@@ -1,0 +1,1150 @@
+--[[
+███████╗ ██████╗ ██████╗ ██╗   ██╗███████╗████████╗██╗   ██╗███████╗██╗   ██╗██╗████████╗ ███████╗
+██╔════╝██╔════╝██╔════╝ ██║   ██║██╔════╝╚══██╔══╝██║   ██║██╔════╝██║   ██║██║╚══██╔══╝ ██╔════╝
+███████╗██║     ██║  ███╗██║   ██║███████╗   ██║   ██║   ██║███████╗██║   ██║██║   ██║    ███████╗
+╚════██║██║     ██║   ██║██║   ██║╚════██║   ██║   ██║   ██║╚════██║██║   ██║██║   ██║    ╚════██║
+███████║╚██████╗╚██████╔╝╚██████╔╝███████║   ██║   ╚██████╔╝███████║╚██████╔╝██║   ██║    ███████║
+╚══════╝ ╚═════╝ ╚═════╝  ╚═════╝ ╚══════╝   ╚═╝    ╚═════╝ ╚══════╝ ╚═════╝ ╚═╝   ╚═╝    ╚══════╝
+===================================================================================================
+  Supreme Creativity (SC) UI Library
+  Version: 5.0.0 (Consolidated & Enhanced)
+  Created By: SupremeCreativity (sc.owner)
+
+  Based on original work by bungie#0001. Heavily modified, refactored, and extended.
+
+  Features:
+  - Password Protection (Client-Side: Insecure against exploiters!)
+  - Advanced Theming/Configuration via SC.Config
+  - Localization Support (SC.Localization, SC:GetText)
+  - Session Time Tracking & Display
+  - Optional Discord Webhook Logging (HttpService required)
+  - Rich Component Set:
+      * Label, Button, ImageButton, Separator, Section
+      * Toggle (with optional Keybind)
+      * Standalone Keybind
+      * Textbox (Small, Medium, Large formats)
+      * Slider
+      * Dropdown (with Search)
+      * Progress Bar
+      * Color Picker (Basic Implementation)
+  - Notifications, Watermarks, Introduction Animation
+  - Utility Functions (Player/Game Info, Date/Time, FPS, etc.)
+  - Smooth Animations & Improved Structure
+  - Extensive Commenting
+===================================================================================================
+--]]
+
+-- // Print Welcome Message to Console
+print([[
+  _____ ____ ____    ____ _   _ ___ _   _ ____    ____ _   _    _    ____ _____ ____
+ / ___/ ___| ___|  / ___| | | |_ _| \ | / ___|  / ___| | | |  / \  |  _ \_   _/ ___|
+ \___ \ |   |__ \ | |   | |_| || ||  \| \___ \ | |   | |_| | / _ \ | |_) || | \___ \
+  ___) | |___ ___) || |___|  _  || || |\  |___) || |___|  _  |/ ___ \|  _ < | |  ___) |
+ |____/\____|____/  \____|_| |_|___|_| \_|____/  \____|_| |_/_/   \_\_| \_\|_| |____/
+                                       UI Library v5.0.0 Initializing...
+]])
+print("==================================================================================")
+print("SC UI Library - Created by SupremeCreativity (sc.owner)")
+print("Please remember client-side security (like passwords) is bypassable.")
+print("==================================================================================")
+
+
+-- // Locals & Services
+local Workspace = game:GetService("Workspace")
+local Player = game:GetService("Players").LocalPlayer
+local Mouse = Player:GetMouse()
+local UserInputService = game:GetService("UserInputService")
+local TextService = game:GetService("TextService")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local CoreGuiService = game:GetService("CoreGui")
+local ContentService = game:GetService("ContentProvider")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
+
+-- // Main Library Object
+local SC = {
+    version = "5.0.0",
+    title = "SC UI",
+    fps = 0,
+    rank = "development", -- Example rank
+    startTime = os.clock(),
+    WebhookURL = "https://discord.com/api/webhooks/1353802030740803684/sjogfRtn6rXRF83IY-Y2b8fULjbQSZY29eXaApOEKBSq8RdqH8P6qy-tdQASb1glu4mm", -- USER PROVIDED WEBHOOK (CHANGE IF NEEDED)
+    Password = "hh.hg**@@", -- CLIENT-SIDE PASSWORD (NOT SECURE!)
+    IsAuthenticated = false, -- Authentication Flag - Set to true after password success
+    MainWindowInstance = nil, -- Stores the main window object after auth
+    CanChangeMainWindowVisibility = true, -- Debounce flag for main window toggle key
+}
+
+--[[================================================================================
+//=                                CONFIGURATION                                   =
+================================================================================]]
+SC.Config = {
+    -- Core Colors
+    AccentColor = Color3.fromRGB(159, 115, 255),       -- Main highlight color
+    AccentColorDarker = Color3.fromRGB(128, 94, 208),  -- For gradients or pressed states
+    BackgroundColor = Color3.fromRGB(28, 28, 28),      -- Dark background
+    BackgroundColorLight = Color3.fromRGB(34, 34, 34), -- Lighter background variant
+    EdgeColor = Color3.fromRGB(60, 60, 60),            -- Outlines and separators
+    SubEdgeColor = Color3.fromRGB(50, 50, 50),         -- Inner edges (tab containers, etc.)
+
+    -- Text Colors
+    TextColor = Color3.fromRGB(215, 215, 215),         -- Slightly brighter default text
+    TextDimColor = Color3.fromRGB(170, 170, 170),      -- Inactive/secondary text
+    TextPlaceholderColor = Color3.fromRGB(140, 140, 140),-- Placeholder text in inputs
+    TextAccentColor = Color3.fromRGB(159, 115, 255),   -- Text highlighted with accent color
+    TextHoverColor = Color3.fromRGB(235, 235, 235),    -- Text color on hover
+    TextErrorColor = Color3.fromRGB(255, 100, 100),    -- Error messages (e.g., password)
+    TextLightColor = Color3.fromRGB(255, 255, 255),    -- Pure white text (e.g., on accent buttons)
+
+    -- Notification Specific Colors
+    ErrorColor = Color3.fromRGB(255, 74, 77),          -- Red bar for errors
+    SuccessColor = Color3.fromRGB(131, 255, 103),      -- Green bar for success
+    AlertColor = Color3.fromRGB(255, 246, 112),        -- Yellow bar for alerts
+    InfoColor = Color3.fromRGB(126, 117, 255),         -- Blue/Purple bar for info
+
+    -- Fonts
+    MainFont = Enum.Font.Code,                         -- Default font for most text
+    HeaderFont = Enum.Font.Code,                       -- Font for window titles, section headers
+    MonospaceFont = Enum.Font.SourceSansMono,          -- Font for keybinds, values (consistency)
+
+    -- Text Sizes
+    TextSizeDefault = 14,
+    TextSizeSmall = 12,
+    TextSizeHeader = 16,
+    TextSizeWatermark = 14,
+    TextSizeNotification = 14,
+
+    -- UI Geometry & Layout
+    CornerRadius = UDim.new(0, 2),                     -- Default corner rounding
+    MainPadding = UDim.new(0, 6),                      -- Padding for ScreenGuis
+    ElementPadding = UDim.new(0, 4),                   -- Padding between elements in layouts
+    ContainerPadding = UDim.new(0, 6),                 -- Padding inside containers/pages
+    ScrollbarThickness = 3,                            -- Slightly thicker scrollbar
+    ScrollbarColor = Color3.fromRGB(159, 115, 255),    -- Scrollbar color matches accent
+
+    -- Animations (TweenInfo objects for consistency)
+    AnimationSpeed = 0.17,
+    FastAnimationSpeed = 0.1,
+    VeryFastAnimationSpeed = 0.07,
+    EasingStyle = Enum.EasingStyle.Sine,
+    EasingDirection = Enum.EasingDirection.Out,        -- Default to Out for reactivity
+
+    HoverTweenInfo = TweenInfo.new(0.12, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+    ToggleTweenInfo = TweenInfo.new(0.13, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+    WindowAppearTweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+    TabSwitchTweenInfo = TweenInfo.new(0.15, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+    NotificationTweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+    SliderDragTweenInfo = TweenInfo.new(0.008, Enum.EasingStyle.Linear, Enum.EasingDirection.Out),
+    KeybindResizeTweenInfo = TweenInfo.new(0.08, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+    TextboxResizeTweenInfo = TweenInfo.new(0.07, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+    WatermarkAppearTweenInfo = TweenInfo.new(0.24, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+    WatermarkTextUpdateTweenInfo = TweenInfo.new(0.04, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+    IntroTweenInfo = TweenInfo.new(0.175, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+    DropdownTweenInfo = TweenInfo.new(0.15, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+    ProgressBarTweenInfo = TweenInfo.new(0.1, Enum.EasingStyle.Linear, Enum.EasingDirection.Out),
+    ColorPickerTweenInfo = TweenInfo.new(0.15, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), -- For color picker elements
+
+    -- Default Texts (Localization Keys - Used by SC:GetText)
+    DefaultWindowTitleKey = "default_window_title",
+    DefaultWatermarkTextKey = "watermark_default",
+    DefaultNotificationTextKey = "notification_default",
+    DefaultTabNameKey = "default_tab_name",
+    DefaultLabelTextKey = "default_label_text",
+    DefaultButtonTextKey = "default_button_text",
+    DefaultSectionTextKey = "default_section_text",
+    DefaultToggleTextKey = "default_toggle_text",
+    DefaultKeybindTextKey = "default_keybind_text",
+    DefaultTextboxTextKey = "default_textbox_text",
+    DefaultDropdownTextKey = "default_dropdown_text", -- Changed from Selector
+    DefaultDropdownSearchPlaceholderKey = "dropdown_search_placeholder",
+    DefaultDropdownNoResultsKey = "dropdown_no_results",
+    DefaultSliderTextKey = "default_slider_text",
+    DefaultProgressBarTextKey = "default_progressbar_text",
+    DefaultImageButtonTextKey = "default_imagebutton_text",
+    DefaultColorPickerTextKey = "default_colorpicker_text",
+    KeybindIndicatorKey = "keybind_indicator",
+    PasswordPromptTitleKey = "password_prompt_title",
+    PasswordPromptLabelKey = "password_prompt_label",
+    PasswordPromptPlaceholderKey = "password_prompt_placeholder",
+    PasswordPromptButtonKey = "password_prompt_button",
+    PasswordPromptErrorKey = "password_prompt_error",
+    SessionTimePrefixKey = "session_time_prefix",
+
+    -- Misc Behavior & Assets
+    MaxButtonsInRow = 4,                              -- Max buttons created by :AddButton in one row
+    UseSynapseSpecificFeatures = true,                -- Allow usage of syn.* functions if available
+    WatermarkLogoImage = "http://www.roblox.com/asset/?id=9365068051", -- Default SC Logo Image ID
+    IntroHashLogoImage = "http://www.roblox.com/asset/?id=9365069861", -- Default Hash Logo Image ID
+    WebhookSendOnInit = true,                         -- Send webhook message when script starts and authenticates
+    WebhookSendPasswordAttempts = true,               -- Send webhook message on login attempts (success/fail)
+    PasswordInputMasked = true,                       -- Mask password input with '*'
+    DefaultToggleKeybind = Enum.KeyCode.P,            -- Default keybind if added to a toggle without specifying
+    DefaultStandaloneKeybind = Enum.KeyCode.L,        -- Default keybind for standalone keybind element
+    DropdownMaxVisibleItems = 6,                      -- Max items visible in dropdown before scrolling
+}
+--[[=====           End of CONFIGURATION           ======]]
+
+
+--[[================================================================================
+//=                                LOCALIZATION                                    =
+================================================================================]]
+SC.Localization = {
+    CurrentLanguage = "en", -- Default language
+    Languages = {
+        ["en"] = {
+            -- Defaults
+            ["default_window_title"] = "SC UI",
+            ["watermark_default"] = "SC Lib v" .. SC.version,
+            ["notification_default"] = "Please wait...",
+            ["default_tab_name"] = "Tab",
+            ["default_label_text"] = "Label",
+            ["default_button_text"] = "Button",
+            ["default_section_text"] = "Section",
+            ["default_toggle_text"] = "Toggle",
+            ["default_keybind_text"] = "Keybind",
+            ["default_textbox_text"] = "Textbox",
+            ["default_dropdown_text"] = "Dropdown",
+            ["dropdown_search_placeholder"] = "Search...",
+            ["dropdown_no_results"] = "No results found.",
+            ["default_slider_text"] = "Slider",
+            ["default_progressbar_text"] = "Progress",
+            ["default_imagebutton_text"] = "Image Button",
+            ["default_colorpicker_text"] = "Color Picker",
+            ["keybind_indicator"] = ". . .",
+
+            -- Introduction & Welcome
+            ["intro_powered_by"] = "Powered by SC",
+            ["intro_hash"] = "hash",
+            ["welcome_message_title"] = "Welcome!", -- Used in notification welcome
+
+            -- Password Prompt
+            ["password_prompt_title"] = "Authentication Required",
+            ["password_prompt_label"] = "Password:",
+            ["password_prompt_placeholder"] = "Enter password...",
+            ["password_prompt_button"] = "Login",
+            ["password_prompt_error"] = "Incorrect Password!",
+
+            -- Time Tracking
+            ["session_time_prefix"] = "Session: ",
+
+            -- System Messages
+            ["error_max_buttons"] = "Error: Max buttons per row (" .. tostring(SC.Config.MaxButtonsInRow) .. ") reached.",
+            ["syn_copy_unavailable"] = "SC:Copy - Synapse function unavailable.",
+            ["syn_fps_unavailable"] = "SC:UnlockFps - Synapse function unavailable.",
+            ["http_service_disabled"] = "SC:SendWebhook - HttpService is not enabled!",
+            ["webhook_send_failed"] = "SC:SendWebhook - Failed to send message. Error: %s", -- %s = error message
+            ["lang_not_found"] = "SC Lib: Language '%s' not found.", -- %s = language code
+            ["lang_set"] = "SC Lib: Language set to '%s'.", -- %s = language code
+            ["auth_success"] = "Authentication Successful!",
+            ["auth_failed"] = "Authentication Failed.",
+        },
+        ["ru"] = {
+            -- Defaults
+            ["default_window_title"] = "SC Интерфейс",
+            ["watermark_default"] = "SC Библиотека v" .. SC.version,
+            ["notification_default"] = "Пожалуйста, подождите...",
+            ["default_tab_name"] = "Вкладка",
+            ["default_label_text"] = "Метка",
+            ["default_button_text"] = "Кнопка",
+            ["default_section_text"] = "Раздел",
+            ["default_toggle_text"] = "Переключатель",
+            ["default_keybind_text"] = "Бинд клавиши",
+            ["default_textbox_text"] = "Поле ввода",
+            ["default_dropdown_text"] = "Выпадающий список",
+            ["dropdown_search_placeholder"] = "Поиск...",
+            ["dropdown_no_results"] = "Ничего не найдено.",
+            ["default_slider_text"] = "Слайдер",
+            ["default_progressbar_text"] = "Прогресс",
+            ["default_imagebutton_text"] = "Кнопка-картинка",
+            ["default_colorpicker_text"] = "Выбор цвета",
+            ["keybind_indicator"] = ". . .",
+
+            -- Introduction & Welcome
+            ["intro_powered_by"] = "Создано с SC",
+            ["intro_hash"] = "хэш",
+            ["welcome_message_title"] = "Добро пожаловать!",
+
+            -- Password Prompt
+            ["password_prompt_title"] = "Требуется Аутентификация",
+            ["password_prompt_label"] = "Пароль:",
+            ["password_prompt_placeholder"] = "Введите пароль...",
+            ["password_prompt_button"] = "Войти",
+            ["password_prompt_error"] = "Неверный Пароль!",
+
+            -- Time Tracking
+            ["session_time_prefix"] = "Сессия: ",
+
+            -- System Messages
+            ["error_max_buttons"] = "Ошибка: Достигнуто макс. кнопок в ряду (" .. tostring(SC.Config.MaxButtonsInRow) .. ").",
+            ["syn_copy_unavailable"] = "SC:Copy - Функция Synapse недоступна.",
+            ["syn_fps_unavailable"] = "SC:UnlockFps - Функция Synapse недоступна.",
+            ["http_service_disabled"] = "SC:SendWebhook - HttpService не включен!",
+            ["webhook_send_failed"] = "SC:SendWebhook - Не удалось отправить сообщение. Ошибка: %s",
+            ["lang_not_found"] = "SC Lib: Язык '%s' не найден.",
+            ["lang_set"] = "SC Lib: Язык установлен на '%s'.",
+            ["auth_success"] = "Аутентификация Успешна!",
+            ["auth_failed"] = "Аутентификация Не Удалась.",
+        }
+        --// Add more languages here
+    }
+}
+
+--// GetText Function: Retrieves localized string, falls back to English or key.
+function SC:GetText(key)
+    local langTable = SC.Localization.Languages[SC.Localization.CurrentLanguage]
+    if langTable and langTable[key] then
+        return langTable[key]
+    else
+        local fallbackTable = SC.Localization.Languages["en"]
+        if fallbackTable and fallbackTable[key] then
+            return fallbackTable[key] -- Fallback to English
+        else
+            warn("SC Lib: Localization key '" .. tostring(key) .. "' missing for '" .. SC.Localization.CurrentLanguage .. "' and fallback 'en'.")
+            return key -- Return key name if totally missing
+        end
+    end
+end
+
+--// SetLanguage Function: Changes the active language. (Does NOT auto-update existing UI text)
+function SC:SetLanguage(languageCode)
+    if SC.Localization.Languages[languageCode] then
+        SC.Localization.CurrentLanguage = languageCode
+        print(string.format(SC:GetText("lang_set"), languageCode))
+        --// TODO (Advanced): Implement UI text refresh mechanism here if needed.
+        --// This would involve tracking all UI elements with text and updating them.
+    else
+        warn(string.format(SC:GetText("lang_not_found"), tostring(languageCode)))
+    end
+end
+--[[=====           End of LOCALIZATION            ======]]
+
+
+--[[================================================================================
+//=                                  UTILITIES                                     =
+================================================================================]]
+
+--// FPS Counter Update Coroutine
+coroutine.wrap(function()
+    while true do
+        SC.fps = math.round(1 / RunService.Heartbeat:Wait())
+    end
+end)()
+
+--// Round Number Utility
+function SC:RoundNumber(number, decimals)
+    decimals = decimals or 0
+    local factor = 10^decimals
+    return math.floor(number * factor + 0.5) / factor
+end
+
+--// Player Info Utilities
+function SC:GetUsername() return Player.Name end
+function SC:GetUserId() return Player.UserId end
+function SC:IsLoaded() return game:IsLoaded() end
+
+--// Game Info Utilities
+function SC:GetPlaceId() return game.PlaceId end
+function SC:GetJobId() return game.JobId end
+
+--// Action Utilities
+function SC:Rejoin()
+    pcall(TeleportService.TeleportToPlaceInstance, TeleportService, SC:GetPlaceId(), SC:GetJobId(), Player)
+end
+
+--// Synapse X Specific Utilities (Checked against Config.UseSynapseSpecificFeatures)
+function SC:Copy(input)
+    if SC.Config.UseSynapseSpecificFeatures and syn and syn.write_clipboard then
+        syn.write_clipboard(input)
+    else
+        warn(SC:GetText("syn_copy_unavailable"))
+    end
+end
+function SC:UnlockFps(fpsCap)
+    fpsCap = fpsCap or 999 -- Default to high FPS cap
+    if SC.Config.UseSynapseSpecificFeatures and syn and setfpscap then
+        setfpscap(fpsCap)
+    else
+        warn(SC:GetText("syn_fps_unavailable"))
+    end
+end
+
+--// Date/Time Utility
+function SC:GetDateTime(formatString)
+    return os.date(formatString or "%Y-%m-%d %H:%M:%S") -- Default format YYYY-MM-DD HH:MM:SS
+end
+
+--// Session Time Utility
+function SC:GetSessionTimeFormatted()
+    local elapsed = os.clock() - SC.startTime
+    local hours = math.floor(elapsed / 3600)
+    local minutes = math.floor((elapsed % 3600) / 60)
+    local seconds = math.floor(elapsed % 60)
+    return string.format("%02d:%02d:%02d", hours, minutes, seconds)
+end
+
+--// Webhook Utility: Sends a formatted message via POST request.
+--// embedData should be an array of Discord embed objects: {{ title="..", description="..", color=.., fields={{name=.., value=..}, ...} }}
+function SC:SendWebhook(embedData)
+    if not SC.WebhookURL or SC.WebhookURL == "" then return end -- Skip if no URL configured
+    if not HttpService.HttpEnabled then warn(SC:GetText("http_service_disabled")); return end
+
+    local payload = HttpService:JSONEncode({
+        username = "SC UI Logger v" .. SC.version, -- Customize bot name
+        avatar_url = "", -- Optional: Add an avatar URL for the bot
+        embeds = embedData
+    })
+
+    -- Use pcall to catch potential HTTP errors
+    local success, err = pcall(HttpService.PostAsync, HttpService, SC.WebhookURL, payload, Enum.HttpContentType.ApplicationJson)
+
+    if not success then
+        warn(string.format(SC:GetText("webhook_send_failed"), tostring(err)))
+    end
+end
+
+--// Dragging Utility: Enables dragging for a GUI object.
+local function EnableDrag(guiObject, dragHandle, latency)
+    dragHandle = dragHandle or guiObject -- Use the object itself if no specific handle provided
+    latency = latency or 0.04
+
+    local dragging = false
+    local dragInput = nil
+    local dragStart = nil
+    local startPos = nil
+    local moveConnection = nil -- Connection for mouse movement while dragging
+
+    dragHandle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = guiObject.Position
+            dragInput = input -- Store the specific input object that started the drag
+
+            -- Disconnect previous connection if it exists
+            if moveConnection then moveConnection:Disconnect() end
+
+            -- Use RenderStepped for smoother updates during drag
+            moveConnection = RunService.RenderStepped:Connect(function()
+                if dragging then
+                    -- Use UserInputService to get current position, as input.Position might not update continuously
+                    local currentPosition = UserInputService:GetMouseLocation() -- Or GetTouchPositions if touch input needed
+                    local delta = currentPosition - dragStart
+                    local newPos = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X,
+                                             startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+
+                    if latency > 0 then
+                        TweenService:Create(guiObject, TweenInfo.new(latency, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), { Position = newPos }):Play()
+                    else
+                        guiObject.Position = newPos
+                    end
+                else
+                    -- Disconnect RenderStepped listener when not dragging
+                    if moveConnection then moveConnection:Disconnect(); moveConnection = nil end
+                end
+            end)
+        end
+    end)
+
+    -- Use InputEnded on UserInputService for more reliable drag end detection
+    UserInputService.InputEnded:Connect(function(input)
+        if input == dragInput then -- Check if the ended input is the one that started the drag
+            dragging = false
+            if moveConnection then moveConnection:Disconnect(); moveConnection = nil end
+            dragInput = nil
+        end
+    end)
+end
+
+--// HSV to RGB Color Conversion Utility (Needed for Color Picker)
+local function HSVtoRGB(h, s, v)
+    h = h % 360 / 360 -- Normalize hue to 0-1 range
+    local r, g, b
+    if s == 0 then
+        r, g, b = v, v, v -- achromatic
+    else
+        local i = math.floor(h * 6)
+        local f = h * 6 - i
+        local p = v * (1 - s)
+        local q = v * (1 - f * s)
+        local t = v * (1 - (1 - f) * s)
+        i = i % 6
+        if i == 0 then r, g, b = v, t, p
+        elseif i == 1 then r, g, b = q, v, p
+        elseif i == 2 then r, g, b = p, v, t
+        elseif i == 3 then r, g, b = p, q, v
+        elseif i == 4 then r, g, b = t, p, v
+        elseif i == 5 then r, g, b = v, p, q
+        end
+    end
+    return Color3.new(r, g, b)
+end
+
+--// RGB to HSV Color Conversion Utility (Needed for Color Picker)
+local function RGBtoHSV(color)
+	local r, g, b = color.r, color.g, color.b
+	local max, min = math.max(r, g, b), math.min(r, g, b)
+	local h, s, v
+	v = max
+	local d = max - min
+	if max == 0 then s = 0 else s = d / max end
+	if max == min then
+		h = 0 -- achromatic
+	else
+		if max == r then h = (g - b) / d + (g < b and 6 or 0)
+		elseif max == g then h = (b - r) / d + 2
+		elseif max == b then h = (r - g) / d + 4
+		end
+		h = h / 6
+	end
+	return h * 360, s, v -- Return Hue in degrees (0-360)
+end
+
+
+--[[=====           End of UTILITIES             ======]]
+
+
+--[[================================================================================
+//=                           PASSWORD AUTHENTICATION                              =
+================================================================================]]
+--// Shows the password prompt. Calls onSuccessCallback() upon successful login.
+local function ShowPasswordPrompt(onSuccessCallback)
+    if SC.IsAuthenticated then onSuccessCallback(); return end -- Skip if already authenticated (e.g., script reloaded)
+
+    local Cfg = SC.Config
+    local promptGui = Instance.new("ScreenGui", CoreGuiService)
+    promptGui.Name = "SC_PasswordPrompt"; promptGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling; promptGui.DisplayOrder = 1001
+
+    local overlay = Instance.new("Frame", promptGui); overlay.Name = "Overlay"; overlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0); overlay.BackgroundTransparency = 0.7; overlay.Size = UDim2.new(1, 0, 1, 0)
+    local promptWindow = Instance.new("Frame", promptGui); local windowCorner = Instance.new("UICorner", promptWindow); local windowGradient = Instance.new("UIGradient", promptWindow); local windowLayout = Instance.new("UIListLayout", promptWindow); local windowPadding = Instance.new("UIPadding", promptWindow)
+    local titleLabel = Instance.new("TextLabel", windowLayout); local passwordLabel = Instance.new("TextLabel", windowLayout); local inputBg = Instance.new("Frame", windowLayout); local inputBgCorner = Instance.new("UICorner", inputBg); local inputBgGradient = Instance.new("UIGradient", inputBg); local passwordInput = Instance.new("TextBox", inputBg); local inputCorner = Instance.new("UICorner", passwordInput); local errorLabel = Instance.new("TextLabel", windowLayout); local loginButton = Instance.new("TextButton", windowLayout); local buttonCorner = Instance.new("UICorner", loginButton)
+
+    promptWindow.Name = "PromptWindow"; promptWindow.AnchorPoint = Vector2.new(0.5, 0.5); promptWindow.Position = UDim2.new(0.5, 0, 0.5, 0); promptWindow.Size = UDim2.new(0, 300, 0, 190); promptWindow.BackgroundColor3 = Cfg.BackgroundColor; promptWindow.ClipsDescendants = true; windowCorner.CornerRadius = Cfg.CornerRadius
+    windowGradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0.00, Cfg.BackgroundColorLight), ColorSequenceKeypoint.new(1.00, Cfg.BackgroundColor)}; windowGradient.Rotation = 90
+    windowLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center; windowLayout.SortOrder = Enum.SortOrder.LayoutOrder; windowLayout.Padding = UDim.new(0, 8)
+    windowPadding.PaddingTop = UDim.new(0, 10); windowPadding.PaddingBottom = UDim.new(0, 10); windowPadding.PaddingLeft = UDim.new(0, 10); windowPadding.PaddingRight = UDim.new(0, 10)
+
+    titleLabel.Name = "TitleLabel"; titleLabel.BackgroundTransparency = 1.0; titleLabel.Size = UDim2.new(1, 0, 0, 20); titleLabel.Font = Cfg.HeaderFont; titleLabel.Text = SC:GetText(Cfg.PasswordPromptTitleKey); titleLabel.TextColor3 = Cfg.TextColor; titleLabel.TextSize = Cfg.TextSizeHeader
+    passwordLabel.Name = "PasswordLabel"; passwordLabel.BackgroundTransparency = 1.0; passwordLabel.Size = UDim2.new(1, 0, 0, 16); passwordLabel.Font = Cfg.MainFont; passwordLabel.Text = SC:GetText(Cfg.PasswordPromptLabelKey); passwordLabel.TextColor3 = Cfg.TextDimColor; passwordLabel.TextSize = Cfg.TextSizeSmall; passwordLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+    inputBg.Name = "InputBg"; inputBg.BackgroundColor3 = Cfg.EdgeColor; inputBg.Size = UDim2.new(1, 0, 0, 28); inputBgCorner.CornerRadius = Cfg.CornerRadius
+    inputBgGradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0.00, Cfg.BackgroundColorLight), ColorSequenceKeypoint.new(1.00, Cfg.BackgroundColor)}; inputBgGradient.Rotation = 90
+    passwordInput.Name = "PasswordInput"; passwordInput.AnchorPoint = Vector2.new(0.5, 0.5); passwordInput.Position = UDim2.new(0.5, 0, 0.5, 0); passwordInput.Size = UDim2.new(1, -4, 1, -4); passwordInput.Font = Cfg.MainFont; passwordInput.PlaceholderText = SC:GetText(Cfg.PasswordPromptPlaceholderKey); passwordInput.PlaceholderColor3 = Cfg.TextPlaceholderColor; passwordInput.TextColor3 = Cfg.TextColor; passwordInput.TextSize = Cfg.TextSizeDefault; passwordInput.BackgroundTransparency = 1.0; passwordInput.ClearTextOnFocus = false; passwordInput.TextXAlignment = Enum.TextXAlignment.Left; passwordInput.TextMasked = Cfg.PasswordInputMasked; inputCorner.CornerRadius = Cfg.CornerRadius
+
+    errorLabel.Name = "ErrorLabel"; errorLabel.BackgroundTransparency = 1.0; errorLabel.Size = UDim2.new(1, 0, 0, 16); errorLabel.Font = Cfg.MainFont; errorLabel.Text = ""; errorLabel.TextColor3 = Cfg.TextErrorColor; errorLabel.TextSize = Cfg.TextSizeSmall; errorLabel.TextWrapped = true
+
+    loginButton.Name = "LoginButton"; loginButton.BackgroundColor3 = Cfg.AccentColor; loginButton.Size = UDim2.new(1, 0, 0, 30); loginButton.Font = Cfg.MainFont; loginButton.Text = SC:GetText(Cfg.PasswordPromptButtonKey); loginButton.TextColor3 = Cfg.TextLightColor; loginButton.TextSize = Cfg.TextSizeDefault; loginButton.AutoButtonColor = false; buttonCorner.CornerRadius = Cfg.CornerRadius
+
+    local function TryLogin()
+        local inputText = passwordInput.Text
+        if inputText == SC.Password then
+            SC.IsAuthenticated = true
+            if Cfg.WebhookSendPasswordAttempts then
+                SC:SendWebhook({{ title = SC:GetText("auth_success"), color = tonumber("0x00FF00"), fields = {{ name = "Username", value = SC:GetUsername(), inline = true }, { name = "UserID", value = tostring(SC:GetUserId()), inline = true }, { name = "Timestamp", value = SC:GetDateTime(), inline = false}} }}) end
+            promptGui:Destroy()
+            onSuccessCallback()
+        else
+            errorLabel.Text = SC:GetText(Cfg.PasswordPromptErrorKey); passwordInput.Text = ""
+            local originalPos = promptWindow.Position; TweenService:Create(promptWindow, TweenInfo.new(0.05, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut, 4, true), {Position = originalPos + UDim2.fromOffset(5,0)}):Play()
+            if Cfg.WebhookSendPasswordAttempts then
+                SC:SendWebhook({{ title = SC:GetText("auth_failed"), color = tonumber("0xFF0000"), fields = {{ name = "Username", value = SC:GetUsername(), inline = true }, { name = "UserID", value = tostring(SC:GetUserId()), inline = true }, { name = "Attempted Password", value = "||"..inputText.."||", inline = false}, { name = "Timestamp", value = SC:GetDateTime(), inline = false}} }}) end
+        end
+    end
+
+    loginButton.MouseButton1Click:Connect(TryLogin)
+    passwordInput.FocusLost:Connect(function(enterPressed) if enterPressed then TryLogin() end end)
+    loginButton.MouseEnter:Connect(function() loginButton.BackgroundColor3 = Cfg.AccentColorDarker end)
+    loginButton.MouseLeave:Connect(function() loginButton.BackgroundColor3 = Cfg.AccentColor end)
+end
+--[[=====       End of AUTHENTICATION        ======]]
+
+
+--[[================================================================================
+//=                             UI COMPONENTS (API)                                =
+================================================================================]]
+--// These are the functions exposed via the Tab object (e.g., Tab:NewLabel(...))
+--// They mostly wrap the internal implementation functions.
+
+--[[--------------------------------------------------------------------------------
+--      INTERNAL COMPONENT IMPLEMENTATIONS (_Internal_New...)
+--      (These contain the detailed UI creation logic for each component type)
+--------------------------------------------------------------------------------]]
+
+SC._Internal_NewLabel = function(page, updateSizeFunc, text, alignment)
+    local Cfg = SC.Config
+    text = text or SC:GetText(Cfg.DefaultLabelTextKey)
+    alignment = alignment or Enum.TextXAlignment.Left
+
+    local label = Instance.new("TextLabel", page); local labelPadding = Instance.new("UIPadding", label)
+    label.Name = "label_" .. text:gsub("%W+", "_"); label.BackgroundTransparency = 1.000; label.Size = UDim2.new(1, 0, 0, 0)
+    label.Font = Cfg.MainFont; label.Text = text; label.TextColor3 = Cfg.TextColor; label.TextSize = Cfg.TextSizeDefault; label.TextWrapped = true; label.TextXAlignment = alignment; label.TextYAlignment = Enum.TextYAlignment.Top; label.RichText = true; label.AutomaticSize = Enum.AutomaticSize.Y
+    labelPadding.PaddingTop = UDim.new(0, 2); labelPadding.PaddingBottom = UDim.new(0, 2)
+    updateSizeFunc()
+
+    local LabelFunctions = { Element = label }
+    function LabelFunctions:Text(newText) label.Text = newText or SC:GetText(Cfg.DefaultLabelTextKey); task.wait(); updateSizeFunc(); return LabelFunctions end
+    function LabelFunctions:Remove() label:Destroy(); updateSizeFunc(); return nil end
+    function LabelFunctions:Hide() label.Visible = false; updateSizeFunc(); return LabelFunctions end
+    function LabelFunctions:Show() label.Visible = true; updateSizeFunc(); return LabelFunctions end
+    function LabelFunctions:Align(newAlignment)
+        local alignEnum = alignment
+        if type(newAlignment) == "string" then if newAlignment:lower():find("le") then alignEnum = Enum.TextXAlignment.Left elseif newAlignment:lower():find("cent") then alignEnum = Enum.TextXAlignment.Center elseif newAlignment:lower():find("ri") then alignEnum = Enum.TextXAlignment.Right end
+        elseif typeof(newAlignment) == "EnumItem" and newAlignment.EnumType == Enum.TextXAlignment then alignEnum = newAlignment end
+        label.TextXAlignment = alignEnum; return LabelFunctions
+    end
+    return LabelFunctions
+end
+
+SC._Internal_NewButton = function(page, updateSizeFunc, text, callback)
+    local Cfg = SC.Config
+    text = text or SC:GetText(Cfg.DefaultButtonTextKey); callback = callback or function() end
+    local buttonFrame = Instance.new("Frame", page); local buttonLayout = Instance.new("UIListLayout", buttonFrame)
+    buttonFrame.Name = "buttonFrame_" .. text:gsub("%W+", "_"); buttonFrame.BackgroundTransparency = 1.000; buttonFrame.Size = UDim2.new(1, 0, 0, 24); buttonFrame.ClipsDescendants = true
+    buttonLayout.FillDirection = Enum.FillDirection.Horizontal; buttonLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center; buttonLayout.VerticalAlignment = Enum.VerticalAlignment.Center; buttonLayout.SortOrder = Enum.SortOrder.LayoutOrder; buttonLayout.Padding = UDim.new(0, Cfg.ElementPadding.Offset)
+
+    local ButtonFunctions = { Buttons = {}, Frame = buttonFrame }; local currentButtons = 0
+
+    local function CreateSingleButton(btnText, btnCallback)
+        currentButtons = currentButtons + 1
+        local button = Instance.new("TextButton", buttonFrame); local buttonCorner = Instance.new("UICorner", button); local buttonBackground = Instance.new("Frame", button); local buttonGradient = Instance.new("UIGradient", buttonBackground); local buttonBackCorner = Instance.new("UICorner", buttonBackground); local buttonLabel = Instance.new("TextLabel", buttonBackground)
+        button.Name = "button_" .. btnText:gsub("%W+", "_"); button.BackgroundColor3 = Cfg.SubEdgeColor; button.Size = UDim2.new(1 / currentButtons, -Cfg.ElementPadding.Offset * (currentButtons -1) / currentButtons , 1, 0); button.AutoButtonColor = false; button.Text = "" -- Use Scale for auto sizing in layout
+        buttonCorner.CornerRadius = Cfg.CornerRadius
+        buttonBackground.Name = "buttonBackground"; buttonBackground.AnchorPoint = Vector2.new(0.5, 0.5); buttonBackground.Position = UDim2.new(0.5, 0, 0.5, 0); buttonBackground.Size = UDim2.new(1, -2, 1, -2)
+        buttonGradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0.00, Cfg.BackgroundColorLight), ColorSequenceKeypoint.new(1.00, Cfg.BackgroundColor)}; buttonGradient.Rotation = 90; buttonBackCorner.CornerRadius = Cfg.CornerRadius
+        buttonLabel.Name = "buttonLabel"; buttonLabel.AnchorPoint = Vector2.new(0.5, 0.5); buttonLabel.Position = UDim2.new(0.5, 0, 0.5, 0); buttonLabel.Size = UDim2.new(1, 0, 1, 0); buttonLabel.BackgroundTransparency = 1.0; buttonLabel.Font = Cfg.MainFont; buttonLabel.Text = btnText; buttonLabel.TextColor3 = Cfg.TextColor; buttonLabel.TextSize = Cfg.TextSizeDefault; buttonLabel.RichText = true
+        button.MouseEnter:Connect(function() TweenService:Create(button, Cfg.HoverTweenInfo, {BackgroundColor3 = Cfg.EdgeColor}):Play() end)
+        button.MouseLeave:Connect(function() TweenService:Create(button, Cfg.HoverTweenInfo, {BackgroundColor3 = Cfg.SubEdgeColor}):Play() end)
+        button.MouseButton1Down:Connect(function() TweenService:Create(buttonLabel, Cfg.HoverTweenInfo, {TextColor3 = Cfg.TextAccentColor}):Play(); TweenService:Create(buttonBackground, Cfg.HoverTweenInfo, {Size = UDim2.new(1, -4, 1, -4)}):Play() end)
+        button.MouseButton1Up:Connect(function() TweenService:Create(buttonLabel, Cfg.HoverTweenInfo, {TextColor3 = Cfg.TextColor}):Play(); TweenService:Create(buttonBackground, Cfg.HoverTweenInfo, {Size = UDim2.new(1, -2, 1, -2)}):Play() end)
+        button.MouseButton1Click:Connect(function() pcall(btnCallback) end)
+
+        -- Resize existing buttons when a new one is added
+        for i, existingButton in ipairs(buttonFrame:GetChildren()) do
+            if existingButton:IsA("TextButton") then
+                 local numButtons = currentButtons
+                 existingButton.Size = UDim2.new(1 / numButtons, -Cfg.ElementPadding.Offset * (numButtons -1) / numButtons, 1, 0)
+             end
+        end
+
+        local SingleButtonFuncs = { Element = button, Label = buttonLabel }
+        SingleButtonFuncs.Fire = function() pcall(btnCallback); return SingleButtonFuncs end
+        SingleButtonFuncs.Hide = function() button.Visible = false; updateSizeFunc(); return SingleButtonFuncs end
+        SingleButtonFuncs.Show = function() button.Visible = true; updateSizeFunc(); return SingleButtonFuncs end
+        SingleButtonFuncs.Text = function(newText) buttonLabel.Text = newText or "?"; return SingleButtonFuncs end
+        SingleButtonFuncs.Remove = function() button:Destroy(); currentButtons = currentButtons - 1; ButtonFunctions.Buttons[btnText] = nil; updateSizeFunc(); return nil end -- TODO: Resize remaining buttons on remove
+        SingleButtonFuncs.SetFunction = function(newCallback) btnCallback = newCallback or function()end; return SingleButtonFuncs end
+        ButtonFunctions.Buttons[btnText] = SingleButtonFuncs; return SingleButtonFuncs
+    end
+    CreateSingleButton(text, callback)
+    function ButtonFunctions:AddButton(addText, addCallback)
+        if currentButtons >= Cfg.MaxButtonsInRow then warn(SC:GetText("error_max_buttons")); return ButtonFunctions end
+        addText = addText or SC:GetText(Cfg.DefaultButtonTextKey) .. "_" .. (currentButtons + 1); addCallback = addCallback or function() end
+        local newButtonFuncs = CreateSingleButton(addText, addCallback); updateSizeFunc(); return newButtonFuncs
+    end
+    -- Main functions operate on the *first* button created
+    ButtonFunctions.Fire = function() if ButtonFunctions.Buttons[text] then ButtonFunctions.Buttons[text]:Fire() end; return ButtonFunctions end
+    ButtonFunctions.Hide = function() if ButtonFunctions.Buttons[text] then ButtonFunctions.Buttons[text]:Hide() end; return ButtonFunctions end
+    ButtonFunctions.Show = function() if ButtonFunctions.Buttons[text] then ButtonFunctions.Buttons[text]:Show() end; return ButtonFunctions end
+    ButtonFunctions.Text = function(newText) if ButtonFunctions.Buttons[text] then ButtonFunctions.Buttons[text]:Text(newText) end; return ButtonFunctions end
+    ButtonFunctions.SetFunction = function(newCallback) if ButtonFunctions.Buttons[text] then ButtonFunctions.Buttons[text]:SetFunction(newCallback) end; return ButtonFunctions end
+    ButtonFunctions.Remove = function() ButtonFunctions.Frame:Destroy(); updateSizeFunc(); return nil end
+    updateSizeFunc(); return ButtonFunctions
+end
+
+SC._Internal_NewSeparator = function(page, updateSizeFunc)
+    local Cfg = SC.Config
+    local separatorFrame = Instance.new("Frame", page); local bar = Instance.new("Frame", separatorFrame)
+    separatorFrame.Name = "separatorFrame"; separatorFrame.BackgroundTransparency = 1.000; separatorFrame.Size = UDim2.new(1, 0, 0, 12)
+    bar.Name = "bar"; bar.BackgroundColor3 = Cfg.EdgeColor; bar.BorderSizePixel = 0; bar.AnchorPoint = Vector2.new(0.5, 0.5); bar.Position = UDim2.new(0.5, 0, 0.5, 0); bar.Size = UDim2.new(1, -Cfg.ElementPadding.Offset*2, 0, 1)
+    updateSizeFunc()
+    local SeparatorFunctions = { Element = separatorFrame }
+    function SeparatorFunctions:Hide() separatorFrame.Visible = false; updateSizeFunc(); return SeparatorFunctions end
+    function SeparatorFunctions:Show() separatorFrame.Visible = true; updateSizeFunc(); return SeparatorFunctions end
+    function SeparatorFunctions:Remove() separatorFrame:Destroy(); updateSizeFunc(); return nil end
+    return SeparatorFunctions
+end
+
+SC._Internal_NewSection = function(page, updateSizeFunc, text)
+    local Cfg = SC.Config
+    text = text or SC:GetText(Cfg.DefaultSectionTextKey)
+    local sectionFrame = Instance.new("Frame", page); local sectionLayout = Instance.new("UIListLayout", sectionFrame); local sectionLabel = Instance.new("TextLabel", sectionLayout); local rightBar = Instance.new("Frame", sectionLayout)
+    sectionFrame.Name = "sectionFrame_" .. text:gsub("%W+", "_"); sectionFrame.BackgroundTransparency = 1.000; sectionFrame.Size = UDim2.new(1, 0, 0, 18)
+    sectionLayout.FillDirection = Enum.FillDirection.Horizontal; sectionLayout.VerticalAlignment = Enum.VerticalAlignment.Center; sectionLayout.SortOrder = Enum.SortOrder.LayoutOrder; sectionLayout.Padding = UDim.new(0, Cfg.ElementPadding.Offset)
+    sectionLabel.Name = "sectionLabel"; sectionLabel.BackgroundTransparency = 1.000; sectionLabel.Size = UDim2.new(0, 0, 1, 0); sectionLabel.AutomaticSize = Enum.AutomaticSize.X; sectionLabel.Font = Cfg.HeaderFont; sectionLabel.Text = text:upper(); sectionLabel.TextColor3 = Cfg.TextDimColor; sectionLabel.TextSize = Cfg.TextSizeSmall; sectionLabel.TextXAlignment = Enum.TextXAlignment.Left; sectionLabel.RichText = true -- Uppercase section headers
+    rightBar.Name = "rightBar"; rightBar.BackgroundColor3 = Cfg.EdgeColor; rightBar.BorderSizePixel = 0; rightBar.Size = UDim2.new(1, 0, 0, 1)
+    local function UpdateBarSize() task.wait(); local labelWidth = sectionLabel.AbsoluteSize.X; local layoutPadding = sectionLayout.Padding.Offset; rightBar.Size = UDim2.new(1, -(labelWidth + layoutPadding), 0, 1) end
+    sectionLabel:GetPropertyChangedSignal("AbsoluteSize"):Connect(UpdateBarSize); UpdateBarSize()
+    updateSizeFunc()
+    local SectionFunctions = { Element = sectionFrame, Label = sectionLabel }
+    function SectionFunctions:Text(newText) sectionLabel.Text = (newText or SC:GetText(Cfg.DefaultSectionTextKey)):upper(); UpdateBarSize(); return SectionFunctions end
+    function SectionFunctions:Hide() sectionFrame.Visible = false; updateSizeFunc(); return SectionFunctions end
+    function SectionFunctions:Show() sectionFrame.Visible = true; updateSizeFunc(); return SectionFunctions end
+    function SectionFunctions:Remove() sectionFrame:Destroy(); updateSizeFunc(); return nil end
+    return SectionFunctions
+end
+
+SC._Internal_NewToggle = function(page, updateSizeFunc, text, default, callback)
+    local Cfg = SC.Config
+    text = text or SC:GetText(Cfg.DefaultToggleTextKey); default = default or false; callback = callback or function() end
+    local toggleButton = Instance.new("TextButton", page); local toggleLayout = Instance.new("UIListLayout", toggleButton); local toggleLabel = Instance.new("TextLabel", toggleLayout); local toggleLabelPadding = Instance.new("UIPadding", toggleLabel)
+    local Extras = Instance.new("Folder", toggleLayout); local ExtrasLayout = Instance.new("UIListLayout", Extras) -- Moved Extras before switch for right alignment
+    local toggleSwitchContainer = Instance.new("Frame", toggleLayout); local toggleEdge = Instance.new("Frame", toggleSwitchContainer); local toggleEdgeCorner = Instance.new("UICorner", toggleEdge); local toggleInner = Instance.new("Frame", toggleEdge); local toggleInnerCorner = Instance.new("UICorner", toggleInner); local toggleInnerGradient = Instance.new("UIGradient", toggleInner)
+    local toggleIndicator = Instance.new("Frame", toggleInner); local toggleIndicatorCorner = Instance.new("UICorner", toggleIndicator); local toggleIndicatorGradient = Instance.new("UIGradient", toggleIndicator)
+
+    toggleButton.Name = "toggleButton_" .. text:gsub("%W+", "_"); toggleButton.BackgroundTransparency = 1.000; toggleButton.Size = UDim2.new(1, 0, 0, 22); toggleButton.AutoButtonColor = false; toggleButton.Text = ""
+    toggleLayout.FillDirection = Enum.FillDirection.Horizontal; toggleLayout.VerticalAlignment = Enum.VerticalAlignment.Center; toggleLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    toggleLabel.Name = "toggleLabel"; toggleLabel.BackgroundTransparency = 1.000; toggleLabel.Size = UDim2.new(1, -50, 1, 0); toggleLabel.Font = Cfg.MainFont; toggleLabel.Text = text; toggleLabel.TextColor3 = Cfg.TextColor; toggleLabel.TextSize = Cfg.TextSizeDefault; toggleLabel.TextXAlignment = Enum.TextXAlignment.Left; toggleLabel.RichText = true
+    toggleLabelPadding.PaddingLeft = UDim.new(0, 2)
+    Extras.Name = "Extras"; Extras.Size = UDim2.new(0, 0, 1, 0); Extras.AutomaticSize = Enum.AutomaticSize.X -- Auto size for keybinds etc.
+    ExtrasLayout.FillDirection = Enum.FillDirection.Horizontal; ExtrasLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right; ExtrasLayout.VerticalAlignment = Enum.VerticalAlignment.Center; ExtrasLayout.SortOrder = Enum.SortOrder.LayoutOrder; ExtrasLayout.Padding = UDim.new(0, Cfg.ElementPadding.Offset)
+    toggleSwitchContainer.Name = "toggleSwitchContainer"; toggleSwitchContainer.BackgroundTransparency = 1.0; toggleSwitchContainer.Size = UDim2.new(0, 18, 0, 18)
+    toggleEdge.Name = "toggleEdge"; toggleEdge.BackgroundColor3 = Cfg.SubEdgeColor; toggleEdge.Size = UDim2.new(1, 0, 1, 0); toggleEdgeCorner.CornerRadius = Cfg.CornerRadius
+    toggleInner.Name = "toggleInner"; toggleInner.AnchorPoint = Vector2.new(0.5, 0.5); toggleInner.Position = UDim2.new(0.5, 0, 0.5, 0); toggleInner.Size = UDim2.new(1, -2, 1, -2); toggleInner.ClipsDescendants = true; toggleInnerCorner.CornerRadius = Cfg.CornerRadius
+    toggleInnerGradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0.00, Cfg.BackgroundColorLight), ColorSequenceKeypoint.new(1.00, Cfg.BackgroundColor)}; toggleInnerGradient.Rotation = 90
+    toggleIndicator.Name = "toggleIndicator"; toggleIndicator.AnchorPoint = Vector2.new(0.5, 0.5); toggleIndicator.Position = UDim2.new(0.5, 0, 0.5, 0); toggleIndicator.Size = UDim2.new(0, 0, 0, 0); toggleIndicator.BackgroundTransparency = 1; toggleIndicatorCorner.CornerRadius = Cfg.CornerRadius
+    toggleIndicatorGradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0.00, Cfg.AccentColor), ColorSequenceKeypoint.new(1.00, Cfg.AccentColorDarker)}; toggleIndicatorGradient.Rotation = 90
+
+    local isOn = default
+    local function SetToggleState(state, skipAnim) isOn = state; local targetSize = isOn and UDim2.new(1, -4, 1, -4) or UDim2.new(0, 0, 0, 0); local targetTransparency = isOn and 0 or 1; if skipAnim then toggleIndicator.Size = targetSize; toggleIndicator.BackgroundTransparency = targetTransparency else TweenService:Create(toggleIndicator, Cfg.ToggleTweenInfo, {Size = targetSize, BackgroundTransparency = targetTransparency}):Play() end; pcall(callback, isOn) end; SetToggleState(isOn, true)
+    toggleButton.MouseButton1Click:Connect(function() SetToggleState(not isOn) end)
+    toggleButton.MouseEnter:Connect(function() TweenService:Create(toggleLabel, Cfg.HoverTweenInfo, {TextColor3 = Cfg.TextHoverColor}):Play() end)
+    toggleButton.MouseLeave:Connect(function() TweenService:Create(toggleLabel, Cfg.HoverTweenInfo, {TextColor3 = Cfg.TextColor}):Play() end)
+    updateSizeFunc()
+
+    local ToggleFunctions = { Element = toggleButton, Label = toggleLabel }; ToggleFunctions.IsOn = function() return isOn end
+    function ToggleFunctions:Text(newText) toggleLabel.Text = newText or SC:GetText(Cfg.DefaultToggleTextKey); return ToggleFunctions end
+    function ToggleFunctions:Hide() toggleButton.Visible = false; updateSizeFunc(); return ToggleFunctions end
+    function ToggleFunctions:Show() toggleButton.Visible = true; updateSizeFunc(); return ToggleFunctions end
+    function ToggleFunctions:Change() SetToggleState(not isOn); return ToggleFunctions end
+    function ToggleFunctions:Remove() toggleButton:Destroy(); updateSizeFunc(); return nil end
+    function ToggleFunctions:Set(state) SetToggleState(toboolean(state)); return ToggleFunctions end
+    function ToggleFunctions:SetFunction(newCallback) callback = newCallback or function() end; return ToggleFunctions end
+
+    function ToggleFunctions:AddKeybind(defaultKey) -- AddKeybind implementation
+        defaultKey = defaultKey or Cfg.DefaultToggleKeybind
+        local keybindButton = Instance.new("TextButton", Extras); local keybindCorner = Instance.new("UICorner", keybindButton); local keybindBackground = Instance.new("Frame", keybindButton); local keybindGradient = Instance.new("UIGradient", keybindBackground); local keybindBackCorner = Instance.new("UICorner", keybindBackground); local keybindLabel = Instance.new("TextLabel", keybindBackground); local keybindLabelConstraint = Instance.new("UISizeConstraint", keybindLabel)
+        keybindButton.Name = "keybindButton"; keybindButton.BackgroundColor3 = Cfg.SubEdgeColor; keybindButton.Size = UDim2.new(0, 30, 0, 20); keybindButton.AutoButtonColor = false; keybindButton.Text = ""
+        keybindCorner.CornerRadius = Cfg.CornerRadius
+        keybindBackground.Name = "keybindBackground"; keybindBackground.AnchorPoint = Vector2.new(0.5, 0.5); keybindBackground.Position = UDim2.new(0.5, 0, 0.5, 0); keybindBackground.Size = UDim2.new(1, -2, 1, -2)
+        keybindGradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0.00, Cfg.BackgroundColorLight), ColorSequenceKeypoint.new(1.00, Cfg.BackgroundColor)}; keybindGradient.Rotation = 90; keybindBackCorner.CornerRadius = Cfg.CornerRadius
+        keybindLabel.Name = "keybindLabel"; keybindLabel.AnchorPoint = Vector2.new(0.5, 0.5); keybindLabel.Position = UDim2.new(0.5, 0, 0.5, 0); keybindLabel.Size = UDim2.new(1, -4, 1, -4); keybindLabel.BackgroundTransparency = 1.0; keybindLabel.Font = Cfg.MonospaceFont; keybindLabel.TextColor3 = Cfg.TextDimColor; keybindLabel.TextSize = Cfg.TextSizeDefault; keybindLabel.RichText = true; keybindLabelConstraint.MinSize = Vector2.new(20, 18)
+
+        local chosenKey = defaultKey; local inputConn; local Shortcuts = { Return = "Enter", LeftShift = "Shift", RightShift = "Shift", LeftControl = "Ctrl", RightControl = "Ctrl", LeftAlt = "Alt", RightAlt = "Alt" }
+        local function UpdateKeybindLabel() local keyName = chosenKey.Name; keybindLabel.Text = Shortcuts[keyName] or keyName:sub(1,1):upper()..keyName:sub(2); local textSize = TextService:GetTextSize(keybindLabel.Text, keybindLabel.TextSize, keybindLabel.Font, Vector2.new(math.huge, 18)); local targetWidth = math.max(keybindLabelConstraint.MinSize.X, textSize.X + 8); TweenService:Create(keybindButton, Cfg.KeybindResizeTweenInfo, { Size = UDim2.new(0, targetWidth, 0, 20) }):Play() end; UpdateKeybindLabel()
+        keybindButton.MouseButton1Click:Connect(function() keybindLabel.Text = SC:GetText("keybind_indicator"); keybindLabel.TextColor3 = Cfg.TextAccentColor; if inputConn then inputConn:Disconnect() end; inputConn = UserInputService.InputBegan:Connect(function(input, gameProcessed) if not gameProcessed and input.KeyCode ~= Enum.KeyCode.Unknown then chosenKey = input.KeyCode; UpdateKeybindLabel(); keybindLabel.TextColor3 = Cfg.TextDimColor; if inputConn then inputConn:Disconnect() end elseif input.UserInputType == Enum.UserInputType.MouseButton1 then UpdateKeybindLabel(); keybindLabel.TextColor3 = Cfg.TextDimColor; if inputConn then inputConn:Disconnect() end end end) end)
+        UserInputService.InputBegan:Connect(function(input, gameProcessed) if not gameProcessed and input.KeyCode == chosenKey then SetToggleState(not isOn) end end)
+        updateSizeFunc(); return ToggleFunctions
+    end
+    return ToggleFunctions
+end
+
+SC._Internal_NewKeybind = function(page, updateSizeFunc, text, defaultKey, callback)
+    local Cfg = SC.Config
+    text = text or SC:GetText(Cfg.DefaultKeybindTextKey); defaultKey = defaultKey or Cfg.DefaultStandaloneKeybind; callback = callback or function() end
+    local keybindFrame = Instance.new("Frame", page); local keybindLayout = Instance.new("UIListLayout", keybindFrame); local keybindLabel = Instance.new("TextLabel", keybindLayout); local keybindLabelPadding = Instance.new("UIPadding", keybindLabel)
+    local keybindButton = Instance.new("TextButton", keybindLayout); local keybindCorner = Instance.new("UICorner", keybindButton); local keybindBackground = Instance.new("Frame", keybindButton); local keybindGradient = Instance.new("UIGradient", keybindBackground); local keybindBackCorner = Instance.new("UICorner", keybindBackground); local keybindButtonLabel = Instance.new("TextLabel", keybindBackground); local keybindLabelConstraint = Instance.new("UISizeConstraint", keybindButtonLabel)
+
+    keybindFrame.Name = "keybindFrame_" .. text:gsub("%W+", "_"); keybindFrame.BackgroundTransparency = 1.000; keybindFrame.Size = UDim2.new(1, 0, 0, 24)
+    keybindLayout.FillDirection = Enum.FillDirection.Horizontal; keybindLayout.VerticalAlignment = Enum.VerticalAlignment.Center; keybindLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    keybindLabel.Name = "keybindLabel"; keybindLabel.BackgroundTransparency = 1.000; keybindLabel.Size = UDim2.new(1, -50, 1, 0); keybindLabel.Font = Cfg.MainFont; keybindLabel.Text = text; keybindLabel.TextColor3 = Cfg.TextColor; keybindLabel.TextSize = Cfg.TextSizeDefault; keybindLabel.TextXAlignment = Enum.TextXAlignment.Left; keybindLabel.RichText = true; keybindLabelPadding.PaddingLeft = UDim.new(0, 2)
+    keybindButton.Name = "keybindButton"; keybindButton.BackgroundColor3 = Cfg.SubEdgeColor; keybindButton.Size = UDim2.new(0, 30, 0, 22); keybindButton.AutoButtonColor = false; keybindButton.Text = ""; keybindCorner.CornerRadius = Cfg.CornerRadius
+    keybindBackground.Name = "keybindBackground"; keybindBackground.AnchorPoint = Vector2.new(0.5, 0.5); keybindBackground.Position = UDim2.new(0.5, 0, 0.5, 0); keybindBackground.Size = UDim2.new(1, -2, 1, -2); keybindBackCorner.CornerRadius = Cfg.CornerRadius
+    keybindGradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0.00, Cfg.BackgroundColorLight), ColorSequenceKeypoint.new(1.00, Cfg.BackgroundColor)}; keybindGradient.Rotation = 90
+    keybindButtonLabel.Name = "keybindButtonLabel"; keybindButtonLabel.AnchorPoint = Vector2.new(0.5, 0.5); keybindButtonLabel.Position = UDim2.new(0.5, 0, 0.5, 0); keybindButtonLabel.Size = UDim2.new(1, -4, 1, -4); keybindButtonLabel.BackgroundTransparency = 1.0; keybindButtonLabel.Font = Cfg.MonospaceFont; keybindButtonLabel.TextColor3 = Cfg.TextDimColor; keybindButtonLabel.TextSize = Cfg.TextSizeDefault; keybindButtonLabel.RichText = true; keybindLabelConstraint.MinSize = Vector2.new(20, 18)
+
+    local chosenKey = defaultKey; local inputConn; local Shortcuts = { Return = "Enter", LeftShift = "Shift", RightShift = "Shift", LeftControl = "Ctrl", RightControl = "Ctrl", LeftAlt = "Alt", RightAlt = "Alt" }
+    local function UpdateKeybindLabel() local keyName = chosenKey.Name; keybindButtonLabel.Text = Shortcuts[keyName] or keyName:sub(1,1):upper()..keyName:sub(2); local textSize = TextService:GetTextSize(keybindButtonLabel.Text, keybindButtonLabel.TextSize, keybindButtonLabel.Font, Vector2.new(math.huge, 18)); local targetWidth = math.max(keybindLabelConstraint.MinSize.X, textSize.X + 8); TweenService:Create(keybindButton, Cfg.KeybindResizeTweenInfo, { Size = UDim2.new(0, targetWidth, 0, 22) }):Play() end; UpdateKeybindLabel()
+    keybindButton.MouseButton1Click:Connect(function() keybindButtonLabel.Text = SC:GetText("keybind_indicator"); keybindButtonLabel.TextColor3 = Cfg.TextAccentColor; if inputConn then inputConn:Disconnect() end; inputConn = UserInputService.InputBegan:Connect(function(input, gameProcessed) if not gameProcessed and input.KeyCode ~= Enum.KeyCode.Unknown then chosenKey = input.KeyCode; UpdateKeybindLabel(); keybindButtonLabel.TextColor3 = Cfg.TextDimColor; if inputConn then inputConn:Disconnect() end elseif input.UserInputType == Enum.UserInputType.MouseButton1 then UpdateKeybindLabel(); keybindButtonLabel.TextColor3 = Cfg.TextDimColor; if inputConn then inputConn:Disconnect() end end end) end)
+    UserInputService.InputBegan:Connect(function(input, gameProcessed) if not gameProcessed and input.KeyCode == chosenKey then pcall(callback, chosenKey) end end)
+    updateSizeFunc()
+
+    local KeybindFunctions = { Element = keybindFrame, Label = keybindLabel, ButtonLabel = keybindButtonLabel }
+    function KeybindFunctions:Fire() pcall(callback, chosenKey); return KeybindFunctions end
+    function KeybindFunctions:SetFunction(newCallback) callback = newCallback or function() end; return KeybindFunctions end
+    function KeybindFunctions:SetKey(newKey) if typeof(newKey) == "EnumItem" and newKey.EnumType == Enum.KeyCode then chosenKey = newKey; UpdateKeybindLabel() end; return KeybindFunctions end
+    function KeybindFunctions:Text(newText) keybindLabel.Text = newText or SC:GetText(Cfg.DefaultKeybindTextKey); return KeybindFunctions end
+    function KeybindFunctions:Hide() keybindFrame.Visible = false; updateSizeFunc(); return KeybindFunctions end
+    function KeybindFunctions:Show() keybindFrame.Visible = true; updateSizeFunc(); return KeybindFunctions end
+    function KeybindFunctions:Remove() keybindFrame:Destroy(); updateSizeFunc(); return nil end
+    return KeybindFunctions
+end
+
+SC._Internal_NewTextbox = function(page, updateSizeFunc, text, options, callback)
+    local Cfg = SC.Config
+    text = text or SC:GetText(Cfg.DefaultTextboxTextKey); options = options or {}; callback = callback or function() end
+    local placeholder = options.Placeholder or ""; local defaultText = options.Default or ""; local format = options.Format or "all"; local clearOnFocus = options.ClearOnFocus or false; local executeOnLostFocus = options.ExecuteOnLostFocus; if executeOnLostFocus == nil then executeOnLostFocus = true end; local type = options.Type or "small" -- small, medium, large
+
+    local textboxFrame = Instance.new("Frame", page)
+    local textboxLayout, textboxLabel, textboxLabelPadding, textboxContainer
+    local textboxEdge, textboxEdgeCorner, textboxBg, textboxBgCorner, textboxBgGradient
+    local inputTextBox, inputPadding
+
+    textboxFrame.Name = "textboxFrame_" .. text:gsub("%W+", "_"); textboxFrame.BackgroundTransparency = 1.000; textboxFrame.ClipsDescendants = true
+
+    if type == "medium" or type == "large" then
+        textboxFrame.Size = UDim2.new(1, 0, 0, type=="medium" and 46 or 142) -- Taller for medium/large
+        textboxLayout = Instance.new("UIListLayout", textboxFrame)
+        textboxLabel = Instance.new("TextLabel", textboxLayout)
+        textboxLabelPadding = Instance.new("UIPadding", textboxLabel)
+        textboxContainer = Instance.new("Frame", textboxLayout) -- Container holds edge/bg/input
+
+        textboxLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        textboxLabel.Name = "textboxLabel"; textboxLabel.BackgroundTransparency = 1.000; textboxLabel.Size = UDim2.new(1, 0, 0, 18); textboxLabel.Font = Cfg.MainFont; textboxLabel.Text = text; textboxLabel.TextColor3 = Cfg.TextColor; textboxLabel.TextSize = Cfg.TextSizeDefault; textboxLabel.TextXAlignment = Enum.TextXAlignment.Left; textboxLabel.RichText = true
+        textboxLabelPadding.PaddingLeft = UDim.new(0, 2); textboxLabelPadding.PaddingBottom = UDim.new(0, 2) -- Padding below label
+        textboxContainer.Name = "textboxContainer"; textboxContainer.BackgroundTransparency = 1.0; textboxContainer.Size = UDim2.new(1, 0, 1, -18) -- Fill remaining height
+    else -- Small type
+        textboxFrame.Size = UDim2.new(1, 0, 0, 24)
+        textboxLayout = Instance.new("UIListLayout", textboxFrame)
+        textboxLabel = Instance.new("TextLabel", textboxLayout)
+        textboxLabelPadding = Instance.new("UIPadding", textboxLabel)
+        textboxContainer = Instance.new("Frame", textboxLayout) -- Aligned right
+
+        textboxLayout.FillDirection = Enum.FillDirection.Horizontal; textboxLayout.VerticalAlignment = Enum.VerticalAlignment.Center; textboxLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        textboxLabel.Name = "textboxLabel"; textboxLabel.BackgroundTransparency = 1.000; textboxLabel.Size = UDim2.new(1, -140, 1, 0); textboxLabel.Font = Cfg.MainFont; textboxLabel.Text = text; textboxLabel.TextColor3 = Cfg.TextColor; textboxLabel.TextSize = Cfg.TextSizeDefault; textboxLabel.TextXAlignment = Enum.TextXAlignment.Left; textboxLabel.RichText = true
+        textboxLabelPadding.PaddingLeft = UDim.new(0, 2)
+        textboxContainer.Name = "textboxContainer"; textboxContainer.BackgroundTransparency = 1.0; textboxContainer.Size = UDim2.new(0, 133, 0, 22)
+    end
+
+    -- Common elements for all types
+    textboxEdge = Instance.new("Frame", textboxContainer); textboxEdgeCorner = Instance.new("UICorner", textboxEdge); textboxBg = Instance.new("Frame", textboxEdge); textboxBgCorner = Instance.new("UICorner", textboxBg); textboxBgGradient = Instance.new("UIGradient", textboxBg)
+    inputTextBox = Instance.new("TextBox", textboxBg); inputPadding = Instance.new("UIPadding", inputTextBox)
+
+    textboxEdge.Name = "textboxEdge"; textboxEdge.BackgroundColor3 = Cfg.EdgeColor; textboxEdge.Size = UDim2.new(1, 0, 1, 0); textboxEdgeCorner.CornerRadius = Cfg.CornerRadius
+    textboxBg.Name = "textboxBg"; textboxBg.AnchorPoint = Vector2.new(0.5, 0.5); textboxBg.Position = UDim2.new(0.5, 0, 0.5, 0); textboxBg.Size = UDim2.new(1, -2, 1, -2); textboxBg.ClipsDescendants = true; textboxBgCorner.CornerRadius = Cfg.CornerRadius
+    textboxBgGradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0.00, Cfg.BackgroundColorLight), ColorSequenceKeypoint.new(1.00, Cfg.BackgroundColor)}; textboxBgGradient.Rotation = 90
+    inputTextBox.Name = "inputTextBox"; inputTextBox.AnchorPoint = Vector2.new(0.5, 0.5); inputTextBox.Position = UDim2.new(0.5, 0, 0.5, 0); inputTextBox.BackgroundTransparency = 1.000; inputTextBox.Size = UDim2.new(1, -8, 1, -8); inputTextBox.Font = Cfg.MainFont; inputTextBox.PlaceholderColor3 = Cfg.TextPlaceholderColor; inputTextBox.PlaceholderText = placeholder; inputTextBox.Text = defaultText; inputTextBox.TextColor3 = Cfg.TextColor; inputTextBox.TextSize = Cfg.TextSizeDefault; inputTextBox.ClearTextOnFocus = clearOnFocus; inputTextBox.ClipsDescendants = true; inputTextBox.TextXAlignment = Enum.TextXAlignment.Left
+    inputPadding.PaddingLeft = UDim.new(0, 4); inputPadding.PaddingRight = UDim.new(0, 4); inputPadding.PaddingTop = UDim.new(0, type=="large" and 2 or 0); inputPadding.PaddingBottom = UDim.new(0, type=="large" and 2 or 0)
+
+    if type == "large" then inputTextBox.TextWrapped = true; inputTextBox.TextYAlignment = Enum.TextYAlignment.Top; inputTextBox.MultiLine = true else inputTextBox.MultiLine = false end
+
+    inputTextBox:GetPropertyChangedSignal("Text"):Connect(function() local currentText = inputTextBox.Text; local newText = currentText; if format == "numbers" then newText = currentText:gsub("%D+", "") elseif format == "lower" then newText = currentText:lower() elseif format == "upper" then newText = currentText:upper() end; if newText ~= currentText then inputTextBox.Text = newText end end)
+    inputTextBox.Focused:Connect(function() TweenService:Create(textboxEdge, Cfg.HoverTweenInfo, {BackgroundColor3 = Cfg.AccentColor}):Play(); SC.CanChangeMainWindowVisibility = false end) -- Prevent window toggle while typing
+    inputTextBox.FocusLost:Connect(function(enterPressed) TweenService:Create(textboxEdge, Cfg.HoverTweenInfo, {BackgroundColor3 = Cfg.EdgeColor}):Play(); SC.CanChangeMainWindowVisibility = true; if executeOnLostFocus or enterPressed then pcall(callback, inputTextBox.Text) end end)
+    updateSizeFunc()
+
+    local TextboxFunctions = { Element = textboxFrame, Input = inputTextBox, Label = textboxLabel }
+    function TextboxFunctions:GetValue() return inputTextBox.Text end
+    function TextboxFunctions:SetValue(newValue, fireCallback) inputTextBox.Text = tostring(newValue or ""); if fireCallback then pcall(callback, inputTextBox.Text) end; return TextboxFunctions end
+    function TextboxFunctions:Fire() pcall(callback, inputTextBox.Text); return TextboxFunctions end
+    function TextboxFunctions:SetFunction(newCallback) callback = newCallback or function() end; return TextboxFunctions end
+    function TextboxFunctions:Text(newText) textboxLabel.Text = newText or SC:GetText(Cfg.DefaultTextboxTextKey); return TextboxFunctions end
+    function TextboxFunctions:Hide() textboxFrame.Visible = false; updateSizeFunc(); return TextboxFunctions end
+    function TextboxFunctions:Show() textboxFrame.Visible = true; updateSizeFunc(); return TextboxFunctions end
+    function TextboxFunctions:Remove() textboxFrame:Destroy(); updateSizeFunc(); return nil end
+    function TextboxFunctions:Place(newPlaceholder) inputTextBox.PlaceholderText = newPlaceholder or ""; return TextboxFunctions end
+    return TextboxFunctions
+end
+
+SC._Internal_NewSlider = function(page, updateSizeFunc, text, options, callback)
+    local Cfg = SC.Config
+    text = text or SC:GetText(Cfg.DefaultSliderTextKey); options = options or {}; callback = callback or function() end
+    local minValue = options.Min or 0; local maxValue = options.Max or 100; local defaultValue = options.Default or minValue; local suffix = options.Suffix or ""; local showMax = options.ShowMax or false; local step = options.Step or 1; local numDecimals = options.Decimals or (step < 1 and 2 or 0); local compareSign = "/"
+    defaultValue = math.clamp(math.floor((defaultValue - minValue) / step + 0.5) * step + minValue, minValue, maxValue)
+
+    local sliderFrame = Instance.new("Frame", page); local sliderLayout = Instance.new("UIListLayout", sliderFrame); local topRow = Instance.new("Frame", sliderLayout); local topRowLayout = Instance.new("UIListLayout", topRow); local sliderLabel = Instance.new("TextLabel", topRowLayout); local sliderLabelPadding = Instance.new("UIPadding", sliderLabel); local sliderValueLabel = Instance.new("TextLabel", topRowLayout); local sliderValuePadding = Instance.new("UIPadding", sliderValueLabel)
+    local sliderButton = Instance.new("TextButton", sliderLayout); local sliderButtonCorner = Instance.new("UICorner", sliderButton); local sliderBackground = Instance.new("Frame", sliderButton); local sliderBgCorner = Instance.new("UICorner", sliderBackground); local sliderBgGradient = Instance.new("UIGradient", sliderBackground); local sliderIndicator = Instance.new("Frame", sliderBackground); local sliderIndicatorCorner = Instance.new("UICorner", sliderIndicator); local sliderIndicatorGradient = Instance.new("UIGradient", sliderIndicator); local sliderBgPadding = Instance.new("UIPadding", sliderBackground)
+
+    sliderFrame.Name = "sliderFrame_" .. text:gsub("%W+", "_"); sliderFrame.BackgroundTransparency = 1.000; sliderFrame.Size = UDim2.new(1, 0, 0, 40)
+    sliderLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    topRow.Name = "topRow"; topRow.BackgroundTransparency = 1.0; topRow.Size = UDim2.new(1, 0, 0, 18); topRowLayout.FillDirection = Enum.FillDirection.Horizontal; topRowLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    sliderLabel.Name = "sliderLabel"; sliderLabel.BackgroundTransparency = 1.000; sliderLabel.Size = UDim2.new(0.6, 0, 1, 0); sliderLabel.Font = Cfg.MainFont; sliderLabel.Text = text; sliderLabel.TextColor3 = Cfg.TextColor; sliderLabel.TextSize = Cfg.TextSizeDefault; sliderLabel.TextXAlignment = Enum.TextXAlignment.Left; sliderLabel.RichText = true; sliderLabelPadding.PaddingLeft = UDim.new(0, 2)
+    sliderValueLabel.Name = "sliderValueLabel"; sliderValueLabel.BackgroundTransparency = 1.000; sliderValueLabel.Size = UDim2.new(0.4, -4, 1, 0); sliderValueLabel.Font = Cfg.MonospaceFont; sliderValueLabel.TextColor3 = Cfg.TextDimColor; sliderValueLabel.TextSize = Cfg.TextSizeDefault; sliderValueLabel.TextXAlignment = Enum.TextXAlignment.Right; sliderValuePadding.PaddingRight = UDim.new(0, 2)
+    sliderButton.Name = "sliderButton"; sliderButton.BackgroundColor3 = Cfg.EdgeColor; sliderButton.Size = UDim2.new(1, 0, 0, 16); sliderButton.AutoButtonColor = false; sliderButton.Text = ""; sliderButtonCorner.CornerRadius = Cfg.CornerRadius
+    sliderBackground.Name = "sliderBackground"; sliderBackground.AnchorPoint = Vector2.new(0.5, 0.5); sliderBackground.Position = UDim2.new(0.5, 0, 0.5, 0); sliderBackground.Size = UDim2.new(1, -2, 1, -2); sliderBackground.ClipsDescendants = true; sliderBgCorner.CornerRadius = Cfg.CornerRadius
+    sliderBgGradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0.00, Cfg.BackgroundColorLight), ColorSequenceKeypoint.new(1.00, Cfg.BackgroundColor)}; sliderBgGradient.Rotation = 90
+    sliderIndicator.Name = "sliderIndicator"; sliderIndicator.BackgroundColor3 = Cfg.AccentColor; sliderIndicator.BorderSizePixel = 0; sliderIndicator.Size = UDim2.new(0, 0, 1, -2); sliderIndicator.Position = UDim2.new(0, 0, 0, 1); sliderIndicatorCorner.CornerRadius = Cfg.CornerRadius
+    sliderIndicatorGradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0.00, Cfg.AccentColor), ColorSequenceKeypoint.new(1.00, Cfg.AccentColorDarker)}; sliderIndicatorGradient.Rotation = 90
+    sliderBgPadding.PaddingLeft = UDim.new(0, 1); sliderBgPadding.PaddingRight = UDim.new(0, 1); sliderBgPadding.PaddingTop = UDim.new(0, 1); sliderBgPadding.PaddingBottom = UDim.new(0, 1)
+
+    local currentValue = defaultValue; local isDragging = false; local dragConnection = nil
+    local function UpdateSliderVisuals(value) local oldValue = currentValue; currentValue = math.clamp(math.floor((value - minValue) / step + 0.5) * step + minValue, minValue, maxValue); local range = maxValue - minValue; local percentage = range==0 and 0 or math.clamp(((currentValue - minValue) / range), 0, 1); TweenService:Create(sliderIndicator, Cfg.SliderDragTweenInfo, {Size = UDim2.new(percentage, 0, 1, -2)}):Play(); local valueText = SC:RoundNumber(numDecimals, currentValue); local maxText = SC:RoundNumber(numDecimals, maxValue); local slideText = showMax and (valueText .. " " .. compareSign .. " " .. maxText .. suffix) or (valueText .. suffix); sliderValueLabel.Text = slideText; if oldValue ~= currentValue then pcall(callback, currentValue) end end
+    UpdateSliderVisuals(currentValue)
+    sliderButton.MouseButton1Down:Connect(function() isDragging = true; local barStart = sliderBackground.AbsolutePosition.X + sliderBgPadding.PaddingLeft.Offset; local barWidth = sliderBackground.AbsoluteSize.X - (sliderBgPadding.PaddingLeft.Offset + sliderBgPadding.PaddingRight.Offset); if barWidth <= 0 then barWidth = 1 end; local clickPercentage = math.clamp((Mouse.X - barStart) / barWidth, 0, 1); local newValue = minValue + clickPercentage * (maxValue - minValue); UpdateSliderVisuals(newValue); if dragConnection then dragConnection:Disconnect() end; dragConnection = RunService.RenderStepped:Connect(function() if not isDragging then if dragConnection then dragConnection:Disconnect() end return end; local currentMouseX = UserInputService:GetMouseLocation().X; clickPercentage = math.clamp((currentMouseX - barStart) / barWidth, 0, 1); newValue = minValue + clickPercentage * (maxValue - minValue); UpdateSliderVisuals(newValue) end) end)
+    UserInputService.InputEnded:Connect(function(input) if isDragging and input.UserInputType == Enum.UserInputType.MouseButton1 then isDragging = false; if dragConnection then dragConnection:Disconnect() end end end)
+    updateSizeFunc()
+
+    local SliderFunctions = { Element = sliderFrame }; SliderFunctions.GetValue = function() return currentValue end
+    function SliderFunctions:SetValue(newValue, fireCallback) UpdateSliderVisuals(newValue); return SliderFunctions end
+    function SliderFunctions:SetFunction(newCallback) callback = newCallback or function() end; return SliderFunctions end
+    function SliderFunctions:Text(newText) sliderLabel.Text = newText or SC:GetText(Cfg.DefaultSliderTextKey); return SliderFunctions end
+    function SliderFunctions:Hide() sliderFrame.Visible = false; updateSizeFunc(); return SliderFunctions end
+    function SliderFunctions:Show() sliderFrame.Visible = true; updateSizeFunc(); return SliderFunctions end
+    function SliderFunctions:Remove() sliderFrame:Destroy(); updateSizeFunc(); return nil end
+    return SliderFunctions
+end
+
+SC._Internal_NewDropdown = function(page, updateSizeFunc, text, options, default, callback)
+    local Cfg = SC.Config
+    text = text or SC:GetText(Cfg.DefaultDropdownTextKey); options = options or {}; default = default or options[1]; callback = callback or function() end
+
+    local dropdownFrame = Instance.new("Frame", page); local dropdownLayout = Instance.new("UIListLayout", dropdownFrame); local topRow = Instance.new("Frame", dropdownLayout); local topRowLayout = Instance.new("UIListLayout", topRow); local dropdownLabel = Instance.new("TextLabel", topRowLayout); local dropdownLabelPadding = Instance.new("UIPadding", dropdownLabel)
+    local selectorButton = Instance.new("TextButton", dropdownLayout); local selectorButtonLayout = Instance.new("UIListLayout", selectorButton); local selectorButtonEdge = Instance.new("Frame", selectorButtonLayout); local selectorButtonEdgeCorner = Instance.new("UICorner", selectorButtonEdge); local selectorButtonBg = Instance.new("Frame", selectorButtonEdge); local selectorButtonBgCorner = Instance.new("UICorner", selectorButtonBg); local selectorButtonBgGradient = Instance.new("UIGradient", selectorButtonBg); local currentSelectionLabel = Instance.new("TextLabel", selectorButtonBg); local currentSelectionPadding = Instance.new("UIPadding", currentSelectionLabel); local dropdownArrow = Instance.new("ImageLabel", selectorButtonLayout)
+    local listFrame = Instance.new("Frame", dropdownFrame); local listEdge = Instance.new("Frame", listFrame); local listEdgeCorner = Instance.new("UICorner", listEdge); local listBg = Instance.new("Frame", listEdge); local listBgCorner = Instance.new("UICorner", listBg); local listBgGradient = Instance.new("UIGradient", listBg); local searchBox = Instance.new("TextBox", listBg); local searchBoxPadding = Instance.new("UIPadding", searchBox); local listScroll = Instance.new("ScrollingFrame", listBg); local listScrollLayout = Instance.new("UIListLayout", listScroll); local listScrollPadding = Instance.new("UIPadding", listScroll); local noResultsLabel = Instance.new("TextLabel", listScroll)
+
+    local isOpen = false; local currentSelection = default; local originalOptions = options -- Store original options
+    local currentOptionButtons = {} -- Store created button references
+
+    dropdownFrame.Name = "dropdownFrame_"..text:gsub("%W+",""); dropdownFrame.BackgroundTransparency = 1.0; dropdownFrame.Size = UDim2.new(1, 0, 0, 46); dropdownFrame.ClipsDescendants = false; dropdownFrame.ZIndex = 2
+    dropdownLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    topRow.Name = "topRow"; topRow.BackgroundTransparency = 1.0; topRow.Size = UDim2.new(1, 0, 0, 18); topRowLayout.FillDirection = Enum.FillDirection.Horizontal; topRowLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    dropdownLabel.Name = "dropdownLabel"; dropdownLabel.BackgroundTransparency = 1.0; dropdownLabel.Size = UDim2.new(1, 0, 1, 0); dropdownLabel.Font = Cfg.MainFont; dropdownLabel.Text = text; dropdownLabel.TextColor3 = Cfg.TextColor; dropdownLabel.TextSize = Cfg.TextSizeDefault; dropdownLabel.TextXAlignment = Enum.TextXAlignment.Left; dropdownLabelPadding.PaddingLeft = UDim.new(0, 2)
+    selectorButton.Name = "selectorButton"; selectorButton.BackgroundTransparency = 1.0; selectorButton.Size = UDim2.new(1, 0, 0, 22); selectorButton.AutoButtonColor = false; selectorButton.Text = ""; selectorButton.ZIndex = 3
+    selectorButtonLayout.FillDirection = Enum.FillDirection.Horizontal; selectorButtonLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    selectorButtonEdge.Name = "selectorButtonEdge"; selectorButtonEdge.BackgroundColor3 = Cfg.EdgeColor; selectorButtonEdge.Size = UDim2.new(1, -20, 1, 0); selectorButtonEdgeCorner.CornerRadius = Cfg.CornerRadius
+    selectorButtonBg.Name = "selectorButtonBg"; selectorButtonBg.AnchorPoint = Vector2.new(0.5, 0.5); selectorButtonBg.Position = UDim2.new(0.5, 0, 0.5, 0); selectorButtonBg.Size = UDim2.new(1, -2, 1, -2); selectorButtonBgCorner.CornerRadius = Cfg.CornerRadius
+    selectorButtonBgGradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0.00, Cfg.BackgroundColorLight), ColorSequenceKeypoint.new(1.00, Cfg.BackgroundColor)}; selectorButtonBgGradient.Rotation = 90
+    currentSelectionLabel.Name = "currentSelectionLabel"; currentSelectionLabel.BackgroundTransparency = 1.0; currentSelectionLabel.Size = UDim2.new(1, 0, 1, 0); currentSelectionLabel.Font = Cfg.MainFont; currentSelectionLabel.Text = currentSelection or SC:GetText("selector_default"); currentSelectionLabel.TextColor3 = Cfg.TextColor; currentSelectionLabel.TextSize = Cfg.TextSizeDefault; currentSelectionLabel.TextXAlignment = Enum.TextXAlignment.Left; currentSelectionPadding.PaddingLeft = UDim.new(0, 6)
+    dropdownArrow.Name = "dropdownArrow"; dropdownArrow.BackgroundTransparency = 1.0; dropdownArrow.Size = UDim2.new(0, 16, 0, 16); dropdownArrow.Image = "rbxassetid://3926305904"; dropdownArrow.ImageRectOffset = Vector2.new(4, 844); dropdownArrow.ImageRectSize = Vector2.new(24, 24); dropdownArrow.ScaleType = Enum.ScaleType.Slice; dropdownArrow.SliceCenter = Rect.new(100, 100, 100, 100); dropdownArrow.ImageColor3 = Cfg.TextDimColor; dropdownArrow.Rotation = 0
+
+    listFrame.Name = "listFrame"; listFrame.BackgroundTransparency = 1.0; listFrame.Position = UDim2.new(0, 0, 1, Cfg.ElementPadding.Offset); listFrame.Size = UDim2.new(1, 0, 0, 0); listFrame.ClipsDescendants = true; listFrame.Visible = false; listFrame.ZIndex = 10
+    listEdge.Name = "listEdge"; listEdge.Parent = listFrame; listEdge.BackgroundColor3 = Cfg.EdgeColor; listEdge.Size = UDim2.new(1, 0, 1, 0); listEdgeCorner.CornerRadius = Cfg.CornerRadius
+    listBg.Name = "listBg"; listBg.Parent = listEdge; listBg.AnchorPoint = Vector2.new(0.5, 0.5); listBg.Position = UDim2.new(0.5, 0, 0.5, 0); listBg.Size = UDim2.new(1, -2, 1, -2); listBg.ClipsDescendants = true; listBgCorner.CornerRadius = Cfg.CornerRadius
+    listBgGradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0.00, Cfg.BackgroundColorLight), ColorSequenceKeypoint.new(1.00, Cfg.BackgroundColor)}; listBgGradient.Rotation = 90; listBgGradient.Parent = listBg
+    searchBox.Name = "searchBox"; searchBox.Parent = listBg; searchBox.BackgroundColor3 = Cfg.BackgroundColor; searchBox.Size = UDim2.new(1, -8, 0, 22); searchBox.Position = UDim2.new(0.5, 0, 0, 4); searchBox.AnchorPoint = Vector2.new(0.5, 0); searchBox.Font = Cfg.MainFont; searchBox.PlaceholderText = SC:GetText("dropdown_search_placeholder"); searchBox.PlaceholderColor3 = Cfg.TextPlaceholderColor; searchBox.TextColor3 = Cfg.TextColor; searchBox.TextSize = Cfg.TextSizeSmall; searchBox.ClearTextOnFocus = false; Instance.new("UICorner", searchBox).CornerRadius = Cfg.CornerRadius; searchBoxPadding.Parent = searchBox; searchBoxPadding.PaddingLeft = UDim.new(0, 4); searchBoxPadding.PaddingRight = UDim.new(0, 4)
+    listScroll.Name = "listScroll"; listScroll.Parent = listBg; listScroll.BackgroundTransparency = 1.0; listScroll.Size = UDim2.new(1, 0, 1, -30); listScroll.Position = UDim2.new(0, 0, 0, 30); listScroll.CanvasSize = UDim2.new(0,0,0,0); listScroll.ScrollBarImageColor3 = Cfg.ScrollbarColor; listScroll.ScrollBarThickness = Cfg.ScrollbarThickness; listScrollLayout.Parent = listScroll; listScrollLayout.SortOrder = Enum.SortOrder.LayoutOrder; listScrollLayout.Padding = UDim.new(0, 2); listScrollPadding.Parent = listScroll; listScrollPadding.PaddingTop = UDim.new(0, 4); listScrollPadding.PaddingBottom = UDim.new(0, 4); listScrollPadding.PaddingLeft = UDim.new(0, 4); listScrollPadding.PaddingRight = UDim.new(0, 4)
+    noResultsLabel.Name = "noResultsLabel"; noResultsLabel.Parent = listScroll; noResultsLabel.BackgroundTransparency = 1.0; noResultsLabel.Size = UDim2.new(1, -8, 0, 20); noResultsLabel.Position = UDim2.new(0.5, 0, 0, 0); noResultsLabel.AnchorPoint = Vector2.new(0.5, 0); noResultsLabel.Font = Cfg.MainFont; noResultsLabel.Text = SC:GetText("dropdown_no_results"); noResultsLabel.TextColor3 = Cfg.TextDimColor; noResultsLabel.TextSize = Cfg.TextSizeSmall; noResultsLabel.Visible = false
+
+    local function UpdateListHeight() local contentHeight = listScrollLayout.AbsoluteContentSize.Y; local totalPadding = listScrollPadding.PaddingTop.Offset + listScrollPadding.PaddingBottom.Offset; local listHeight = math.min(contentHeight + totalPadding, Cfg.DropdownMaxVisibleItems * 22); local searchHeight = 30; local totalFrameHeight = listHeight + searchHeight; listScroll.CanvasSize = UDim2.new(0, 0, 0, contentHeight); listFrame.Size = UDim2.new(1, 0, 0, totalFrameHeight); if isOpen then listFrame.Visible = true; TweenService:Create(listFrame, Cfg.DropdownTweenInfo, { Size = UDim2.new(1, 0, 0, totalFrameHeight) }):Play() else local closeTween = TweenService:Create(listFrame, Cfg.DropdownTweenInfo, { Size = UDim2.new(1, 0, 0, 0) }); closeTween.Completed:Connect(function() if not isOpen then listFrame.Visible = false end end); closeTween:Play() end end
+    local function PopulateList(filter)
+        filter = filter and filter:lower() or ""; for _, btn in pairs(currentOptionButtons) do btn:Destroy() end; table.clear(currentOptionButtons); local count = 0
+        for _, optionText in ipairs(originalOptions) do if filter == "" or optionText:lower():find(filter, 1, true) then local optionButton = Instance.new("TextButton", listScrollLayout); optionButton.Name = "option_" .. optionText:gsub("%W+", ""); optionButton.BackgroundTransparency = 1.0; optionButton.Size = UDim2.new(1, 0, 0, 20); optionButton.AutoButtonColor = false; optionButton.Font = Cfg.MainFont; optionButton.Text = optionText; optionButton.TextColor3 = (optionText == currentSelection) and Cfg.TextAccentColor or Cfg.TextDimColor; optionButton.TextSize = Cfg.TextSizeDefault; optionButton.TextXAlignment = Enum.TextXAlignment.Left; count = count + 1; currentOptionButtons[optionText] = optionButton; optionButton.MouseEnter:Connect(function() if optionText ~= currentSelection then optionButton.TextColor3 = Cfg.TextHoverColor end end); optionButton.MouseLeave:Connect(function() if optionText ~= currentSelection then optionButton.TextColor3 = Cfg.TextDimColor end end); optionButton.MouseButton1Click:Connect(function() currentSelection = optionText; currentSelectionLabel.Text = currentSelection; for _, childBtn in pairs(currentOptionButtons) do childBtn.TextColor3 = (childBtn.Text == currentSelection) and Cfg.TextAccentColor or Cfg.TextDimColor end; pcall(callback, currentSelection); isOpen = false; TweenService:Create(dropdownArrow, Cfg.DropdownTweenInfo, { Rotation = 0 }):Play(); local closeTween = TweenService:Create(listFrame, Cfg.DropdownTweenInfo, { Size = UDim2.new(1, 0, 0, 0) }); closeTween.Completed:Connect(function() if not isOpen then listFrame.Visible = false end end); closeTween:Play() end) end end
+        noResultsLabel.Visible = (count == 0); UpdateListHeight()
+    end
+    searchBox:GetPropertyChangedSignal("Text"):Connect(function() PopulateList(searchBox.Text) end)
+    selectorButton.MouseButton1Click:Connect(function() isOpen = not isOpen; local targetRotation = isOpen and 180 or 0; TweenService:Create(dropdownArrow, Cfg.DropdownTweenInfo, { Rotation = targetRotation }):Play(); if isOpen then searchBox.Text = ""; PopulateList("") else local closeTween = TweenService:Create(listFrame, Cfg.DropdownTweenInfo, { Size = UDim2.new(1, 0, 0, 0) }); closeTween.Completed:Connect(function() if not isOpen then listFrame.Visible = false end end); closeTween:Play() end end)
+    UserInputService.InputBegan:Connect(function(input) if isOpen and input.UserInputType == Enum.UserInputType.MouseButton1 then local target = Mouse.Target; if not (target and (target:IsDescendantOf(selectorButton) or target:IsDescendantOf(listFrame))) then isOpen = false; TweenService:Create(dropdownArrow, Cfg.DropdownTweenInfo, { Rotation = 0 }):Play(); local closeTween = TweenService:Create(listFrame, Cfg.DropdownTweenInfo, { Size = UDim2.new(1, 0, 0, 0) }); closeTween.Completed:Connect(function() if not isOpen then listFrame.Visible = false end end); closeTween:Play() end end end)
+    PopulateList("") -- Initial populate & size calc
+    updateSizeFunc()
+
+    local DropdownFunctions = { Element = dropdownFrame }; DropdownFunctions.CurrentSelection = function() return currentSelection end
+    function DropdownFunctions:SetSelected(value, fireCallback) local found = false; for _, optionText in ipairs(originalOptions) do if optionText == value then currentSelection = value; currentSelectionLabel.Text = currentSelection; found = true; break end end; if found then PopulateList(searchBox.Text); if fireCallback then pcall(callback, currentSelection) end end; return DropdownFunctions end
+    function DropdownFunctions:SetFunction(newCallback) callback = newCallback or function() end; return DropdownFunctions end
+    function DropdownFunctions:Text(newText) dropdownLabel.Text = newText or SC:GetText(Cfg.DefaultDropdownTextKey); return DropdownFunctions end
+    function DropdownFunctions:Hide() dropdownFrame.Visible = false; updateSizeFunc(); return DropdownFunctions end
+    function DropdownFunctions:Show() dropdownFrame.Visible = true; updateSizeFunc(); return DropdownFunctions end
+    function DropdownFunctions:Remove() dropdownFrame:Destroy(); updateSizeFunc(); return nil end
+    --// Function to update the list of options dynamically
+    function DropdownFunctions:UpdateOptions(newOptionsTable)
+        originalOptions = newOptionsTable or {}
+        -- Reselect default or first item if current selection is no longer valid
+        local foundCurrent = false
+        for _, opt in ipairs(originalOptions) do if opt == currentSelection then foundCurrent = true; break end end
+        if not foundCurrent then
+            currentSelection = originalOptions[1] -- Select first item
+            currentSelectionLabel.Text = currentSelection or SC:GetText("selector_default")
+            pcall(callback, currentSelection) -- Fire callback for the new default selection
+        end
+        PopulateList(searchBox.Text) -- Repopulate with the new options
+        return DropdownFunctions
+    end
+    return DropdownFunctions
+end
+
+SC._Internal_NewProgressBar = function(page, updateSizeFunc, text, options, callback)
+    local Cfg = SC.Config
+    text = text or SC:GetText(Cfg.DefaultProgressBarTextKey); options = options or {}; callback = callback or function() end
+    local minValue = options.Min or 0; local maxValue = options.Max or 100; local defaultValue = options.Default or minValue; local suffix = options.Suffix or "%"; local showValue = options.ShowValue; if showValue == nil then showValue = true end; local numDecimals = options.Decimals or 0
+    defaultValue = math.clamp(defaultValue, minValue, maxValue)
+
+    local pBarFrame = Instance.new("Frame", page); local pBarLayout = Instance.new("UIListLayout", pBarFrame); local topRow = Instance.new("Frame", pBarLayout); local topRowLayout = Instance.new("UIListLayout", topRow); local pBarLabel = Instance.new("TextLabel", topRowLayout); local pBarValueLabel = Instance.new("TextLabel", topRowLayout)
+    local pBarEdge = Instance.new("Frame", pBarLayout); local pBarEdgeCorner = Instance.new("UICorner", pBarEdge); local pBarBg = Instance.new("Frame", pBarEdge); local pBarBgCorner = Instance.new("UICorner", pBarBg); local pBarBgGradient = Instance.new("UIGradient", pBarBg)
+    local pBarIndicator = Instance.new("Frame", pBarBg); local pBarIndicatorCorner = Instance.new("UICorner", pBarIndicator); local pBarIndicatorGradient = Instance.new("UIGradient", pBarIndicator); local pBarBgPadding = Instance.new("UIPadding", pBarBg)
+
+    pBarFrame.Name = "pBarFrame_" .. text:gsub("%W+", ""); pBarFrame.BackgroundTransparency = 1.0; pBarFrame.Size = UDim2.new(1, 0, 0, 40)
+    pBarLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    topRow.Name = "topRow"; topRow.BackgroundTransparency = 1.0; topRow.Size = UDim2.new(1, 0, 0, 18); topRowLayout.FillDirection = Enum.FillDirection.Horizontal; topRowLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    pBarLabel.Name = "pBarLabel"; pBarLabel.BackgroundTransparency = 1.0; pBarLabel.Size = UDim2.new(0.7, 0, 1, 0); pBarLabel.Font = Cfg.MainFont; pBarLabel.Text = text; pBarLabel.TextColor3 = Cfg.TextColor; pBarLabel.TextSize = Cfg.TextSizeDefault; pBarLabel.TextXAlignment = Enum.TextXAlignment.Left; Instance.new("UIPadding", pBarLabel).PaddingLeft = UDim.new(0, 2)
+    pBarValueLabel.Name = "pBarValueLabel"; pBarValueLabel.BackgroundTransparency = 1.0; pBarValueLabel.Size = UDim2.new(0.3, -4, 1, 0); pBarValueLabel.Font = Cfg.MonospaceFont; pBarValueLabel.TextColor3 = Cfg.TextDimColor; pBarValueLabel.TextSize = Cfg.TextSizeDefault; pBarValueLabel.TextXAlignment = Enum.TextXAlignment.Right; pBarValueLabel.Visible = showValue; Instance.new("UIPadding", pBarValueLabel).PaddingRight = UDim.new(0, 2)
+    pBarEdge.Name = "pBarEdge"; pBarEdge.BackgroundColor3 = Cfg.EdgeColor; pBarEdge.Size = UDim2.new(1, 0, 0, 16); pBarEdgeCorner.CornerRadius = Cfg.CornerRadius
+    pBarBg.Name = "pBarBg"; pBarBg.AnchorPoint = Vector2.new(0.5, 0.5); pBarBg.Position = UDim2.new(0.5, 0, 0.5, 0); pBarBg.Size = UDim2.new(1, -2, 1, -2); pBarBg.ClipsDescendants = true; pBarBgCorner.CornerRadius = Cfg.CornerRadius
+    pBarBgGradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0.00, Cfg.BackgroundColorLight), ColorSequenceKeypoint.new(1.00, Cfg.BackgroundColor)}; pBarBgGradient.Rotation = 90
+    pBarIndicator.Name = "pBarIndicator"; pBarIndicator.BackgroundColor3 = Cfg.AccentColor; pBarIndicator.BorderSizePixel = 0; pBarIndicator.Size = UDim2.new(0, 0, 1, -2); pBarIndicator.Position = UDim2.new(0, 0, 0, 1); pBarIndicatorCorner.CornerRadius = Cfg.CornerRadius
+    pBarIndicatorGradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0.00, Cfg.AccentColor), ColorSequenceKeypoint.new(1.00, Cfg.AccentColorDarker)}; pBarIndicatorGradient.Rotation = 90
+    pBarBgPadding.PaddingLeft = UDim.new(0, 1); pBarBgPadding.PaddingRight = UDim.new(0, 1); pBarBgPadding.PaddingTop = UDim.new(0, 1); pBarBgPadding.PaddingBottom = UDim.new(0, 1)
+
+    local currentValue = defaultValue
+    local function UpdateProgressBar(value, skipAnim) local oldValue = currentValue; currentValue = math.clamp(value, minValue, maxValue); local range = maxValue-minValue; local percentage = range==0 and 0 or math.clamp(((currentValue - minValue) / range), 0, 1); local animInfo = skipAnim and TweenInfo.new(0) or Cfg.ProgressBarTweenInfo; TweenService:Create(pBarIndicator, animInfo, {Size = UDim2.new(percentage, 0, 1, -2)}):Play(); if showValue then local valueText = SC:RoundNumber(numDecimals, currentValue); pBarValueLabel.Text = valueText .. suffix end; if oldValue ~= currentValue then pcall(callback, currentValue) end end
+    UpdateProgressBar(currentValue, true)
+    updateSizeFunc()
+
+    local ProgressBarFunctions = { Element = pBarFrame }
+    ProgressBarFunctions.GetValue = function() return currentValue end
+    function ProgressBarFunctions:SetValue(newValue, skipAnim) UpdateProgressBar(newValue, skipAnim); return ProgressBarFunctions end
+    function ProgressBarFunctions:SetFunction(newCallback) callback = newCallback or function() end; return ProgressBarFunctions end
+    function ProgressBarFunctions:Text(newText) pBarLabel.Text = newText or SC:GetText(Cfg.DefaultProgressBarTextKey); return ProgressBarFunctions end
+    function ProgressBarFunctions:Hide() pBarFrame.Visible = false; updateSizeFunc(); return ProgressBarFunctions end
+    function ProgressBarFunctions:Show() pBarFrame.Visible = true; updateSizeFunc(); return ProgressBarFunctions end
+    function ProgressBarFunctions:Remove() pBarFrame:Destroy(); updateSizeFunc(); return nil end
+    return ProgressBarFunctions
+end
+
+SC._Internal_NewImageButton = function(page, updateSizeFunc, text, imageId, options, callback)
+    local Cfg = SC.Config
+    text = text or SC:GetText(Cfg.DefaultImageButtonTextKey); imageId = imageId or ""; options = options or {}; callback = callback or function() end
+    local size = options.Size or UDim2.new(0, 64, 0, 64); local imageColor = options.ImageColor or Color3.new(1,1,1); local tooltip = options.Tooltip or ""; local cornerRadius = options.CornerRadius or Cfg.CornerRadius
+
+    local imgButtonFrame = Instance.new("Frame", page); local imgButtonLayout = Instance.new("UIListLayout", imgButtonFrame); local imgButton = Instance.new("ImageButton", imgButtonLayout); local imgButtonCorner = Instance.new("UICorner", imgButton); local imgButtonLabel = Instance.new("TextLabel", imgButtonLayout)
+
+    imgButtonFrame.Name = "imgButtonFrame_"..text:gsub("%W+",""); imgButtonFrame.BackgroundTransparency = 1.0; imgButtonFrame.Size = UDim2.new(0, size.X.Offset, 0, size.Y.Offset + 18) -- Auto width based on button size
+    imgButtonFrame.AutomaticSize = Enum.AutomaticSize.X -- Auto-adjust frame width if needed
+
+    imgButtonLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center; imgButtonLayout.SortOrder = Enum.SortOrder.LayoutOrder; imgButtonLayout.Padding = UDim.new(0,2)
+
+    imgButton.Name = "imgButton_"..text:gsub("%W+",""); imgButton.BackgroundColor3 = Cfg.SubEdgeColor; imgButton.Size = size; imgButton.AutoButtonColor = false; imgButton.Image = imageId; imgButton.ImageColor3 = imageColor; imgButton.ScaleType = Enum.ScaleType.Fit; imgButtonCorner.CornerRadius = cornerRadius
+
+    imgButtonLabel.Name = "imgButtonLabel"; imgButtonLabel.BackgroundTransparency = 1.0; imgButtonLabel.Size = UDim2.new(1, 0, 0, 16); imgButtonLabel.Font = Cfg.MainFont; imgButtonLabel.Text = text; imgButtonLabel.TextColor3 = Cfg.TextDimColor; imgButtonLabel.TextSize = Cfg.TextSizeSmall; imgButtonLabel.TextXAlignment = Enum.TextXAlignment.Center
+
+    imgButton.MouseEnter:Connect(function() TweenService:Create(imgButton, Cfg.HoverTweenInfo, {BackgroundColor3 = Cfg.EdgeColor, ImageColor3 = Color3.new(0.9, 0.9, 0.9)}):Play(); imgButtonLabel.TextColor3 = Cfg.TextColor end)
+    imgButton.MouseLeave:Connect(function() TweenService:Create(imgButton, Cfg.HoverTweenInfo, {BackgroundColor3 = Cfg.SubEdgeColor, ImageColor3 = imageColor}):Play(); imgButtonLabel.TextColor3 = Cfg.TextDimColor end)
+    imgButton.MouseButton1Down:Connect(function() TweenService:Create(imgButton, Cfg.HoverTweenInfo, {Size = size - UDim2.fromOffset(4,4)}):Play() end)
+    imgButton.MouseButton1Up:Connect(function() TweenService:Create(imgButton, Cfg.HoverTweenInfo, {Size = size}):Play() end)
+    imgButton.MouseButton1Click:Connect(function() pcall(callback) end)
+    updateSizeFunc()
+
+    local ImageButtonFunctions = { Element = imgButtonFrame, Button = imgButton, Label = imgButtonLabel }
+    ImageButtonFunctions.Fire = function() pcall(callback); return ImageButtonFunctions end
+    ImageButtonFunctions.SetFunction = function(newCallback) callback = newCallback or function() end; return ImageButtonFunctions end
+    ImageButtonFunctions.Text = function(newText) imgButtonLabel.Text = newText or SC:GetText(Cfg.DefaultImageButtonTextKey); return ImageButtonFunctions end
+    ImageButtonFunctions.SetImage = function(newImageId) imageId = newImageId or ""; imgButton.Image = imageId; return ImageButtonFunctions end
+    ImageButtonFunctions.SetImageColor = function(newColor) imageColor = newColor or Color3.new(1,1,1); imgButton.ImageColor3 = imageColor; return ImageButtonFunctions end
+    ImageButtonFunctions.Hide = function() imgButtonFrame.Visible = false; updateSizeFunc(); return ImageButtonFunctions end
+    ImageButtonFunctions.Show = function() imgButtonFrame.Visible = true; updateSizeFunc(); return ImageButtonFunctions end
+    ImageButtonFunctions.Remove = function() imgButtonFrame:Destroy(); updateSizeFunc(); return nil end
+    return ImageButtonFunctions
+end
+
+SC._Internal_NewColorpicker = function(page, updateSizeFunc, text, defaultColor, callback)
+    local Cfg = SC.Config
+    text = text or SC:GetText(Cfg.DefaultColorPickerTextKey); defaultColor = defaultColor or Color3.new(1,0,0); callback = callback or function() end
+
+    local cpFrame = Instance.new("Frame", page); local cpLayout = Instance.new("UIListLayout", cpFrame); local cpLabel = Instance.new("TextLabel", cpLayout); local colorButton = Instance.new("TextButton", cpLayout); local colorIndicator = Instance.new("Frame", colorButton); local checkerboard = Instance.new("ImageLabel", colorIndicator)
+    local pickerPopup = Instance.new("Frame", cpFrame) -- Popup window, initially hidden
+
+    cpFrame.Name = "cpFrame_"..text:gsub("%W+",""); cpFrame.BackgroundTransparency = 1.0; cpFrame.Size = UDim2.new(1, 0, 0, 24); cpFrame.ClipsDescendants = false; cpFrame.ZIndex = 2
+    cpLayout.FillDirection = Enum.FillDirection.Horizontal; cpLayout.VerticalAlignment = Enum.VerticalAlignment.Center; cpLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    cpLabel.Name = "cpLabel"; cpLabel.BackgroundTransparency = 1.0; cpLabel.Size = UDim2.new(1, -50, 1, 0); cpLabel.Font = Cfg.MainFont; cpLabel.Text = text; cpLabel.TextColor3 = Cfg.TextColor; cpLabel.TextSize = Cfg.TextSizeDefault; cpLabel.TextXAlignment = Enum.TextXAlignment.Left
+    colorButton.Name = "colorButton"; colorButton.BackgroundColor3 = Cfg.EdgeColor; colorButton.Size = UDim2.new(0, 40, 0, 22); colorButton.AutoButtonColor = false; colorButton.Text = ""; Instance.new("UICorner", colorButton).CornerRadius = Cfg.CornerRadius
+    colorIndicator.Name = "colorIndicator"; colorIndicator.Parent = colorButton; colorIndicator.AnchorPoint = Vector2.new(0.5, 0.5); colorIndicator.Position = UDim2.new(0.5, 0, 0.5, 0); colorIndicator.Size = UDim2.new(1, -4, 1, -4); colorIndicator.BackgroundColor3 = defaultColor; colorIndicator.ClipsDescendants = true; Instance.new("UICorner", colorIndicator).CornerRadius = Cfg.CornerRadius
+    checkerboard.Name = "Checkerboard"; checkerboard.Parent = colorIndicator; checkerboard.BackgroundTransparency = 1.0; checkerboard.Image = "rbxassetid://166602337"; checkerboard.ScaleType = Enum.ScaleType.Tile; checkerboard.TileSize = UDim2.new(0, 8, 0, 8); checkerboard.ZIndex = 0; checkerboard.Size = UDim2.new(1, 0, 1, 0); checkerboard.ImageTransparency = 0.8
+
+    -- Picker Popup UI (Basic Structure) - Initially hidden
+    pickerPopup.Name = "pickerPopup"; pickerPopup.Visible = false; pickerPopup.Size = UDim2.new(0, 180, 0, 200); pickerPopup.Position = UDim2.new(0, 0, 1, 4); pickerPopup.BackgroundColor3 = Cfg.BackgroundColor; pickerPopup.BorderSizePixel = 1; pickerPopup.BorderColor3 = Cfg.EdgeColor; pickerPopup.ZIndex = 10; Instance.new("UICorner", pickerPopup).CornerRadius = Cfg.CornerRadius
+    local popupLayout = Instance.new("UIListLayout", pickerPopup); popupLayout.Padding = UDim.new(0,4); popupLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    local popupPadding = Instance.new("UIPadding", pickerPopup); popupPadding.PaddingLeft = UDim.new(0,4); popupPadding.PaddingRight = UDim.new(0,4); popupPadding.PaddingTop = UDim.new(0,4); popupPadding.PaddingBottom = UDim.new(0,4)
+    local svFrame = Instance.new("Frame", popupLayout); svFrame.Size = UDim2.new(1, 0, 0, 120); svFrame.BackgroundColor3 = Color3.new(1,0,0); svFrame.Name = "SVFrame"; Instance.new("UICorner", svFrame).CornerRadius = Cfg.CornerRadius
+    local svGradientV = Instance.new("UIGradient", svFrame); svGradientV.Rotation = 90; svGradientV.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0,0),NumberSequenceKeypoint.new(1,1)}; svGradientV.Color = ColorSequence.new(Color3.new(0,0,0))
+    local svGradientH = Instance.new("UIGradient", svFrame); svGradientH.Rotation = 0; svGradientH.Transparency = NumberSequence.new(0); svGradientH.Color = ColorSequence.new{ColorSequenceKeypoint.new(0,Color3.new(1,1,1)),NumberSequenceKeypoint.new(1,Color3.new(1,1,1))}
+    local svSelector = Instance.new("Frame", svFrame); svSelector.Size = UDim2.fromOffset(8,8); svSelector.AnchorPoint = Vector2.new(0.5,0.5); svSelector.Position = UDim2.new(1, -4, 0, 4); svSelector.BackgroundColor3 = Color3.new(0,0,0); svSelector.BorderSizePixel = 1; svSelector.BorderColor3 = Color3.new(1,1,1); Instance.new("UICorner", svSelector).CornerRadius = UDim.new(1,0)
+    local hueSliderFrame = Instance.new("Frame", popupLayout); hueSliderFrame.Size = UDim2.new(1, 0, 0, 16); hueSliderFrame.BackgroundColor3 = Cfg.BackgroundColor; Instance.new("UICorner", hueSliderFrame).CornerRadius = Cfg.CornerRadius; local hueGradient = Instance.new("UIGradient", hueSliderFrame)
+    local hueSelector = Instance.new("Frame", hueSliderFrame); hueSelector.Size = UDim2.new(0, 4, 1, 2); hueSelector.Position = UDim2.new(0, -2, 0, -1); hueSelector.BackgroundColor3 = Color3.new(1,1,1); hueSelector.BorderSizePixel = 0; Instance.new("UICorner", hueSelector).CornerRadius = UDim.new(1,0)
+    hueGradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0.00,Color3.fromRGB(255,0,0)),ColorSequenceKeypoint.new(0.17,Color3.fromRGB(255,255,0)),ColorSequenceKeypoint.new(0.33,Color3.fromRGB(0,255,0)),ColorSequenceKeypoint.new(0.50,Color3.fromRGB(0,255,255)),ColorSequenceKeypoint.new(0.67,Color3.fromRGB(0,0,255)),ColorSequenceKeypoint.new(0.83,Color3.fromRGB(255,0,255)),ColorSequenceKeypoint.new(1.00,Color3.fromRGB(255,0,0))}
+
+    -- Color Picker Logic
+    local currentHue, currentSat, currentVal = RGBtoHSV(defaultColor)
+    local isDraggingSV = false; local isDraggingHue = false
+
+    local function UpdateColor(fireCb)
+        local baseHueColor = HSVtoRGB(currentHue, 1, 1); svFrame.BackgroundColor3 = baseHueColor
+        local finalColor = HSVtoRGB(currentHue, currentSat, currentVal); colorIndicator.BackgroundColor3 = finalColor; checkerboard.Visible = (finalColor.r == 1 and finalColor.g == 1 and finalColor.b == 1) -- Show checkerboard for white
+        if fireCb then pcall(callback, finalColor) end
+    end
+
+    -- SV Frame Input
+    svFrame.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then isDraggingSV = true end end)
+    svFrame.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then isDraggingSV = false end end)
+    svFrame.MouseMoved:Connect(function(x,y) if isDraggingSV then local relX = math.clamp((x - svFrame.AbsolutePosition.X) / svFrame.AbsoluteSize.X, 0, 1); local relY = math.clamp((y - svFrame.AbsolutePosition.Y) / svFrame.AbsoluteSize.Y, 0, 1); currentSat = relX; currentVal = 1 - relY; svSelector.Position = UDim2.new(relX, 0, relY, 0); UpdateColor(true) end end)
+    -- Hue Slider Input
+    hueSliderFrame.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then isDraggingHue = true end end)
+    hueSliderFrame.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then isDraggingHue = false end end)
+    hueSliderFrame.MouseMoved:Connect(function(x,y) if isDraggingHue then local relX = math.clamp((x - hueSliderFrame.AbsolutePosition.X) / hueSliderFrame.AbsoluteSize.X, 0, 1); currentHue = relX * 360; hueSelector.Position = UDim2.new(relX, 0, 0, -1); UpdateColor(true) end end)
+
+    -- Toggle Popup
+    colorButton.MouseButton1Click:Connect(function() pickerPopup.Visible = not pickerPopup.Visible end)
+    -- Close on outside click (simple version)
+    UserInputService.InputBegan:Connect(function(input) if pickerPopup.Visible and input.UserInputType == Enum.UserInputType.MouseButton1 then local target = Mouse.Target; if not (target and target:IsDescendantOf(pickerPopup)) then pickerPopup.Visible = false end end end)
+
+    UpdateColor(false) -- Set initial state
+    hueSelector.Position = UDim2.new(currentHue / 360, 0, 0, -1)
+    svSelector.Position = UDim2.new(currentSat, 0, 1 - currentVal, 0)
+    updateSizeFunc()
+
+    local ColorPickerFunctions = { Element = cpFrame }
+    ColorPickerFunctions.GetColor = function() return colorIndicator.BackgroundColor3 end
+    function ColorPickerFunctions:SetColor(newColor, fireCallback) if typeof(newColor) == "Color3" then local h,s,v = RGBtoHSV(newColor); currentHue, currentSat, currentVal = h,s,v; hueSelector.Position = UDim2.new(currentHue/360, 0, 0, -1); svSelector.Position = UDim2.new(currentSat, 0, 1-currentVal, 0); UpdateColor(fireCallback) end; return ColorPickerFunctions end
+    function ColorPickerFunctions:SetFunction(newCallback) callback = newCallback or function() end; return ColorPickerFunctions end
+    function ColorPickerFunctions:Text(newText) cpLabel.Text = newText or SC:GetText(Cfg.DefaultColorPickerTextKey); return ColorPickerFunctions end
+    function ColorPickerFunctions:Hide() cpFrame.Visible = false; updateSizeFunc(); return ColorPickerFunctions end
+    function ColorPickerFunctions:Show() cpFrame.Visible = true; updateSizeFunc(); return ColorPickerFunctions end
+    function ColorPickerFunctions:Remove() cpFrame:Destroy(); updateSizeFunc(); return nil end
+    return ColorPickerFunctions
+end
+
+
+-- Component Management Functions (Tab Level)
+SC._Internal_Tab_Open = function(TabLibrary, tabButton, page, container) if TabLibrary.CurrentTab == tabButton then return end; local previousPage = TabLibrary.CurrentPage; local previousTab = TabLibrary.CurrentTab; TabLibrary.CurrentTab = tabButton; TabLibrary.CurrentPage = page; if previousTab then TweenService:Create(previousTab, SC.Config.TabSwitchTweenInfo, { TextColor3 = SC.Config.TextDimColor }):Play() end; TweenService:Create(tabButton, SC.Config.TabSwitchTweenInfo, { TextColor3 = SC.Config.TextAccentColor }):Play(); if previousPage then local ft = TweenService:Create(previousPage, SC.Config.TabSwitchTweenInfo, { BackgroundTransparency = 1 }); ft.Completed:Connect(function() if TabLibrary.CurrentPage ~= previousPage then previousPage.Visible=false end end); ft:Play(); for _, c in ipairs(previousPage:GetChildren()) do if c:IsA("GuiObject") and c.Name~="UIListLayout" and c.Name~="UIPadding" then TweenService:Create(c, SC.Config.TabSwitchTweenInfo, {Transparency = 1}):Play() end end else page.BackgroundTransparency=1 end; page.Visible = true; for _, c in ipairs(page:GetChildren()) do if c:IsA("GuiObject") and c.Name~="UIListLayout" and c.Name~="UIPadding" then c.Transparency=1; TweenService:Create(c, SC.Config.TabSwitchTweenInfo, {Transparency = 0}):Play() end end; end
+SC._Internal_Tab_Remove = function(tabButton, page) tabButton:Destroy(); page:Destroy(); return nil end -- TODO: Select next tab on remove
+SC._Internal_Tab_Hide = function(TabLibrary, tabButton, page) tabButton.Visible = false; if TabLibrary.CurrentPage == page then page.Visible = false end end -- TODO: Select next tab on hide
+SC._Internal_Tab_Show = function(tabButton) tabButton.Visible = true end
+SC._Internal_Tab_Text = function(tabButton, page, newText) tabButton.Text = newText; page.Name = tabButton.Text .. "_Page" end
+
+
+--[[================================================================================
+//=                             PUBLIC API & INIT                                  =
+================================================================================]]
+
+--// Initialize Main UI (Only callable after authentication)
+SC.Init = function(title, key)
+    if not SC.IsAuthenticated then
+        warn("SC UI Error: Not Authenticated! Call SC:Init() only after successful password entry.")
+        -- Optionally, show the password prompt again here if needed
+        -- ShowPasswordPrompt(function() SC.Init(title, key) end)
+        return nil
+    end
+    -- Pass internal function to avoid exposing it globally before auth
+    return InitializeMainUI(title, key)
+end
+
+--// Initial Webhook Notification (Sent after successful authentication)
+local function SendInitialWebhook()
+    if SC.Config.WebhookSendOnInit then
+        local embed = {
+            {
+                title = "SC UI Initialized & Authenticated",
+                color = tonumber("0xAAAAFF"), -- Light Purple
+                description = "Session started for user.",
+                fields = {
+                    { name = "Username", value = SC:GetUsername(), inline = true },
+                    { name = "UserID", value = tostring(SC:GetUserId()), inline = true },
+                    { name = "PlaceID", value = tostring(SC:GetPlaceId()), inline = false },
+                    { name = "Timestamp", value = SC:GetDateTime(), inline = false}
+                },
+                footer = { text = "SC UI v" .. SC.version }
+            }
+        }
+        -- Use task.spawn to avoid potential http delays blocking script execution
+        task.spawn(SC.SendWebhook, SC, embed)
+    end
+end
+
+--// Start Authentication Process
+ShowPasswordPrompt(function()
+    -- This callback function executes ONLY after the correct password is entered.
+    print("SC UI: Authentication Successful!")
+
+    -- Send the initial webhook message now that authentication is done
+    SendInitialWebhook()
+
+    -- Example: Show a welcome notification
+    local Notifier = SC:InitNotifications()
+    if Notifier then
+        Notifier:Notify(SC:GetText("welcome_message_title"), 5, "success")
+    end
+
+    -- At this point, the user's script can safely call SC:Init() to create the main UI.
+    -- Example: You might emit a signal or set a flag that the main script waits for.
+    -- For direct use, the main script would need to yield until SC.IsAuthenticated is true.
+end)
+
+--[[=====           End of SCRIPT           ======]]
+
+return SC -- Return the main library object
