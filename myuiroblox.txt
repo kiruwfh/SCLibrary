@@ -932,16 +932,20 @@ function library:ShowGreeting()
         barFillTween.Completed:Wait()
 
         -- Fade Out Everything
-        local fadeOutGroup = {overlay, contentFrame, logo, welcomeText, loadingBarBg}
+        local fadeOutGroup = {overlay, contentFrame, logo, welcomeText, loadingBarBg, loadingBarFill} -- Added loadingBarFill to fade out too
         for _, element in ipairs(fadeOutGroup) do
-            if element:IsA("GuiObject") then -- Check if it's a GUI object
-                 local targetTransparency = (element.Name == "Overlay") and 1.0 or 1.0 -- Target full transparency for all
-                 TweenService:Create(element, TweenTable["greet_fade_out_all"], {BackgroundTransparency = targetTransparency}):Play()
-                 if element:FindFirstChildWhichIsA("TextLabel") or element:IsA("TextLabel") then
-                     TweenService:Create(element, TweenTable["greet_fade_out_all"], {TextTransparency = 1.0}):Play()
-                 end
-                 if element:FindFirstChildWhichIsA("ImageLabel") or element:IsA("ImageLabel") then
-                     TweenService:Create(element, TweenTable["greet_fade_out_all"], {ImageTransparency = 1.0}):Play()
+            if element and element.Parent and element:IsA("GuiObject") then -- Check if it's a valid GUI object
+                 -- Always try to fade BackgroundTransparency for Frames/GuiObjects
+                 local targetBgTransparency = 1.0
+                 -- Special case for overlay if you want a different end transparency, otherwise keep 1.0
+                 -- if element == overlay then targetBgTransparency = 0.8 else targetBgTransparency = 1.0 end
+                 pcall(function() TweenService:Create(element, TweenTable["greet_fade_out_all"], {BackgroundTransparency = targetBgTransparency}):Play() end)
+
+                 -- Only tween Text/Image transparency if the property exists
+                 if element:IsA("TextLabel") or element:IsA("TextButton") then
+                      pcall(function() TweenService:Create(element, TweenTable["greet_fade_out_all"], {TextTransparency = 1.0}):Play() end)
+                 elseif element:IsA("ImageLabel") or element:IsA("ImageButton") then
+                      pcall(function() TweenService:Create(element, TweenTable["greet_fade_out_all"], {ImageTransparency = 1.0}):Play() end)
                  end
             end
         end
