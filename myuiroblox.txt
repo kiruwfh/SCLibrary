@@ -196,6 +196,7 @@ function library:UnlockFps(new) -- syn only
 end
 
 function library:Watermark(text)
+    wait() -- Add small delay before interacting with CoreGui
     for i,v in pairs(CoreGuiService:GetChildren()) do
         if v.Name == "SCUI_Watermark" then -- Prefix check
             v:Destroy()
@@ -221,7 +222,7 @@ function library:Watermark(text)
     local backgroundLayout = Instance.new("UIListLayout")
 
     watermark.Name = "SCUI_Watermark" -- Prefix name
-    watermark.Parent = CoreGuiService
+    watermark.Parent = Player.PlayerGui -- Change Parent
     watermark.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     
     watermarkLayout.Name = "watermarkLayout"
@@ -494,6 +495,7 @@ function library:Watermark(text)
 end
 
 function library:InitNotifications(text, duration, callback)
+    wait() -- Add small delay before interacting with CoreGui
     for i,v in next, CoreGuiService:GetChildren() do
         if v.Name == "SCUI_Notifications" then -- Prefix check and fix lowercase 'name'
             v:Destroy()
@@ -505,7 +507,7 @@ function library:InitNotifications(text, duration, callback)
     local notificationsPadding = Instance.new("UIPadding")
 
     Notifications.Name = "SCUI_Notifications" -- Prefix name
-    Notifications.Parent = CoreGuiService
+    Notifications.Parent = Player.PlayerGui -- Change Parent
     Notifications.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
     notificationsLayout.Name = "notificationsLayout"
@@ -675,6 +677,7 @@ function library:InitNotifications(text, duration, callback)
 end
 
 function library:Introduction()
+    wait() -- Add small delay before interacting with CoreGui
     for _,v in next, CoreGuiService:GetChildren() do
          -- Destroy any potential leftover UI from this library
         if v.Name == "SCUI_Introduction" or v.Name == "SCUI_MainScreen" or v.Name == "SCUI_KeyPromptScreen" then
@@ -700,7 +703,7 @@ function library:Introduction()
     local pageLayout = Instance.new("UIListLayout")
     
     introduction.Name = "SCUI_Introduction" -- Prefix name
-    introduction.Parent = CoreGuiService
+    introduction.Parent = Player.PlayerGui -- Change Parent
     introduction.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     
     edge.Name = "edge"
@@ -805,8 +808,17 @@ function library:Introduction()
     pageLayout.SortOrder = Enum.SortOrder.LayoutOrder
     pageLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 
-    CreateTween("SCRotation", 0.1, Enum.EasingStyle.Linear) -- Give rotation a duration
+    CreateTween("SCRotation", 0.1, Enum.EasingStyle.Linear) 
+    CreateTween("intro_fade_in", 0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out) -- Slightly faster fade
+    CreateTween("intro_scale", 0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out) -- Slightly faster scale
+
     local MinusAmount = -16
+    SCLogo.Size = UDim2.fromScale(0.1, 0.1) -- Start slightly visible for scale effect
+    SCLogo.ImageTransparency = 1 
+    SCLogo.Rotation = 0
+    hashLogo.Size = UDim2.fromScale(0.1, 0.1) -- Start slightly visible for scale effect
+    hashLogo.ImageTransparency = 1
+
     coroutine.wrap(function()
         while wait() do
             MinusAmount = MinusAmount + 0.4
@@ -816,36 +828,40 @@ function library:Introduction()
 
     TweenService:Create(edge, TweenTable["introduction"], {BackgroundTransparency = 0}):Play()
     TweenService:Create(background, TweenTable["introduction"], {BackgroundTransparency = 0}):Play()
-    wait(.2)
-    TweenService:Create(bar, TweenTable["introduction"], {Size = UDim2.new(0, 298, 0, 1)}):Play()
-    wait(.2)
-    TweenService:Create(SC, TweenTable["introduction"], {TextTransparency = 0}):Play()
-    TweenService:Create(text, TweenTable["introduction"], {TextTransparency = 0}):Play()
-    wait(.3)
-    TweenService:Create(SCLogo, TweenTable["introduction"], {ImageTransparency = 0}):Play()
-    wait(2)
-    TweenService:Create(SCLogo, TweenTable["introduction"], {ImageTransparency = 1}):Play()
-    wait(.2)
-    TweenService:Create(hashLogo, TweenTable["introduction"], {ImageTransparency = 0}):Play()
-    wait(2)
-    TweenService:Create(hashLogo, TweenTable["introduction"], {ImageTransparency = 1}):Play()
-    wait(.1)
-    TweenService:Create(text, TweenTable["introduction"], {TextTransparency = 1}):Play()
-    wait(.1)
-    TweenService:Create(SC, TweenTable["introduction"], {TextTransparency = 1}):Play()
-    wait(.1)
+    wait(0.1)
+    TweenService:Create(bar, TweenTable["introduction"], {Size = UDim2.new(1, 0, 0, 1)}):Play() 
+    wait(0.1)
+    TweenService:Create(SCLogo, TweenTable["intro_scale"], {Size = UDim2.new(0, 150, 0, 150)}):Play() 
+    TweenService:Create(SCLogo, TweenTable["intro_fade_in"], {ImageTransparency = 0}):Play()
+    wait(0.2) -- Stagger text fade-in
+    TweenService:Create(SC, TweenTable["intro_fade_in"], {TextTransparency = 0}):Play() 
+    wait(1.5) -- Hold first logo/text
+    TweenService:Create(SCLogo, TweenTable["intro_fade_in"], {ImageTransparency = 1}):Play() 
+    wait(0.2)
+    TweenService:Create(hashLogo, TweenTable["intro_scale"], {Size = UDim2.new(0, 150, 0, 150)}):Play() 
+    TweenService:Create(hashLogo, TweenTable["intro_fade_in"], {ImageTransparency = 0}):Play()
+    wait(0.2) -- Stagger text fade-in
+    TweenService:Create(text, TweenTable["intro_fade_in"], {TextTransparency = 0}):Play() 
+    wait(1.5) -- Hold second logo/text
+    TweenService:Create(hashLogo, TweenTable["intro_fade_in"], {ImageTransparency = 1}):Play() 
+    wait(0.1)
+    TweenService:Create(text, TweenTable["intro_fade_in"], {TextTransparency = 1}):Play()
+    wait(0.1)
+    TweenService:Create(SC, TweenTable["intro_fade_in"], {TextTransparency = 1}):Play()
+    wait(0.1)
     TweenService:Create(bar, TweenTable["introduction"], {Size = UDim2.new(0, 0, 0, 1)}):Play()
-    wait(.1)
+    wait(0.1)
     TweenService:Create(background, TweenTable["introduction"], {BackgroundTransparency = 1}):Play()
     TweenService:Create(edge, TweenTable["introduction"], {BackgroundTransparency = 1}):Play()
-    wait(.2)
-introduction:Destroy()
+    wait(0.2)
+    introduction:Destroy()
 end
 
 local CorrectKey = "hh.hg**@@" -- The key required for access
 local KeyEnteredCorrectly = Instance.new("BindableEvent")
 
 function library:PromptForKey()
+    wait() -- Add small delay before interacting with CoreGui
     for _,v in next, CoreGuiService:GetChildren() do
         if v.Name == "SCUI_KeyPromptScreen" then -- Prefix check
             v:Destroy()
@@ -870,7 +886,7 @@ function library:PromptForKey()
     local Padding = Instance.new("UIPadding")
 
     KeyPromptScreen.Name = "SCUI_KeyPromptScreen" -- Prefix name
-    KeyPromptScreen.Parent = CoreGuiService
+    KeyPromptScreen.Parent = Player.PlayerGui -- Change Parent
     KeyPromptScreen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     KeyPromptScreen.ResetOnSpawn = false -- Prevent UI reset on respawn
 
@@ -946,20 +962,48 @@ function library:PromptForKey()
 
     SubmitButton.Name = "SubmitButton"
     SubmitButton.Parent = BackgroundFrame
-    SubmitButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    SubmitButton.Size = UDim2.new(1, -20, 0, 25) -- Use scale with offset for padding
+    SubmitButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50) -- Edge color
+    SubmitButton.Size = UDim2.new(1, -20, 0, 25) 
     SubmitButton.AutoButtonColor = false
-    SubmitButton.Font = Enum.Font.Code
-    SubmitButton.Text = "Submit"
-    SubmitButton.TextColor3 = Color3.fromRGB(190, 190, 190)
+    SubmitButton.Font = Enum.Font.SourceSans 
+    SubmitButton.Text = "" -- Clear text, will be on label
+    SubmitButton.TextColor3 = Color3.fromRGB(0, 0, 0)
     SubmitButton.TextSize = 14.000
 
     SubmitButtonCorner.CornerRadius = UDim.new(0, 2)
     SubmitButtonCorner.Parent = SubmitButton
 
+    -- Inner frame for gradient and label (Consistent Style) - Replicated from NewButton
+    local SubmitButtonBackground = Instance.new("Frame")
+    local SubmitButtonBackCorner = Instance.new("UICorner")
+    local SubmitButtonLabel = Instance.new("TextLabel")
+
+    SubmitButtonBackground.Name = "SubmitButtonBackground"
+    SubmitButtonBackground.Parent = SubmitButton
+    SubmitButtonBackground.AnchorPoint = Vector2.new(0.5, 0.5)
+    SubmitButtonBackground.BackgroundColor3 = Color3.fromRGB(255, 255, 255) 
+    SubmitButtonBackground.Position = UDim2.new(0.5, 0, 0.5, 0)
+    SubmitButtonBackground.Size = UDim2.new(1, -2, 1, -2) -- Fit inside edge frame
+
     SubmitButtonGradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0.00, Color3.fromRGB(34, 34, 34)), ColorSequenceKeypoint.new(1.00, Color3.fromRGB(28, 28, 28))}
     SubmitButtonGradient.Rotation = 90
-    SubmitButtonGradient.Parent = SubmitButton
+    SubmitButtonGradient.Parent = SubmitButtonBackground 
+
+    SubmitButtonBackCorner.CornerRadius = UDim.new(0, 2) 
+    SubmitButtonBackCorner.Parent = SubmitButtonBackground
+
+    SubmitButtonLabel.Name = "SubmitButtonLabel"
+    SubmitButtonLabel.Parent = SubmitButtonBackground 
+    SubmitButtonLabel.AnchorPoint = Vector2.new(0.5, 0.5)
+    SubmitButtonLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    SubmitButtonLabel.BackgroundTransparency = 1.000
+    SubmitButtonLabel.Position = UDim2.new(0.5, 0, 0.5, 0)
+    SubmitButtonLabel.Size = UDim2.new(1, 0, 1, 0) 
+    SubmitButtonLabel.Font = Enum.Font.Code
+    SubmitButtonLabel.Text = "Submit"
+    SubmitButtonLabel.TextColor3 = Color3.fromRGB(190, 190, 190)
+    SubmitButtonLabel.TextSize = 14.000
+    SubmitButtonLabel.RichText = true 
 
     StatusLabel.Name = "StatusLabel"
     StatusLabel.Parent = BackgroundFrame
@@ -972,7 +1016,7 @@ function library:PromptForKey()
     StatusLabel.TextSize = 12.000
     StatusLabel.TextXAlignment = Enum.TextXAlignment.Center
 
-    -- Button Hover Effects
+    -- Button Hover Effects (Target outer frame for edge, label for text color)
     SubmitButton.MouseEnter:Connect(function()
         TweenService:Create(SubmitButton, TweenTable["hover"], {BackgroundColor3 = Color3.fromRGB(60, 60, 60)}):Play()
     end)
@@ -980,10 +1024,10 @@ function library:PromptForKey()
         TweenService:Create(SubmitButton, TweenTable["hover"], {BackgroundColor3 = Color3.fromRGB(50, 50, 50)}):Play()
     end)
     SubmitButton.MouseButton1Down:Connect(function()
-        TweenService:Create(SubmitButton, TweenTable["hover"], {BackgroundColor3 = Color3.fromRGB(159, 115, 255)}):Play()
+        TweenService:Create(SubmitButtonLabel, TweenTable["hover"], {TextColor3 = Color3.fromRGB(159, 115, 255)}):Play()
     end)
     SubmitButton.MouseButton1Up:Connect(function()
-        TweenService:Create(SubmitButton, TweenTable["hover"], {BackgroundColor3 = Color3.fromRGB(60, 60, 60)}):Play()
+        TweenService:Create(SubmitButtonLabel, TweenTable["hover"], {TextColor3 = Color3.fromRGB(190, 190, 190)}):Play()
     end)
 
     -- Submit Logic
@@ -1015,6 +1059,7 @@ end
 
 
 function library:_InternalInit(key) -- Renamed from Init
+    wait() -- Add small delay before interacting with CoreGui
     for _,v in next, CoreGuiService:GetChildren() do
         if v.Name == "SCUI_MainScreen" then -- Prefix check
             v:Destroy()
@@ -1050,7 +1095,7 @@ function library:_InternalInit(key) -- Renamed from Init
     local containerGradient = Instance.new("UIGradient")
 
     screen.Name = "SCUI_MainScreen" -- Prefix name
-    screen.Parent = CoreGuiService
+    screen.Parent = Player.PlayerGui -- Change Parent
     screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
     edge.Name = "edge"
@@ -1272,8 +1317,9 @@ function library:_InternalInit(key) -- Renamed from Init
         end)
 
         local function UpdatePageSize()
-            local correction = pageLayout.AbsoluteContentSize
-            page.CanvasSize = UDim2.new(0, correction.X+13, 0, correction.Y+13)
+             task.wait() -- Wait a frame for layout calculations
+             local correction = pageLayout.AbsoluteContentSize
+             page.CanvasSize = UDim2.new(0, 0, 0, correction.Y + pagePadding.PaddingTop.Offset + pagePadding.PaddingBottom.Offset) -- Use AbsoluteContentSize + padding
         end
 
         page.ChildAdded:Connect(UpdatePageSize)
@@ -1845,6 +1891,7 @@ function library:_InternalInit(key) -- Renamed from Init
 
             CreateTween("toggle_form", 0.15, Enum.EasingStyle.Quad) -- Slightly faster toggle
             local On = default
+            local keybindConnection -- Variable to hold the keybind connection
             if default then
                 On = true
             else
@@ -2016,13 +2063,14 @@ function library:_InternalInit(key) -- Renamed from Init
                     end
                 end)
     
-                local ChatTextBox = Player.PlayerGui.Chat.Frame.ChatBarParentFrame.Frame.BoxFrame.Frame.ChatBar
-                if UserInputService.WindowFocused then
-                    UserInputService.InputBegan:Connect(function(c, p)
-                        if not p then
-                            if c.KeyCode.Name == ChosenKey and not ChatTextBox:IsFocused() then
-                                On = not On
-                                local SizeOn = On and UDim2.new(0, 12, 0, 12) or UDim2.new(0, 0, 0, 0)
+                -- Refined Keybind Check
+                UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
+                    if gameProcessedEvent then return end -- Ignore if game engine handled input (e.g., typing in chat)
+                    if UserInputService:GetFocusedTextBox() then return end -- Ignore if a textbox is focused
+
+                    if input.KeyCode.Name == ChosenKey then
+                        On = not On
+                        local SizeOn = On and UDim2.new(0, 12, 0, 12) or UDim2.new(0, 0, 0, 0)
                                 local Transparency = On and 0 or 1
                                 TweenService:Create(toggleDesign, TweenTable["toggle_form"], {Size = SizeOn}):Play()
                                 TweenService:Create(toggleDesign, TweenTable["toggle_form"], {BackgroundTransparency = Transparency}):Play()
@@ -2034,10 +2082,34 @@ function library:_InternalInit(key) -- Renamed from Init
                 end
     
                 local ExtraKeybindFunctions = {}
+                local currentKeybindConnection -- Store connection specific to this keybind instance
+
+                local function setupKeybindListener()
+                    if currentKeybindConnection then
+                        currentKeybindConnection:Disconnect() 
+                    end
+                    currentKeybindConnection = UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
+                        if gameProcessedEvent then return end -- Ignore if game engine handled input (e.g., typing in chat)
+                        if UserInputService:GetFocusedTextBox() then return end -- Ignore if a textbox is focused
+
+                        if input.KeyCode.Name == ChosenKey then
+                            On = not On
+                            local SizeOn = On and UDim2.new(0, 12, 0, 12) or UDim2.new(0, 0, 0, 0)
+                            local Transparency = On and 0 or 1
+                            TweenService:Create(toggleDesign, TweenTable["toggle_form"], {Size = SizeOn}):Play()
+                            TweenService:Create(toggleDesign, TweenTable["toggle_form"], {BackgroundTransparency = Transparency}):Play()
+                            callback_t(On)
+                        end
+                    end)
+                end
+                
+                setupKeybindListener() -- Initial setup
+
                 function ExtraKeybindFunctions:SetKey(new)
-                    new = new or ChosenKey.Name
-                    ChosenKey = new.Name
-                    keybindButtonLabel.Text = new.Name
+                    new = new or Enum.KeyCode[ChosenKey] 
+                    ChosenKey = new.Name 
+                    keybindButtonLabel.Text = Shortcuts[new.Name] or new.Name 
+                    setupKeybindListener() -- Re-setup listener with the new key
                     return ExtraKeybindFunctions
                 end
                 --
@@ -2229,9 +2301,1593 @@ function library:_InternalInit(key) -- Renamed from Init
             keybindButtonLabel:GetPropertyChangedSignal("Text"):Connect(ResizeKeybind)
             ResizeKeybind()
 
-            local ChosenKey = default
+            local ChosenKey = default.Name 
+            local keybindConnection -- Variable to hold the connection
+
             keybindButton.MouseButton1Click:Connect(function()
                 keybindButtonLabel.Text = "..."
+                local InputWait = UserInputService.InputBegan:wait()
+                if UserInputService.WindowFocused and InputWait.KeyCode.Name ~= "Unknown" then
+                    local Result = Shortcuts[InputWait.KeyCode.Name] or InputWait.KeyCode.Name
+                    keybindButtonLabel.Text = Result
+                    ChosenKey = InputWait.KeyCode.Name
+                end
+            end)
+
+            keybind.MouseButton1Click:Connect(function()
+                keybindButtonLabel.Text = ". . ."
+                local InputWait = UserInputService.InputBegan:wait()
+                if UserInputService.WindowFocused and InputWait.KeyCode.Name ~= "Unknown" then
+                    local Result = Shortcuts[InputWait.KeyCode.Name] or InputWait.KeyCode.Name
+                    keybindButtonLabel.Text = Result
+                    ChosenKey = InputWait.KeyCode.Name
+                end
+            end)
+
+            -- Refined Keybind Check Logic using InputBegan
+            local function setupKeybindListener()
+                 if keybindConnection then
+                    keybindConnection:Disconnect() 
+                end
+                keybindConnection = UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
+                    if gameProcessedEvent then return end 
+                    if UserInputService:GetFocusedTextBox() then return end 
+                    if input.KeyCode.Name == ChosenKey then
+                        callback(input.KeyCode) 
+                    end
+                end)
+            end
+
+            setupKeybindListener() -- Initial setup
+            UpdatePageSize()
+
+            local KeybindFunctions = {}
+            local keybindConnection -- Store the connection for this specific keybind
+
+            local function setupKeybindListener()
+                if keybindConnection then
+                    keybindConnection:Disconnect() 
+                end
+                keybindConnection = UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
+                    if gameProcessedEvent then return end 
+                    if UserInputService:GetFocusedTextBox() then return end 
+                    if input.KeyCode.Name == ChosenKey then
+                        callback(input.KeyCode) -- Pass the actual KeyCode EnumItem
+                    end
+                end)
+            end
+
+            setupKeybindListener() -- Initial setup
+
+            function KeybindFunctions:Fire()
+                callback(Enum.KeyCode[ChosenKey]) -- Fire with the correct EnumItem
+                return KeybindFunctions
+            end
+            --
+            function KeybindFunctions:SetFunction(new)
+                new = new or function() end
+                callback = new
+                return KeybindFunctions 
+            end
+            --
+            function KeybindFunctions:SetKey(new)
+                new = new or Enum.KeyCode[ChosenKey] 
+                ChosenKey = new.Name 
+                keybindButtonLabel.Text = Shortcuts[new.Name] or new.Name 
+                ResizeKeybind() -- Resize after text change
+                setupKeybindListener() -- Re-setup listener with the new key
+                return KeybindFunctions
+            end
+            --
+            function KeybindFunctions:Text(new)
+                new = new or keybindLabel.Text
+                keybindLabel.Text = new
+                return KeybindFunctions
+            end
+            --
+            function KeybindFunctions:Hide()
+                keybindFrame.Visible = false
+                return KeybindFunctions
+            end
+            --
+            function KeybindFunctions:Show()
+                keybindFrame.Visible = true
+                return KeybindFunctions
+            end
+            return KeybindFunctions
+        end
+        --
+        function Components:NewTextbox(text, default, place, format, type, autoexec, autoclear, callback)
+            text = text or "text box"
+            default = default or ""
+            place = place or ""
+            format = format or "all" -- all, numbers, lower, upper
+            type = type or "small" -- small, medium, large
+            autoexec = autoexec or true
+            autoclear = autoclear or false
+            callback = callback or function() end
+
+            if type == "small" then
+                local textboxFrame = Instance.new("Frame")
+                local textboxFolder = Instance.new("Folder")
+                local textboxFolderLayout = Instance.new("UIListLayout")
+                local textbox = Instance.new("Frame")
+                local textboxLayout = Instance.new("UIListLayout")
+                local textboxStraint = Instance.new("UISizeConstraint")
+                local textboxCorner = Instance.new("UICorner")
+                local textboxTwo = Instance.new("Frame")
+                local textboxTwoStraint = Instance.new("UISizeConstraint")
+                local textboxTwoGradient = Instance.new("UIGradient")
+                local textboxTwoCorner = Instance.new("UICorner")
+                local textBoxValues = Instance.new("TextBox")
+                local textBoxValuesStraint = Instance.new("UISizeConstraint")
+                local textboxTwoLayout = Instance.new("UIListLayout")
+                local textboxLabel = Instance.new("TextLabel")
+                local textboxPadding = Instance.new("UIPadding")
+                local textBoxValuesPadding = Instance.new("UIPadding")
+    
+                textboxFrame.Name = "textboxFrame"
+                textboxFrame.Parent = page
+                textboxFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                textboxFrame.BackgroundTransparency = 1.000
+                textboxFrame.ClipsDescendants = true
+                textboxFrame.Size = UDim2.new(0, 396, 0, 24)
+    
+                textboxFolder.Name = "textboxFolder"
+                textboxFolder.Parent = textboxFrame
+    
+                textboxFolderLayout.Name = "textboxFolderLayout"
+                textboxFolderLayout.Parent = textboxFolder
+                textboxFolderLayout.FillDirection = Enum.FillDirection.Horizontal
+                textboxFolderLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+                textboxFolderLayout.SortOrder = Enum.SortOrder.LayoutOrder
+                textboxFolderLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+                textboxFolderLayout.Padding = UDim.new(0, 4)
+    
+                textbox.Name = "textbox"
+                textbox.Parent = textboxFolder
+                textbox.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+                textbox.Size = UDim2.new(0, 133, 0, 22)
+    
+                textboxLayout.Name = "textboxLayout"
+                textboxLayout.Parent = textbox
+                textboxLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+                textboxLayout.SortOrder = Enum.SortOrder.LayoutOrder
+                textboxLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    
+                textboxStraint.Name = "textboxStraint"
+                textboxStraint.Parent = textbox
+                textboxStraint.MinSize = Vector2.new(50, 22)
+    
+                textboxCorner.CornerRadius = UDim.new(0, 2)
+                textboxCorner.Name = "textboxCorner"
+                textboxCorner.Parent = textbox
+    
+                textboxTwo.Name = "textboxTwo"
+                textboxTwo.Parent = textbox
+                textboxTwo.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                textboxTwo.Size = UDim2.new(0, 131, 0, 20)
+    
+                textboxTwoStraint.Name = "textboxTwoStraint"
+                textboxTwoStraint.Parent = textboxTwo
+                textboxTwoStraint.MinSize = Vector2.new(48, 20)
+    
+                textboxTwoGradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0.00, Color3.fromRGB(34, 34, 34)), ColorSequenceKeypoint.new(1.00, Color3.fromRGB(28, 28, 28))}
+                textboxTwoGradient.Rotation = 90
+                textboxTwoGradient.Name = "textboxTwoGradient"
+                textboxTwoGradient.Parent = textboxTwo
+    
+                textboxTwoCorner.CornerRadius = UDim.new(0, 2)
+                textboxTwoCorner.Name = "textboxTwoCorner"
+                textboxTwoCorner.Parent = textboxTwo
+    
+                textBoxValues.Name = "textBoxValues"
+                textBoxValues.Parent = textboxTwo
+                textBoxValues.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                textBoxValues.BackgroundTransparency = 1.000
+                textBoxValues.Position = UDim2.new(0.664141417, 0, 0.0416666679, 0)
+                textBoxValues.Size = UDim2.new(0, 131, 0, 20)
+                textBoxValues.Font = Enum.Font.Code
+                textBoxValues.PlaceholderColor3 = Color3.fromRGB(140, 140, 140)
+                textBoxValues.PlaceholderText = place
+                textBoxValues.Text = ""
+                textBoxValues.TextColor3 = Color3.fromRGB(190, 190, 190)
+                textBoxValues.TextSize = 14.000
+                textBoxValues.ClearTextOnFocus = autoclear
+                textBoxValues.ClipsDescendants = true
+                textBoxValues.TextXAlignment = Enum.TextXAlignment.Right
+
+                textBoxValuesPadding.Name = "textBoxValuesPadding"
+                textBoxValuesPadding.Parent = textBoxValues
+                textBoxValuesPadding.PaddingBottom = UDim.new(0, 6)
+                textBoxValuesPadding.PaddingLeft = UDim.new(0, 6)
+                textBoxValuesPadding.PaddingRight = UDim.new(0, 4)
+                textBoxValuesPadding.PaddingTop = UDim.new(0, 6)
+    
+                textBoxValuesStraint.Name = "textBoxValuesStraint"
+                textBoxValuesStraint.Parent = textBoxValues
+                textBoxValuesStraint.MinSize = Vector2.new(48, 20)
+    
+                textboxTwoLayout.Name = "textboxTwoLayout"
+                textboxTwoLayout.Parent = textboxTwo
+                textboxTwoLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+                textboxTwoLayout.SortOrder = Enum.SortOrder.LayoutOrder
+                textboxTwoLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    
+                textboxLabel.Name = "textboxLabel"
+                textboxLabel.Parent = textboxFrame
+                textboxLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                textboxLabel.BackgroundTransparency = 1.000
+                textboxLabel.Size = UDim2.new(0, 396, 0, 24)
+                textboxLabel.Font = Enum.Font.Code
+                textboxLabel.Text = text
+                textboxLabel.TextColor3 = Color3.fromRGB(190, 190, 190)
+                textboxLabel.TextSize = 14.000
+                textboxLabel.TextWrapped = true
+                textboxLabel.TextXAlignment = Enum.TextXAlignment.Left
+                textboxLabel.RichText = true
+    
+                textboxPadding.Name = "textboxPadding"
+                textboxPadding.Parent = textboxLabel
+                textboxPadding.PaddingBottom = UDim.new(0, 6)
+                textboxPadding.PaddingLeft = UDim.new(0, 2)
+                textboxPadding.PaddingRight = UDim.new(0, 6)
+                textboxPadding.PaddingTop = UDim.new(0, 6)
+    
+                local ForcedMinSize = TextService:GetTextSize(textBoxValues.PlaceholderText, textBoxValues.TextSize, textBoxValues.Font, Vector2.new(math.huge,math.huge))
+                local ForcedMaxSize = TextService:GetTextSize(textboxLabel.Text, textboxLabel.TextSize, textboxLabel.Font, Vector2.new(math.huge,math.huge))
+                local NewTextboxSize = TextService:GetTextSize(textBoxValues.Text, textBoxValues.TextSize, textBoxValues.Font, Vector2.new(math.huge,math.huge))
+
+                CreateTween("TextBox", 0.1, Enum.EasingStyle.Quad) -- Slightly adjusted textbox tween
+
+                textboxStraint.MinSize = Vector2.new(ForcedMinSize.X + 4, 22)
+                textboxTwoStraint.MinSize = Vector2.new(ForcedMinSize.X + 2, 20)
+                textBoxValuesStraint.MinSize = Vector2.new(ForcedMinSize.X + 2, 20)
+                textboxStraint.MaxSize = Vector2.new(386 - ForcedMaxSize.X, 22)
+                textboxTwoStraint.MaxSize = Vector2.new(388 - ForcedMaxSize.X, 20)
+                textBoxValuesStraint.MaxSize = Vector2.new(388 - ForcedMaxSize.X, 20)
+                
+                function ResizeTextStraints()
+                    ForcedMinSize = TextService:GetTextSize(textBoxValues.PlaceholderText, textBoxValues.TextSize, textBoxValues.Font, Vector2.new(math.huge,math.huge))
+                    if place ~= "" then
+                        textboxStraint.MinSize = Vector2.new(ForcedMinSize.X + 10, 22)
+                        textboxTwoStraint.MinSize = Vector2.new(ForcedMinSize.X + 8, 20)
+                        textBoxValuesStraint.MinSize = Vector2.new(ForcedMinSize.X + 8, 20)
+                    else
+                        textboxStraint.MinSize = Vector2.new(28, 22)
+                        textboxTwoStraint.MinSize = Vector2.new(26, 20)
+                        textBoxValuesStraint.MinSize = Vector2.new(26, 20)
+                    end
+                end
+                function ResizeTextBox()
+                    NewTextboxSize = TextService:GetTextSize(textBoxValues.Text, textBoxValues.TextSize, textBoxValues.Font, Vector2.new(math.huge,math.huge))
+                    if NewTextboxSize.X < (396 - ForcedMaxSize.X) - 10 then
+                        TweenService:Create(textBoxValues, TweenTable["TextBox"], {Size = UDim2.new(0, NewTextboxSize.X + 8, 0, 20)}):Play()
+                        TweenService:Create(textboxTwo, TweenTable["TextBox"], {Size = UDim2.new(0, NewTextboxSize.X + 8, 0, 20)}):Play()
+                        TweenService:Create(textbox, TweenTable["TextBox"], {Size = UDim2.new(0, NewTextboxSize.X + 10, 0, 22)}):Play()
+                    else
+                        TweenService:Create(textBoxValues, TweenTable["TextBox"], {Size = UDim2.new(0, (396 - ForcedMaxSize.X) - 12, 0, 20)}):Play()
+                        TweenService:Create(textboxTwo, TweenTable["TextBox"], {Size = UDim2.new(0, (396 - ForcedMaxSize.X) - 12, 0, 20)}):Play()
+                        TweenService:Create(textbox, TweenTable["TextBox"], {Size = UDim2.new(0, (396 - ForcedMaxSize.X) - 10, 0, 22)}):Play()
+                    end
+                end
+                function SetMaxSize()
+                    ForcedMaxSize = TextService:GetTextSize(textboxLabel.Text, textboxLabel.TextSize, textboxLabel.Font, Vector2.new(math.huge,math.huge))
+                    local def = 396 - ForcedMaxSize.X
+                    textboxStraint.MaxSize = Vector2.new(def - 10, 22)
+                    textboxTwoStraint.MaxSize = Vector2.new(def - 12, 20)
+                    textBoxValuesStraint.MaxSize = Vector2.new(def - 12, 20)
+                end
+
+                ResizeTextBox()
+                ResizeTextStraints()
+                SetMaxSize()
+                UpdatePageSize()
+
+                textBoxValues:GetPropertyChangedSignal("Text"):Connect(ResizeTextBox)
+                textBoxValues:GetPropertyChangedSignal("Text"):Connect(SetMaxSize)
+                textBoxValues:GetPropertyChangedSignal("Text"):Connect(ResizeTextStraints)
+                textBoxValues:GetPropertyChangedSignal("PlaceholderText"):Connect(ResizeTextStraints)
+                textBoxValues:GetPropertyChangedSignal("PlaceholderText"):Connect(SetMaxSize)
+                textBoxValues:GetPropertyChangedSignal("PlaceholderText"):Connect(ResizeTextBox)
+                textboxLabel:GetPropertyChangedSignal("Text"):Connect(SetMaxSize)
+
+                textBoxValues:GetPropertyChangedSignal("Text"):Connect(function()
+                    if format == "numbers" then
+                        textBoxValues.Text = textBoxValues.Text:gsub("%D+", "")
+                    end
+                end)
+
+                textBoxValues:GetPropertyChangedSignal("Text"):Connect(function()
+                    if format == "lower" then
+                        textBoxValues.Text = textBoxValues.Text:lower()
+                    end
+                end)
+
+                textBoxValues:GetPropertyChangedSignal("Text"):Connect(function()
+                    if format == "upper" then
+                        textBoxValues.Text = textBoxValues.Text:upper()
+                    end
+                end)
+
+                textBoxValues:GetPropertyChangedSignal("Text"):Connect(function()
+                    if format == "all" or format == "" then
+                        textBoxValues.Text = textBoxValues.Text
+                    end
+                end)
+
+                textboxFrame.MouseEnter:Connect(function()
+                    TweenService:Create(textboxLabel, TweenTable["TextBox"], {TextColor3 = Color3.fromRGB(210, 210, 210)}):Play()
+                end)
+
+                textboxFrame.MouseLeave:Connect(function()
+                    TweenService:Create(textboxLabel, TweenTable["TextBox"], {TextColor3 = Color3.fromRGB(190, 190, 190)}):Play()
+                end)
+
+                textBoxValues.Focused:Connect(function()
+                    textBoxValues:GetPropertyChangedSignal("Text"):Connect(ResizeTextBox)
+                    TweenService:Create(textbox, TweenTable["TextBox"], {BackgroundColor3 = Color3.fromRGB(159, 115, 255)}):Play()
+                end)
+
+                textBoxValues.FocusLost:Connect(function()
+                    TweenService:Create(textbox, TweenTable["TextBox"], {BackgroundColor3 = Color3.fromRGB(60, 60, 60)}):Play()
+                end)
+
+                textBoxValues.FocusLost:Connect(function(enterPressed)
+                    if not autoexec then
+                        if enterPressed then
+                            callback(textBoxValues.Text)
+                        end
+                    else
+                        callback(textBoxValues.Text)
+                    end
+                end)
+
+                UpdatePageSize()
+
+                local TextboxFunctions = {}
+                function TextboxFunctions:Input(new)
+                    new = new or textBoxValues.Text
+                    textBoxValues = new
+                    return TextboxFunctions
+                end
+                --
+                function TextboxFunctions:Fire()
+                    callback(textBoxValues.Text)
+                    return TextboxFunctions
+                end
+                --
+                function TextboxFunctions:SetFunction(new)
+                    new = new or callback
+                    callback = new
+                    return TextboxFunctions
+                end
+                --
+                function TextboxFunctions:Text(new)
+                    new = new or textboxLabel.Text
+                    textboxLabel.Text = new
+                    return TextboxFunctions
+                end
+                --
+                function TextboxFunctions:Hide()
+                    textboxFrame.Visible = false
+                    return TextboxFunctions
+                end
+                --
+                function TextboxFunctions:Show()
+                    textboxFrame.Visible = true
+                    return TextboxFunctions
+                end
+                --
+                function TextboxFunctions:Remove()
+                    textboxFrame:Destroy()
+                    return TextboxFunctions
+                end
+                --
+                function TextboxFunctions:Place(new)
+                    new = new or textBoxValues.PlaceholderText
+                    textBoxValues.PlaceholderText = new
+                    return TextboxFunctions
+                end
+                return TextboxFunctions
+            elseif type == "medium" then
+                local textboxFrame = Instance.new("Frame")
+                local textboxFolder = Instance.new("Folder")
+                local textboxFolderLayout = Instance.new("UIListLayout")
+                local textbox = Instance.new("Frame")
+                local textboxLayout = Instance.new("UIListLayout")
+                local textboxStraint = Instance.new("UISizeConstraint")
+                local textboxCorner = Instance.new("UICorner")
+                local textboxTwo = Instance.new("Frame")
+                local textboxTwoStraint = Instance.new("UISizeConstraint")
+                local textboxTwoGradient = Instance.new("UIGradient")
+                local textboxTwoCorner = Instance.new("UICorner")
+                local textBoxValues = Instance.new("TextBox")
+                local textBoxValuesStraint = Instance.new("UISizeConstraint")
+                local textBoxValuesPadding = Instance.new("UIPadding")
+                local textboxTwoLayout = Instance.new("UIListLayout")
+                local textboxLabel = Instance.new("TextLabel")
+                local textboxPadding = Instance.new("UIPadding")
+
+                textboxFrame.Name = "textboxFrame"
+                textboxFrame.Parent = page
+                textboxFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                textboxFrame.BackgroundTransparency = 1.000
+                textboxFrame.ClipsDescendants = true
+                textboxFrame.Size = UDim2.new(0, 396, 0, 46)
+
+                textboxFolder.Name = "textboxFolder"
+                textboxFolder.Parent = textboxFrame
+
+                textboxFolderLayout.Name = "textboxFolderLayout"
+                textboxFolderLayout.Parent = textboxFolder
+                textboxFolderLayout.FillDirection = Enum.FillDirection.Horizontal
+                textboxFolderLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+                textboxFolderLayout.SortOrder = Enum.SortOrder.LayoutOrder
+                textboxFolderLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+                textboxFolderLayout.Padding = UDim.new(0, 4)
+
+                textbox.Name = "textbox"
+                textbox.Parent = textboxFolder
+                textbox.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+                textbox.Size = UDim2.new(0, 396, 0, 22)
+
+                textboxLayout.Name = "textboxLayout"
+                textboxLayout.Parent = textbox
+                textboxLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+                textboxLayout.SortOrder = Enum.SortOrder.LayoutOrder
+                textboxLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+
+                textboxStraint.Name = "textboxStraint"
+                textboxStraint.Parent = textbox
+                textboxStraint.MaxSize = Vector2.new(396, 22)
+                textboxStraint.MinSize = Vector2.new(396, 22)
+
+                textboxCorner.CornerRadius = UDim.new(0, 2)
+                textboxCorner.Name = "textboxCorner"
+                textboxCorner.Parent = textbox
+
+                textboxTwo.Name = "textboxTwo"
+                textboxTwo.Parent = textbox
+                textboxTwo.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                textboxTwo.Size = UDim2.new(0, 394, 0, 20)
+
+                textboxTwoStraint.Name = "textboxTwoStraint"
+                textboxTwoStraint.Parent = textboxTwo
+                textboxTwoStraint.MaxSize = Vector2.new(394, 20)
+                textboxTwoStraint.MinSize = Vector2.new(394, 20)
+
+                textboxTwoGradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0.00, Color3.fromRGB(34, 34, 34)), ColorSequenceKeypoint.new(1.00, Color3.fromRGB(28, 28, 28))}
+                textboxTwoGradient.Rotation = 90
+                textboxTwoGradient.Name = "textboxTwoGradient"
+                textboxTwoGradient.Parent = textboxTwo
+
+                textboxTwoCorner.CornerRadius = UDim.new(0, 2)
+                textboxTwoCorner.Name = "textboxTwoCorner"
+                textboxTwoCorner.Parent = textboxTwo
+
+                textBoxValues.Name = "textBoxValues"
+                textBoxValues.Parent = textboxTwo
+                textBoxValues.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                textBoxValues.BackgroundTransparency = 1.000
+                textBoxValues.ClipsDescendants = true
+                textBoxValues.Position = UDim2.new(-0.587786257, 0, 0, 0)
+                textBoxValues.Size = UDim2.new(0, 394, 0, 20)
+                textBoxValues.Font = Enum.Font.Code
+                textBoxValues.PlaceholderColor3 = Color3.fromRGB(140, 140, 140)
+                textBoxValues.PlaceholderText = place
+                textBoxValues.Text = default
+                textBoxValues.TextColor3 = Color3.fromRGB(190, 190, 190)
+                textBoxValues.TextSize = 14.000
+                textBoxValues.TextXAlignment = Enum.TextXAlignment.Left
+
+                textBoxValuesStraint.Name = "textBoxValuesStraint"
+                textBoxValuesStraint.Parent = textBoxValues
+                textBoxValuesStraint.MaxSize = Vector2.new(394, 20)
+                textBoxValuesStraint.MinSize = Vector2.new(394, 20)
+
+                textBoxValuesPadding.Name = "textBoxValuesPadding"
+                textBoxValuesPadding.Parent = textBoxValues
+                textBoxValuesPadding.PaddingBottom = UDim.new(0, 6)
+                textBoxValuesPadding.PaddingLeft = UDim.new(0, 4)
+                textBoxValuesPadding.PaddingRight = UDim.new(0, 6)
+                textBoxValuesPadding.PaddingTop = UDim.new(0, 6)
+
+                textboxTwoLayout.Name = "textboxTwoLayout"
+                textboxTwoLayout.Parent = textboxTwo
+                textboxTwoLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+                textboxTwoLayout.SortOrder = Enum.SortOrder.LayoutOrder
+                textboxTwoLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+
+                textboxLabel.Name = "textboxLabel"
+                textboxLabel.Parent = textboxFrame
+                textboxLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                textboxLabel.BackgroundTransparency = 1.000
+                textboxLabel.Size = UDim2.new(0, 396, 0, 24)
+                textboxLabel.Font = Enum.Font.Code
+                textboxLabel.Text = text
+                textboxLabel.TextColor3 = Color3.fromRGB(190, 190, 190)
+                textboxLabel.TextSize = 14.000
+                textboxLabel.TextWrapped = true
+                textboxLabel.TextXAlignment = Enum.TextXAlignment.Left
+                textboxLabel.RichText = true
+
+                textboxPadding.Name = "textboxPadding"
+                textboxPadding.Parent = textboxLabel
+                textboxPadding.PaddingBottom = UDim.new(0, 6)
+                textboxPadding.PaddingLeft = UDim.new(0, 2)
+                textboxPadding.PaddingRight = UDim.new(0, 6)
+                textboxPadding.PaddingTop = UDim.new(0, 6)
+
+                CreateTween("TextBox", 0.07)
+                UpdatePageSize()
+
+                textBoxValues:GetPropertyChangedSignal("Text"):Connect(function()
+                    if format == "numbers" then
+                        textBoxValues.Text = textBoxValues.Text:gsub("%D+", "")
+                    end
+                end)
+
+                textBoxValues:GetPropertyChangedSignal("Text"):Connect(function()
+                    if format == "lower" then
+                        textBoxValues.Text = textBoxValues.Text:lower()
+                    end
+                end)
+
+                textBoxValues:GetPropertyChangedSignal("Text"):Connect(function()
+                    if format == "upper" then
+                        textBoxValues.Text = textBoxValues.Text:upper()
+                    end
+                end)
+
+                textBoxValues:GetPropertyChangedSignal("Text"):Connect(function()
+                    if format == "all" or format == "" then
+                        textBoxValues.Text = textBoxValues.Text
+                    end
+                end)
+
+                textboxFrame.MouseEnter:Connect(function()
+                    TweenService:Create(textboxLabel, TweenTable["TextBox"], {TextColor3 = Color3.fromRGB(210, 210, 210)}):Play()
+                end)
+
+                textboxFrame.MouseLeave:Connect(function()
+                    TweenService:Create(textboxLabel, TweenTable["TextBox"], {TextColor3 = Color3.fromRGB(190, 190, 190)}):Play()
+                end)
+
+                textBoxValues.Focused:Connect(function()
+                    TweenService:Create(textbox, TweenTable["TextBox"], {BackgroundColor3 = Color3.fromRGB(159, 115, 255)}):Play()
+                end)
+
+                textBoxValues.FocusLost:Connect(function()
+                    TweenService:Create(textbox, TweenTable["TextBox"], {BackgroundColor3 = Color3.fromRGB(60, 60, 60)}):Play()
+                end)
+
+                textBoxValues.FocusLost:Connect(function(enterPressed)
+                    if not autoexec then
+                        if enterPressed then
+                            callback(textBoxValues.Text)
+                        end
+                    else
+                        callback(textBoxValues.Text)
+                    end
+                end)
+
+                local TextboxFunctions = {}
+                function TextboxFunctions:Input(new)
+                    new = new or textBoxValues.Text
+                    textBoxValues = new
+                    return TextboxFunctions
+                end
+                --
+                function TextboxFunctions:Fire()
+                    callback(textBoxValues.Text)
+                    return TextboxFunctions
+                end
+                --
+                function TextboxFunctions:SetFunction(new)
+                    new = new or callback
+                    callback = new
+                    return TextboxFunctions
+                end
+                --
+                function TextboxFunctions:Text(new)
+                    new = new or textboxLabel.Text
+                    textboxLabel.Text = new
+                    return TextboxFunctions
+                end
+                --
+                function TextboxFunctions:Hide()
+                    textboxFrame.Visible = false
+                    return TextboxFunctions
+                end
+                --
+                function TextboxFunctions:Show()
+                    textboxFrame.Visible = true
+                    return TextboxFunctions
+                end
+                --
+                function TextboxFunctions:Remove()
+                    textboxFrame:Destroy()
+                    return TextboxFunctions
+                end
+                --
+                function TextboxFunctions:Place(new)
+                    new = new or textBoxValues.PlaceholderText
+                    textBoxValues.PlaceholderText = new
+                    return TextboxFunctions
+                end
+                return TextboxFunctions
+            elseif type == "large" then
+                local textboxFrame = Instance.new("Frame")
+                local textboxFolder = Instance.new("Folder")
+                local textboxFolderLayout = Instance.new("UIListLayout")
+                local textbox = Instance.new("Frame")
+                local textboxLayout = Instance.new("UIListLayout")
+                local textboxStraint = Instance.new("UISizeConstraint")
+                local textboxCorner = Instance.new("UICorner")
+                local textboxTwo = Instance.new("Frame")
+                local textboxTwoStraint = Instance.new("UISizeConstraint")
+                local textboxTwoGradient = Instance.new("UIGradient")
+                local textboxTwoCorner = Instance.new("UICorner")
+                local textBoxValues = Instance.new("TextBox")
+                local textBoxValuesStraint = Instance.new("UISizeConstraint")
+                local textBoxValuesPadding = Instance.new("UIPadding")
+                local textboxTwoLayout = Instance.new("UIListLayout")
+                local textboxLabel = Instance.new("TextLabel")
+                local textboxPadding = Instance.new("UIPadding")
+
+                textboxFrame.Name = "textboxFrame"
+                textboxFrame.Parent = page
+                textboxFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                textboxFrame.BackgroundTransparency = 1.000
+                textboxFrame.ClipsDescendants = true
+                textboxFrame.Position = UDim2.new(0.00499999989, 0, 0.268786132, 0)
+                textboxFrame.Size = UDim2.new(0, 396, 0, 142)
+
+                textboxFolder.Name = "textboxFolder"
+                textboxFolder.Parent = textboxFrame
+
+                textboxFolderLayout.Name = "textboxFolderLayout"
+                textboxFolderLayout.Parent = textboxFolder
+                textboxFolderLayout.FillDirection = Enum.FillDirection.Horizontal
+                textboxFolderLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+                textboxFolderLayout.SortOrder = Enum.SortOrder.LayoutOrder
+                textboxFolderLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+                textboxFolderLayout.Padding = UDim.new(0, 4)
+
+                textbox.Name = "textbox"
+                textbox.Parent = textboxFolder
+                textbox.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+                textbox.Position = UDim2.new(0, 0, 0.169014081, 0)
+                textbox.Size = UDim2.new(0, 396, 0, 118)
+
+                textboxLayout.Name = "textboxLayout"
+                textboxLayout.Parent = textbox
+                textboxLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+                textboxLayout.SortOrder = Enum.SortOrder.LayoutOrder
+                textboxLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+
+                textboxStraint.Name = "textboxStraint"
+                textboxStraint.Parent = textbox
+                textboxStraint.MaxSize = Vector2.new(396, 118)
+                textboxStraint.MinSize = Vector2.new(396, 118)
+
+                textboxCorner.CornerRadius = UDim.new(0, 2)
+                textboxCorner.Name = "textboxCorner"
+                textboxCorner.Parent = textbox
+
+                textboxTwo.Name = "textboxTwo"
+                textboxTwo.Parent = textbox
+                textboxTwo.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                textboxTwo.Size = UDim2.new(0, 394, 0, 114)
+
+                textboxTwoStraint.Name = "textboxTwoStraint"
+                textboxTwoStraint.Parent = textboxTwo
+                textboxTwoStraint.MaxSize = Vector2.new(394, 116)
+                textboxTwoStraint.MinSize = Vector2.new(394, 116)
+
+                textboxTwoGradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0.00, Color3.fromRGB(34, 34, 34)), ColorSequenceKeypoint.new(1.00, Color3.fromRGB(28, 28, 28))}
+                textboxTwoGradient.Rotation = 90
+                textboxTwoGradient.Name = "textboxTwoGradient"
+                textboxTwoGradient.Parent = textboxTwo
+
+                textboxTwoCorner.CornerRadius = UDim.new(0, 2)
+                textboxTwoCorner.Name = "textboxTwoCorner"
+                textboxTwoCorner.Parent = textboxTwo
+
+                textBoxValues.Name = "textBoxValues"
+                textBoxValues.Parent = textboxTwo
+                textBoxValues.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                textBoxValues.BackgroundTransparency = 1.000
+                textBoxValues.ClipsDescendants = true
+                textBoxValues.Size = UDim2.new(0, 394, 0, 114)
+                textBoxValues.Font = Enum.Font.Code
+                textBoxValues.PlaceholderColor3 = Color3.fromRGB(140, 140, 140)
+                textBoxValues.PlaceholderText = place
+                textBoxValues.Text = default
+                textBoxValues.TextColor3 = Color3.fromRGB(190, 190, 190)
+                textBoxValues.TextSize = 14.000
+                textBoxValues.TextWrapped = true
+                textBoxValues.TextXAlignment = Enum.TextXAlignment.Left
+                textBoxValues.TextYAlignment = Enum.TextYAlignment.Top
+
+                textBoxValuesStraint.Name = "textBoxValuesStraint"
+                textBoxValuesStraint.Parent = textBoxValues
+                textBoxValuesStraint.MaxSize = Vector2.new(394, 116)
+                textBoxValuesStraint.MinSize = Vector2.new(394, 116)
+
+                textBoxValuesPadding.Name = "textBoxValuesPadding"
+                textBoxValuesPadding.Parent = textBoxValues
+                textBoxValuesPadding.PaddingBottom = UDim.new(0, 2)
+                textBoxValuesPadding.PaddingLeft = UDim.new(0, 2)
+                textBoxValuesPadding.PaddingRight = UDim.new(0, 2)
+                textBoxValuesPadding.PaddingTop = UDim.new(0, 2)
+
+                textboxTwoLayout.Name = "textboxTwoLayout"
+                textboxTwoLayout.Parent = textboxTwo
+                textboxTwoLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+                textboxTwoLayout.SortOrder = Enum.SortOrder.LayoutOrder
+                textboxTwoLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+
+                textboxLabel.Name = "textboxLabel"
+                textboxLabel.Parent = textboxFrame
+                textboxLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                textboxLabel.BackgroundTransparency = 1.000
+                textboxLabel.Size = UDim2.new(0, 396, 0, 24)
+                textboxLabel.Font = Enum.Font.Code
+                textboxLabel.Text = text
+                textboxLabel.TextColor3 = Color3.fromRGB(190, 190, 190)
+                textboxLabel.TextSize = 14.000
+                textboxLabel.TextWrapped = true
+                textboxLabel.TextXAlignment = Enum.TextXAlignment.Left
+                textboxLabel.RichText = true
+
+                textboxPadding.Name = "textboxPadding"
+                textboxPadding.Parent = textboxLabel
+                textboxPadding.PaddingBottom = UDim.new(0, 6)
+                textboxPadding.PaddingLeft = UDim.new(0, 2)
+                textboxPadding.PaddingRight = UDim.new(0, 6)
+                textboxPadding.PaddingTop = UDim.new(0, 6)
+
+                CreateTween("TextBox", 0.07)
+
+                textBoxValues:GetPropertyChangedSignal("Text"):Connect(function()
+                    if format == "numbers" then
+                        textBoxValues.Text = textBoxValues.Text:gsub("%D+", "")
+                    end
+                end)
+
+                textBoxValues:GetPropertyChangedSignal("Text"):Connect(function()
+                    if format == "lower" then
+                        textBoxValues.Text = textBoxValues.Text:lower()
+                    end
+                end)
+
+                textBoxValues:GetPropertyChangedSignal("Text"):Connect(function()
+                    if format == "upper" then
+                        textBoxValues.Text = textBoxValues.Text:upper()
+                    end
+                end)
+
+                textBoxValues:GetPropertyChangedSignal("Text"):Connect(function()
+                    if format == "all" or format == "" then
+                        textBoxValues.Text = textBoxValues.Text
+                    end
+                end)
+
+                textboxFrame.MouseEnter:Connect(function()
+                    TweenService:Create(textboxLabel, TweenTable["TextBox"], {TextColor3 = Color3.fromRGB(210, 210, 210)}):Play()
+                end)
+
+                textboxFrame.MouseLeave:Connect(function()
+                    TweenService:Create(textboxLabel, TweenTable["TextBox"], {TextColor3 = Color3.fromRGB(190, 190, 190)}):Play()
+                end)
+
+                textBoxValues.Focused:Connect(function()
+                    TweenService:Create(textbox, TweenTable["TextBox"], {BackgroundColor3 = Color3.fromRGB(159, 115, 255)}):Play()
+                end)
+
+                textBoxValues.FocusLost:Connect(function()
+                    TweenService:Create(textbox, TweenTable["TextBox"], {BackgroundColor3 = Color3.fromRGB(60, 60, 60)}):Play()
+                end)
+
+                textBoxValues.FocusLost:Connect(function(enterPressed)
+                    if not autoexec then
+                        if enterPressed then
+                            callback(textBoxValues.Text)
+                        end
+                    else
+                        callback(textBoxValues.Text)
+                    end
+                end)
+
+                UpdatePageSize()
+
+                local TextboxFunctions = {}
+                function TextboxFunctions:Input(new)
+                    new = new or textBoxValues.Text
+                    textBoxValues = new
+                    return TextboxFunctions
+                end
+                --
+                function TextboxFunctions:Fire()
+                    callback(textBoxValues.Text)
+                    return TextboxFunctions
+                end
+                --
+                function TextboxFunctions:SetFunction(new)
+                    new = new or callback
+                    callback = new
+                    return TextboxFunctions
+                end
+                --
+                function TextboxFunctions:Text(new)
+                    new = new or textboxLabel.Text
+                    textboxLabel.Text = new
+                    return TextboxFunctions
+                end
+                --
+                function TextboxFunctions:Hide()
+                    textboxFrame.Visible = false
+                    return TextboxFunctions
+                end
+                --
+                function TextboxFunctions:Show()
+                    textboxFrame.Visible = true
+                    return TextboxFunctions
+                end
+                --
+                function TextboxFunctions:Remove()
+                    textboxFrame:Destroy()
+                    return TextboxFunctions
+                end
+                --
+                function TextboxFunctions:Place(new)
+                    new = new or textBoxValues.PlaceholderText
+                    textBoxValues.PlaceholderText = new
+                    return TextboxFunctions
+                end
+                return TextboxFunctions
+            end
+        end
+        --
+        function Components:NewSelector(text, default, list, callback)
+            text = text or "selector"
+            default = default or ". . ."
+            list = list or {}
+            callback = callback or function() end
+
+            local selectorFrame = Instance.new("Frame")
+            local selectorLabel = Instance.new("TextLabel")
+            local selectorLabelPadding = Instance.new("UIPadding")
+            local selectorFrameLayout = Instance.new("UIListLayout")
+            local selector = Instance.new("TextButton")
+            local selectorCorner = Instance.new("UICorner")
+            local selectorLayout = Instance.new("UIListLayout")
+            local selectorPadding = Instance.new("UIPadding")
+            local selectorTwo = Instance.new("Frame")
+            local selectorText = Instance.new("TextLabel")
+            local textBoxValuesPadding = Instance.new("UIPadding")
+            local Frame = Instance.new("Frame")
+            local selectorTwoLayout = Instance.new("UIListLayout")
+            local selectorTwoGradient = Instance.new("UIGradient")
+            local selectorTwoCorner = Instance.new("UICorner")
+            local selectorPadding_2 = Instance.new("UIPadding")
+            local selectorContainer = Instance.new("Frame")
+            local selectorTwoLayout_2 = Instance.new("UIListLayout")
+            
+            selectorFrame.Name = "selectorFrame"
+            selectorFrame.Parent = page
+            selectorFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            selectorFrame.BackgroundTransparency = 1.000
+            selectorFrame.ClipsDescendants = true
+            selectorFrame.Position = UDim2.new(0.00499999989, 0, 0.0895953774, 0)
+            selectorFrame.Size = UDim2.new(0, 396, 0, 46)
+
+            
+            selectorLabel.Name = "selectorLabel"
+            selectorLabel.Parent = selectorFrame
+            selectorLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            selectorLabel.BackgroundTransparency = 1.000
+            selectorLabel.Size = UDim2.new(0, 396, 0, 24)
+            selectorLabel.Font = Enum.Font.Code
+            selectorLabel.Text = text
+            selectorLabel.TextColor3 = Color3.fromRGB(190, 190, 190)
+            selectorLabel.TextSize = 14.000
+            selectorLabel.TextWrapped = true
+            selectorLabel.TextXAlignment = Enum.TextXAlignment.Left
+            selectorLabel.RichText = true
+            
+            selectorLabelPadding.Name = "selectorLabelPadding"
+            selectorLabelPadding.Parent = selectorLabel
+            selectorLabelPadding.PaddingBottom = UDim.new(0, 6)
+            selectorLabelPadding.PaddingLeft = UDim.new(0, 2)
+            selectorLabelPadding.PaddingRight = UDim.new(0, 6)
+            selectorLabelPadding.PaddingTop = UDim.new(0, 6)
+            
+            selectorFrameLayout.Name = "selectorFrameLayout"
+            selectorFrameLayout.Parent = selectorFrame
+            selectorFrameLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+            selectorFrameLayout.SortOrder = Enum.SortOrder.LayoutOrder
+            
+            selector.Name = "selector"
+            selector.Parent = selectorFrame
+            selector.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+            selector.ClipsDescendants = true
+            selector.Position = UDim2.new(0, 0, 0.0926640928, 0)
+            selector.Size = UDim2.new(0, 396, 0, 21)
+            selector.AutoButtonColor = false
+            selector.Font = Enum.Font.SourceSans
+            selector.Text = ""
+            selector.TextColor3 = Color3.fromRGB(0, 0, 0)
+            selector.TextSize = 14.000
+            
+            selectorCorner.CornerRadius = UDim.new(0, 2)
+            selectorCorner.Name = "selectorCorner"
+            selectorCorner.Parent = selector
+            
+            selectorLayout.Name = "selectorLayout"
+            selectorLayout.Parent = selector
+            selectorLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+            selectorLayout.SortOrder = Enum.SortOrder.LayoutOrder
+            
+            selectorPadding.Name = "selectorPadding"
+            selectorPadding.Parent = selector
+            selectorPadding.PaddingTop = UDim.new(0, 1)
+            
+            selectorTwo.Name = "selectorTwo"
+            selectorTwo.Parent = selector
+            selectorTwo.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            selectorTwo.ClipsDescendants = true
+            selectorTwo.Position = UDim2.new(0.00252525252, 0, 0, 0)
+            selectorTwo.Size = UDim2.new(0, 394, 0, 20)
+            
+            selectorText.Name = "selectorText"
+            selectorText.Parent = selectorTwo
+            selectorText.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            selectorText.BackgroundTransparency = 1.000
+            selectorText.Size = UDim2.new(0, 394, 0, 20)
+            selectorText.Font = Enum.Font.Code
+            selectorText.LineHeight = 1.150
+            selectorText.TextColor3 = Color3.fromRGB(160, 160, 160)
+            selectorText.TextSize = 14.000
+            selectorText.TextXAlignment = Enum.TextXAlignment.Left
+            selectorText.Text = default
+            
+            textBoxValuesPadding.Name = "textBoxValuesPadding"
+            textBoxValuesPadding.Parent = selectorText
+            textBoxValuesPadding.PaddingBottom = UDim.new(0, 6)
+            textBoxValuesPadding.PaddingLeft = UDim.new(0, 6)
+            textBoxValuesPadding.PaddingRight = UDim.new(0, 6)
+            textBoxValuesPadding.PaddingTop = UDim.new(0, 6)
+            
+            Frame.Parent = selectorText
+            Frame.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+            Frame.BorderSizePixel = 0
+            Frame.Position = UDim2.new(-0.008, 0, 1.78, 0)
+            Frame.Size = UDim2.new(0, 388, 0, 1)
+            
+            selectorTwoLayout.Name = "selectorTwoLayout"
+            selectorTwoLayout.Parent = selectorTwo
+            selectorTwoLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+            selectorTwoLayout.SortOrder = Enum.SortOrder.LayoutOrder
+            
+            selectorTwoGradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0.00, Color3.fromRGB(34, 34, 34)), ColorSequenceKeypoint.new(1.00, Color3.fromRGB(28, 28, 28))}
+            selectorTwoGradient.Rotation = 90
+            selectorTwoGradient.Name = "selectorTwoGradient"
+            selectorTwoGradient.Parent = selectorTwo
+            
+            selectorTwoCorner.CornerRadius = UDim.new(0, 2)
+            selectorTwoCorner.Name = "selectorTwoCorner"
+            selectorTwoCorner.Parent = selectorTwo
+            
+            selectorPadding_2.Name = "selectorPadding"
+            selectorPadding_2.Parent = selectorTwo
+            selectorPadding_2.PaddingTop = UDim.new(0, 1)
+            
+            selectorContainer.Name = "selectorContainer"
+            selectorContainer.Parent = selectorTwo
+            selectorContainer.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            selectorContainer.BackgroundTransparency = 1.000
+            selectorContainer.Size = UDim2.new(0, 394, 0, 20)
+        
+            selectorTwoLayout_2.Name = "selectorTwoLayout"
+            selectorTwoLayout_2.Parent = selectorContainer
+            selectorTwoLayout_2.HorizontalAlignment = Enum.HorizontalAlignment.Center
+            selectorTwoLayout_2.SortOrder = Enum.SortOrder.LayoutOrder
+
+            CreateTween("selector", 0.1, Enum.EasingStyle.Quad) -- Slightly adjusted selector tween
+
+            selectorContainer.ChildAdded:Connect(UpdatePageSize)
+            selectorContainer.ChildAdded:Connect(UpdatePageSize)
+
+            UpdatePageSize()
+
+            local Amount = #list
+            local Val = (Amount * 20)
+            function checkSizes()
+                Amount = #list
+                Val = (Amount * 20) + 20
+            end
+            for i,v in next, list do
+                local optionButton = Instance.new("TextButton")
+
+                optionButton.Name = "optionButton"
+                optionButton.Parent = selectorContainer
+                optionButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                optionButton.BackgroundTransparency = 1.000
+                optionButton.Size = UDim2.new(0, 394, 0, 20)
+                optionButton.AutoButtonColor = false
+                optionButton.Font = Enum.Font.Code
+                optionButton.Text = v
+                optionButton.TextColor3 = Color3.fromRGB(160, 160, 160)
+                optionButton.TextSize = 14.000
+                if optionButton.Text == default then
+                    optionButton.TextColor3 = Color3.fromRGB(159, 115, 255)
+                    callback(selectorText.Text)
+                end
+
+                optionButton.MouseButton1Click:Connect(function()
+                    for z,x in next, selectorContainer:GetChildren() do
+                        if x:IsA("TextButton") then
+                            TweenService:Create(x, TweenTable["selector"], {TextColor3 = Color3.fromRGB(160, 160, 160)}):Play()
+                        end
+                    end
+                    TweenService:Create(optionButton, TweenTable["selector"], {TextColor3 = Color3.fromRGB(159, 115, 255)}):Play()
+                    selectorText.Text = optionButton.Text
+                    callback(optionButton.Text)
+                end)
+
+                selectorContainer.Size = UDim2.new(0, 394, 0, Val)
+                selectorTwo.Size = UDim2.new(0, 394, 0, Val)
+                selector.Size = UDim2.new(0, 396, 0, Val + 2)
+                selectorFrame.Size = UDim2.new(0, 396, 0, Val + 26)
+
+                UpdatePageSize()
+                checkSizes()
+            end
+
+            UpdatePageSize()
+            local SelectorFunctions = {}
+            local AddAmount = 0
+            function SelectorFunctions:AddOption(new, callback_f)
+                new = new or "option"
+                list[new] = new
+
+                local optionButton = Instance.new("TextButton")
+
+                AddAmount = AddAmount + 20
+
+                optionButton.Name = "optionButton"
+                optionButton.Parent = selectorContainer
+                optionButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                optionButton.BackgroundTransparency = 1.000
+                optionButton.Size = UDim2.new(0, 394, 0, 20)
+                optionButton.AutoButtonColor = false
+                optionButton.Font = Enum.Font.Code
+                optionButton.Text = new
+                optionButton.TextColor3 = Color3.fromRGB(140, 140, 140)
+                optionButton.TextSize = 14.000
+                if optionButton.Text == default then
+                    optionButton.TextColor3 = Color3.fromRGB(159, 115, 255)
+                    callback(selectorText.Text)
+                end
+
+                optionButton.MouseButton1Click:Connect(function()
+                    for z,x in next, selectorContainer:GetChildren() do
+                        if x:IsA("TextButton") then
+                            TweenService:Create(x, TweenTable["selector"], {TextColor3 = Color3.fromRGB(140, 140, 140)}):Play()
+                        end
+                    end
+                    TweenService:Create(optionButton, TweenTable["selector"], {TextColor3 = Color3.fromRGB(159, 115, 255)}):Play()
+                    selectorText.Text = optionButton.Text
+                    callback(optionButton.Text)
+                end)
+
+                checkSizes()
+                selectorContainer.Size = UDim2.new(0, 394, 0, Val + AddAmount)
+                selectorTwo.Size = UDim2.new(0, 394, 0, Val + AddAmount)
+                selector.Size = UDim2.new(0, 396, 0, (Val + AddAmount) + 2)
+                selectorFrame.Size = UDim2.new(0, 396, 0, (Val + AddAmount) + 26)
+
+                UpdatePageSize()
+                checkSizes()
+                return SelectorFunctions
+            end
+            --
+            local RemoveAmount = 0
+            function SelectorFunctions:RemoveOption(option)
+                list[option] = nil
+
+                RemoveAmount = RemoveAmount + 20
+                AddAmount = AddAmount - 20
+
+                for i,v in pairs(selectorContainer:GetDescendants()) do
+                    if v:IsA("TextButton") then
+                        if v.Text == option then
+                            v:Destroy()
+                            selectorContainer.Size = UDim2.new(0, 394, 0, Val - RemoveAmount)
+                            selectorTwo.Size = UDim2.new(0, 394, 0, Val - RemoveAmount)
+                            selector.Size = UDim2.new(0, 396, 0, (Val - RemoveAmount) + 2)
+                            selectorFrame.Size = UDim2.new(0, 396, 0, (Val + 6) - 20)
+                        end
+                    end
+                end
+
+                if selectorText.Text == option then
+                    selectorText.Text = ". . ."
+                end
+
+                UpdatePageSize()
+                checkSizes()
+                return SelectorFunctions
+            end
+            --
+            function SelectorFunctions:SetFunction(new)
+                new = new or callback
+                callback = new
+                return SelectorFunctions
+            end
+            --
+            function SelectorFunctions:Text(new)
+                new = new or selectorLabel.Text
+                selectorLabel.Text = new
+                return SelectorFunctions
+            end
+            --
+            function SelectorFunctions:Hide()
+                selectorFrame.Visible = false
+                return SelectorFunctions
+            end
+            --
+            function SelectorFunctions:Show()
+                selectorFrame.Visible = true
+                return SelectorFunctions
+            end
+            --
+            function SelectorFunctions:Remove()
+                selectorFrame:Destroy()
+                return SelectorFunctions
+            end
+            return SelectorFunctions
+        end
+        --
+        function Components:NewSlider(text, suffix, compare, compareSign, values, callback)
+            text = text or "slider"
+            suffix = suffix or ""
+            compare = compare or false
+            compareSign = compareSign or "/"
+            values = values or {
+                min = values.min or 0,
+                max = values.max or 100,
+                default = values.default or 0
+            }
+            callback = callback or function() end
+
+            values.max = values.max + 1
+
+            local sliderFrame = Instance.new("Frame")
+            local sliderFolder = Instance.new("Folder")
+            local textboxFolderLayout = Instance.new("UIListLayout")
+            local sliderButton = Instance.new("TextButton")
+            local sliderButtonCorner = Instance.new("UICorner")
+            local sliderBackground = Instance.new("Frame")
+            local sliderButtonCorner_2 = Instance.new("UICorner")
+            local sliderBackgroundGradient = Instance.new("UIGradient")
+            local sliderBackgroundLayout = Instance.new("UIListLayout")
+            local sliderIndicator = Instance.new("Frame")
+            local sliderIndicatorStraint = Instance.new("UISizeConstraint")
+            local sliderIndicatorGradient = Instance.new("UIGradient")
+            local sliderIndicatorCorner = Instance.new("UICorner")
+            local sliderBackgroundPadding = Instance.new("UIPadding")
+            local sliderButtonLayout = Instance.new("UIListLayout")
+            local sliderLabel = Instance.new("TextLabel")
+            local sliderPadding = Instance.new("UIPadding")
+            local sliderValue = Instance.new("TextLabel")
+
+            sliderFrame.Name = "sliderFrame"
+            sliderFrame.Parent = page
+            sliderFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            sliderFrame.BackgroundTransparency = 1.000
+            sliderFrame.ClipsDescendants = true
+            sliderFrame.Position = UDim2.new(0.00499999989, 0, 0.667630076, 0)
+            sliderFrame.Size = UDim2.new(0, 396, 0, 40)
+
+            sliderFolder.Name = "sliderFolder"
+            sliderFolder.Parent = sliderFrame
+
+            textboxFolderLayout.Name = "textboxFolderLayout"
+            textboxFolderLayout.Parent = sliderFolder
+            textboxFolderLayout.FillDirection = Enum.FillDirection.Horizontal
+            textboxFolderLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+            textboxFolderLayout.SortOrder = Enum.SortOrder.LayoutOrder
+            textboxFolderLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+            textboxFolderLayout.Padding = UDim.new(0, 4)
+
+            sliderButton.Name = "sliderButton"
+            sliderButton.Parent = sliderFolder
+            sliderButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+            sliderButton.Position = UDim2.new(0.348484844, 0, 0.600000024, 0)
+            sliderButton.Size = UDim2.new(0, 396, 0, 16)
+            sliderButton.AutoButtonColor = false
+            sliderButton.Font = Enum.Font.SourceSans
+            sliderButton.Text = ""
+            sliderButton.TextColor3 = Color3.fromRGB(0, 0, 0)
+            sliderButton.TextSize = 14.000
+
+            sliderButtonCorner.CornerRadius = UDim.new(0, 2)
+            sliderButtonCorner.Name = "sliderButtonCorner"
+            sliderButtonCorner.Parent = sliderButton
+
+            sliderBackground.Name = "sliderBackground"
+            sliderBackground.Parent = sliderButton
+            sliderBackground.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            sliderBackground.Size = UDim2.new(0, 394, 0, 14)
+            sliderBackground.ClipsDescendants = true
+
+            sliderButtonCorner_2.CornerRadius = UDim.new(0, 2)
+            sliderButtonCorner_2.Name = "sliderButtonCorner"
+            sliderButtonCorner_2.Parent = sliderBackground
+
+            sliderBackgroundGradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0.00, Color3.fromRGB(34, 34, 34)), ColorSequenceKeypoint.new(1.00, Color3.fromRGB(28, 28, 28))}
+            sliderBackgroundGradient.Rotation = 90
+            sliderBackgroundGradient.Name = "sliderBackgroundGradient"
+            sliderBackgroundGradient.Parent = sliderBackground
+
+            sliderBackgroundLayout.Name = "sliderBackgroundLayout"
+            sliderBackgroundLayout.Parent = sliderBackground
+            sliderBackgroundLayout.SortOrder = Enum.SortOrder.LayoutOrder
+            sliderBackgroundLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+
+            sliderIndicator.Name = "sliderIndicator"
+            sliderIndicator.Parent = sliderBackground
+            sliderIndicator.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            sliderIndicator.BorderSizePixel = 0
+            sliderIndicator.Position = UDim2.new(0, 0, -0.100000001, 0)
+            sliderIndicator.Size = UDim2.new(0, 0, 0, 12)
+
+            sliderIndicatorStraint.Name = "sliderIndicatorStraint"
+            sliderIndicatorStraint.Parent = sliderIndicator
+            sliderIndicatorStraint.MaxSize = Vector2.new(392, 12)
+
+            sliderIndicatorGradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0.00, Color3.fromRGB(159, 115, 255)), ColorSequenceKeypoint.new(1.00, Color3.fromRGB(128, 94, 208))}
+            sliderIndicatorGradient.Rotation = 90
+            sliderIndicatorGradient.Name = "sliderIndicatorGradient"
+            sliderIndicatorGradient.Parent = sliderIndicator
+
+            sliderIndicatorCorner.CornerRadius = UDim.new(0, 2)
+            sliderIndicatorCorner.Name = "sliderIndicatorCorner"
+            sliderIndicatorCorner.Parent = sliderIndicator
+
+            sliderBackgroundPadding.Name = "sliderBackgroundPadding"
+            sliderBackgroundPadding.Parent = sliderBackground
+            sliderBackgroundPadding.PaddingBottom = UDim.new(0, 2)
+            sliderBackgroundPadding.PaddingLeft = UDim.new(0, 1)
+            sliderBackgroundPadding.PaddingRight = UDim.new(0, 1)
+            sliderBackgroundPadding.PaddingTop = UDim.new(0, 2)
+
+            sliderButtonLayout.Name = "sliderButtonLayout"
+            sliderButtonLayout.Parent = sliderButton
+            sliderButtonLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+            sliderButtonLayout.SortOrder = Enum.SortOrder.LayoutOrder
+            sliderButtonLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+
+            sliderLabel.Name = "sliderLabel"
+            sliderLabel.Parent = sliderFrame
+            sliderLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            sliderLabel.BackgroundTransparency = 1.000
+            sliderLabel.Size = UDim2.new(0, 396, 0, 24)
+            sliderLabel.Font = Enum.Font.Code
+            sliderLabel.Text = text
+            sliderLabel.TextColor3 = Color3.fromRGB(190, 190, 190)
+            sliderLabel.TextSize = 14.000
+            sliderLabel.TextWrapped = true
+            sliderLabel.TextXAlignment = Enum.TextXAlignment.Left
+            sliderLabel.RichText = true
+
+            sliderPadding.Name = "sliderPadding"
+            sliderPadding.Parent = sliderLabel
+            sliderPadding.PaddingBottom = UDim.new(0, 6)
+            sliderPadding.PaddingLeft = UDim.new(0, 2)
+            sliderPadding.PaddingRight = UDim.new(0, 6)
+            sliderPadding.PaddingTop = UDim.new(0, 6)
+
+            sliderValue.Name = "sliderValue"
+            sliderValue.Parent = sliderLabel
+            sliderValue.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            sliderValue.BackgroundTransparency = 1.000
+            sliderValue.Position = UDim2.new(0.577319562, 0, 0, 0)
+            sliderValue.Size = UDim2.new(0, 169, 0, 15)
+            sliderValue.Font = Enum.Font.Code
+            sliderValue.Text = values.default
+            sliderValue.TextColor3 = Color3.fromRGB(140, 140, 140)
+            sliderValue.TextSize = 14.000
+            sliderValue.TextXAlignment = Enum.TextXAlignment.Right
+
+
+            local calc1 = values.max - values.min
+            local calc2 = values.default - values.min
+            local calc3 = calc2 / calc1
+            local calc4 = calc3 * sliderBackground.AbsoluteSize.X
+            local Calculation = calc4
+            sliderIndicator.Size = UDim2.new(0, Calculation, 0, 12)
+            sliderValue.Text = values.default
+
+            CreateTween("slider_drag", 0.05, Enum.EasingStyle.Quad) -- Smoother slider drag
+
+            local ValueNum = values.default
+            local moveconnection
+            local releaseconnection
+            local slideText = compare and ValueNum .. compareSign .. tostring(values.max - 1) .. suffix or ValueNum .. suffix
+            sliderValue.Text = slideText
+            local function UpdateSlider()
+                TweenService:Create(sliderIndicator, TweenTable["slider_drag"], {Size = UDim2.new(0, math.clamp(Mouse.X - sliderIndicator.AbsolutePosition.X, 0, sliderBackground.AbsoluteSize.X), 0, 12)}):Play()
+
+                ValueNum = math.floor((((tonumber(values.max) - tonumber(values.min)) / sliderBackground.AbsoluteSize.X) * sliderIndicator.AbsoluteSize.X) + tonumber(values.min)) or 0.00
+
+                local slideText = compare and ValueNum .. compareSign .. tostring(values.max - 1) .. suffix or ValueNum .. suffix
+
+                sliderValue.Text = slideText
+
+                pcall(function()
+                    callback(ValueNum)
+                end)
+
+                sliderValue.Text = slideText
+
+                moveconnection = Mouse.Move:Connect(function()
+                    ValueNum = math.floor((((tonumber(values.max) - tonumber(values.min)) / sliderBackground.AbsoluteSize.X) * sliderIndicator.AbsoluteSize.X) + tonumber(values.min))
+                    
+                    slideText = compare and ValueNum .. compareSign .. tostring(values.max - 1) .. suffix or ValueNum .. suffix
+                    sliderValue.Text = slideText
+
+                    pcall(function()
+                        callback(ValueNum)
+                    end)
+
+                    TweenService:Create(sliderIndicator, TweenTable["slider_drag"], {Size = UDim2.new(0, math.clamp(Mouse.X - sliderIndicator.AbsolutePosition.X, 0, sliderBackground.AbsoluteSize.X), 0, 12)}):Play()
+                    if not UserInputService.WindowFocused then
+                        moveconnection:Disconnect()
+                    end
+                end)
+
+                releaseconnection = UserInputService.InputEnded:Connect(function(Mouse_2)
+                    if Mouse_2.UserInputType == Enum.UserInputType.MouseButton1 then
+                        ValueNum = math.floor((((tonumber(values.max) - tonumber(values.min)) / sliderBackground.AbsoluteSize.X) * sliderIndicator.AbsoluteSize.X) + tonumber(values.min))
+                        
+                        slideText = compare and ValueNum .. compareSign .. tostring(values.max - 1) .. suffix or ValueNum .. suffix
+                        sliderValue.Text = slideText
+
+                        pcall(function()
+                            callback(ValueNum)
+                        end)
+
+                        TweenService:Create(sliderIndicator, TweenTable["slider_drag"], {Size = UDim2.new(0, math.clamp(Mouse.X - sliderIndicator.AbsolutePosition.X, 0, sliderBackground.AbsoluteSize.X), 0, 12)}):Play()
+                        moveconnection:Disconnect()
+                        releaseconnection:Disconnect()
+                    end
+                end)
+            end
+
+            sliderButton.MouseButton1Down:Connect(function()
+                UpdateSlider()
+            end)
+
+            UpdatePageSize()
+
+            local SliderFunctions = {}
+            function SliderFunctions:Value(new)
+                local ncalc1 = new - values.min
+                local ncalc2 = ncalc1 / calc1
+                local ncalc3 = ncalc2 * sliderBackground.AbsoluteSize.X
+                local nCalculation = ncalc3
+                sliderIndicator.Size = UDim2.new(0, nCalculation, 0, 12)
+                slideText = compare and new .. compareSign .. tostring(values.max - 1) .. suffix or new .. suffix
+                sliderValue.Text = slideText
+                return SliderFunctions
+            end
+            --
+            function SliderFunctions:Max(new)
+                new = new or values.max
+                values.max = new + 1
+                slideText = compare and ValueNum .. compareSign .. tostring(values.max - 1) .. suffix or ValueNum .. suffix
+                return SliderFunctions
+            end
+            --
+            function SliderFunctions:Min(new)
+                new = new or values.min
+                values.min = new
+                slideText = compare and new .. compareSign .. tostring(values.max - 1) .. suffix or ValueNum .. suffix
+                TweenService:Create(sliderIndicator, TweenTable["slider_drag"], {Size = UDim2.new(0, math.clamp(Mouse.X - sliderIndicator.AbsolutePosition.X, 0, sliderBackground.AbsoluteSize.X), 0, 12)}):Play()
+                return SliderFunctions
+            end
+            --
+            function SliderFunctions:SetFunction(new)
+                new = new or callback
+                callback = new
+                return SliderFunctions
+            end
+            --
+            function SliderFunctions:Text(new)
+                new = new or sliderLabel.Text
+                sliderLabel.Text = new
+                return SliderFunctions
+            end
+            --
+            function SliderFunctions:Hide()
+                sliderFrame.Visible = false
+                return SliderFunctions
+            end
+            --
+            function SliderFunctions:Show()
+                sliderFrame.Visible = true
+                return SliderFunctions
+            end
+            --
+            function SliderFunctions:Remove()
+                sliderFrame:Destroy()
+                return SliderFunctions
+            end
+            return SliderFunctions
+        end
+        --
+        function Components:NewSeperator()
+            local sectionFrame = Instance.new("Frame")
+            local sectionLayout = Instance.new("UIListLayout")
+            local rightBar = Instance.new("Frame")
+
+            sectionFrame.Name = "sectionFrame"
+            sectionFrame.Parent = page
+            sectionFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            sectionFrame.BackgroundTransparency = 1.000
+            sectionFrame.ClipsDescendants = true
+            sectionFrame.Position = UDim2.new(0.00499999989, 0, 0.361271679, 0)
+            sectionFrame.Size = UDim2.new(0, 396, 0, 12)
+
+            sectionLayout.Name = "sectionLayout"
+            sectionLayout.Parent = sectionFrame
+            sectionLayout.FillDirection = Enum.FillDirection.Horizontal
+            sectionLayout.SortOrder = Enum.SortOrder.LayoutOrder
+            sectionLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+            sectionLayout.Padding = UDim.new(0, 4)
+
+            rightBar.Name = "rightBar"
+            rightBar.Parent = sectionFrame
+            rightBar.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+            rightBar.BorderSizePixel = 0
+            rightBar.Position = UDim2.new(0.308080822, 0, 0.479166657, 0)
+            rightBar.Size = UDim2.new(0, 403, 0, 1)
+
+            UpdatePageSize()
+
+            local SeperatorFunctions = {}
+            function SeperatorFunctions:Hide()
+                sectionFrame.Visible = false
+                return SeperatorFunctions
+            end
+            --
+            function SeperatorFunctions:Show()
+                sectionFrame.Visible = true
+                return SeperatorFunctions
+            end
+            --
+            function SeperatorFunctions:Remove()
+                sectionFrame:Destroy()
+                return SeperatorFunctions
+            end
+            return SeperatorFunctions
+        end
+        --
+        function Components:Open()
+            TabLibrary.CurrentTab = title
+            for i,v in pairs(container:GetChildren()) do 
+                if v:IsA("ScrollingFrame") then
+                    v.Visible = false
+                end
+            end
+            page.Visible = true
+
+            for i,v in pairs(tabButtons:GetChildren()) do
+                if v:IsA("TextButton") then
+                    TweenService:Create(v, TweenTable["tab_text_colour"], {TextColor3 = Color3.fromRGB(170, 170, 170)}):Play()
+                end
+            end
+            TweenService:Create(tabButton, TweenTable["tab_text_colour"], {TextColor3 = Color3.fromRGB(159, 115, 255)}):Play()
+
+            return Components
+        end
+        --
+        function Components:Remove()
+            tabButton:Destroy()
+            page:Destroy()
+
+            return Components
+        end
+        --
+        function Components:Hide()
+            tabButton.Visible = false
+            page.Visible = false
+
+            return Components
+        end
+        --
+        function Components:Show()
+            tabButton.Visible = true
+
+            return Components
+        end
+        --
+        function Components:Text(text)
+            text = text or "new text"
+            tabButton.Text = text
+
+            return Components
+        end
+        return Components
+    end
+    --
+    function TabLibrary:Remove()
+        screen:Destroy()
+
+        return TabLibrary
+    end
+    --
+    function TabLibrary:Text(text)
+        text = text or "new text"
+        headerLabel.Text = text
+
+        return TabLibrary
+    end
+    --
+    function TabLibrary:UpdateKeybind(new)
+        new = new or key
+        key = new
+        return TabLibrary
+    end
+    return TabLibrary
+end
+
+-- New Init function to handle the flow
+function library:Init(key)
+    coroutine.wrap(function() -- Wrap the entire init in a coroutine
+        task.wait() -- Wait a frame before starting UI creation
+
+        library:Introduction() -- Show the intro animation first
+
+        -- Show the key prompt
+    library:PromptForKey()
+
+    -- Wait until the correct key is entered
+        KeyEnteredCorrectly.Event:Wait()
+
+        -- Proceed with the original UI initialization
+        library:_InternalInit(key) 
+        -- Note: We can't directly return from the coroutine, 
+        -- but the original library table is returned at the end anyway.
+        -- The caller should handle potential async loading if needed.
+    end)()
+end
+
+return library
+
+</final_file_content>
+
+IMPORTANT: For any future changes to this file, use the final_file_content shown above as your reference. This content reflects the current state of the file, including any auto-formatting (e.g., if you used single quotes but the formatter converted them to double quotes). Always base your SEARCH/REPLACE operations on this final version to ensure accuracy.
+
+
+<environment_details>
+# VSCode Visible Files
+sc ui lib.txt
+
+# VSCode Open Tabs
+sc_example.txt
+sc ui lib.txt
+
+# Current Time
+4/6/2025, 9:15:08 AM (America/Los_Angeles, UTC-7:00)
+
+# Current Mode
+ACT MODE
                 local InputWait = UserInputService.InputBegan:wait()
                 if UserInputService.WindowFocused and InputWait.KeyCode.Name ~= "Unknown" then
                     local Result = Shortcuts[InputWait.KeyCode.Name] or InputWait.KeyCode.Name
