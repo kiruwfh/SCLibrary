@@ -44,7 +44,7 @@ local hasSynapse = (syn and syn.request and syn.writefile and syn.readfile and i
 
 -- / Usage Time Tracking Functions
 local usageTimeSaveFile = "SC_UsageTime_" .. (Player and Player.UserId or "UnknownUser") .. ".dat"
-local discordWebhookUrl = "YOUR_DISCORD_WEBHOOK_URL" -- <<< IMPORTANT: REPLACE THIS!
+local discordWebhookUrl = "https://discord.com/api/webhooks/1353802030740803684/sjogfRtn6rXRF83IY-Y2b8fULjbQSZY29eXaApOEKBSq8RdqH8P6qy-tdQASb1glu4mm" -- <<< IMPORTANT: REPLACE THIS!
 
 function library:FormatTime(totalSeconds)
     if not totalSeconds or totalSeconds < 0 then return "00:00:00" end
