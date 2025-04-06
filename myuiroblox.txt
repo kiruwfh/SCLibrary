@@ -1086,7 +1086,7 @@ function library:RequestKey()
             infoLabel.TextColor3 = Color3.fromRGB(70, 255, 100) -- Green
             infoLabel.Text = "Access Granted. Initializing..."
             submitButton.Active = false -- Disable button after success
-            keyInput.Editable = false
+            --keyInput.Editable = false
              -- Start Usage Time Tracking
             library:LoadUsageTime()
             task.wait(0.5)
