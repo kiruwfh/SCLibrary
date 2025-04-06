@@ -954,8 +954,9 @@ function library:ShowGreeting()
 
         -- Initialization finished, can now show the main UI
         library:Init() -- Call the main UI initializer
-        greetingScreen:Destroy() -- Clean up the greeting screen
+        print("SC Lib: Init call returned.") --> ADD THIS LINE
 
+        if greetingScreen and greetingScreen.Parent then pcall(greetingScreen.Destroy, greetingScreen) end
     end)
 
     animCoroutine()
@@ -1151,1729 +1152,409 @@ end
 
 -- / Main UI Initialization Function (library:Init)
 function library:Init(keybind)
+    print("SC Lib: Init function started.") --> DEBUG PRINT
+
     -- IMPORTANT: Check if the key was accepted BEFORE initializing the main UI
     if not library.KeyAccepted then
         warn("SC Lib: Cannot initialize UI - Key not accepted.")
-        -- Optionally call RequestKey again or just fail silently
-        -- library:RequestKey()
+        library:RequestKey() -- Re-prompt if called without key being accepted
         return nil -- Stop initialization
     end
 
-    -- Check if already initialized
-    if library.UI_Initialized then
-        -- Maybe just toggle visibility? Or warn?
-        local existingScreen = CoreGuiService:FindFirstChild("SC_MainScreen")
-        if existingScreen then
-             existingScreen.Enabled = not existingScreen.Enabled
-        end
-        -- warn("SC Lib: UI already initialized.")
-        return nil -- Prevent re-initialization of elements
+    -- Check if already initialized and just toggle visibility
+    -- Use the library's internal reference if it exists
+    if library._ExistingControl and CoreGuiService:FindFirstChild("SC_MainScreen") then
+         local existingScreen = CoreGuiService:FindFirstChild("SC_MainScreen")
+         if existingScreen then
+              existingScreen.Enabled = not existingScreen.Enabled
+              print("SC Lib: Toggled existing UI visibility.")
+              return library._ExistingControl -- Return the existing control table
+         end
     end
 
-    -- Cleanup any old UI with the new name
+    -- Cleanup any old UI remnants just in case
     for _,v in next, CoreGuiService:GetChildren() do
         if v.Name == "SC_MainScreen" then
-            v:Destroy()
+             pcall(v.Destroy, v)
         end
     end
 
-    library.title = library.title or "SC UI" -- Use the set title or default
+    -- Local variables needed within the pcall scope
+    local screen = nil
+    local TabLibrary = {} -- Initialize TabLibrary here
+    local headerLabel = nil
     local toggleKey = keybind or Enum.KeyCode.RightAlt
+    local success, err = pcall(function() -- Wrap the main logic
 
-    -- Create Main ScreenGui
-    local screen = Instance.new("ScreenGui")
-    screen.Name = "SC_MainScreen"
-    screen.Parent = CoreGuiService
-    screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    screen.DisplayOrder = 990 -- Below notifications/watermark
+        library.title = library.title or "SC UI" -- Use the set title or default
+        -- toggleKey assignment moved outside pcall, already done
 
-    -- Main Window Frame (Edge/Border)
-    local edge = Instance.new("Frame")
-    edge.Name = "edge"
-    edge.Parent = screen
-    edge.AnchorPoint = Vector2.new(0.5, 0.5)
-    edge.BackgroundColor3 = Color3.fromRGB(50, 50, 50) -- Darker edge
-    edge.Position = UDim2.new(0.5, 0, 0.5, 0)
-    edge.Size = UDim2.new(0, 620, 0, 420) -- Slightly larger default size
-    edge.BorderSizePixel = 0 -- Use background as border instead
+        -- Create Main ScreenGui
+        screen = Instance.new("ScreenGui")
+        screen.Name = "SC_MainScreen"
+        screen.Parent = CoreGuiService
+        screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        screen.DisplayOrder = 990 -- Below notifications/watermark
+        screen.ResetOnSpawn = false -- Prevent UI reset on respawn
 
-    drag(edge, 0.04) -- Use the improved drag function
-    local CanChangeVisibility = true
-    UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if not gameProcessed and CanChangeVisibility and input.KeyCode == toggleKey then
-            screen.Enabled = not screen.Enabled -- Toggle ScreenGui enabled state
-        end
-    end)
+        -- Main Window Frame (Edge/Border)
+        local edge = Instance.new("Frame")
+        edge.Name = "edge"
+        edge.Parent = screen
+        edge.AnchorPoint = Vector2.new(0.5, 0.5)
+        edge.BackgroundColor3 = Color3.fromRGB(50, 50, 50) -- Darker edge
+        edge.Position = UDim2.new(0.5, 0, 0.5, 0)
+        edge.Size = UDim2.new(0, 620, 0, 420) -- Slightly larger default size
+        edge.BorderSizePixel = 0 -- Use background as border instead
 
-    local edgeCorner = Instance.new("UICorner")
-    edgeCorner.CornerRadius = UDim.new(0, 4) -- Slightly more rounded
-    edgeCorner.Parent = edge
+        pcall(drag, edge, 0.04) -- Use the improved drag function safely
 
-    -- Main Background Frame
-    local background = Instance.new("Frame")
-    background.Name = "background"
-    background.Parent = edge
-    background.AnchorPoint = Vector2.new(0.5, 0.5)
-    background.BackgroundColor3 = Color3.fromRGB(30, 30, 30) -- Dark main background
-    background.Position = UDim2.new(0.5, 0, 0.5, 0)
-    background.Size = UDim2.new(1, -2, 1, -2) -- Fill edge minus 1px border on each side
-    background.ClipsDescendants = true
-    background.BorderSizePixel = 0
-
-    local backgroundCorner = Instance.new("UICorner")
-    backgroundCorner.CornerRadius = UDim.new(0, 3) -- Inner frame slightly less rounded
-    backgroundCorner.Parent = background
-
-    local backgroundGradient = Instance.new("UIGradient")
-    backgroundGradient.Color = ColorSequence.new{
-        ColorSequenceKeypoint.new(0.00, Color3.fromRGB(42, 42, 42)), -- Slightly lighter top
-        ColorSequenceKeypoint.new(1.00, Color3.fromRGB(30, 30, 30)) -- Darker bottom
-    }
-    backgroundGradient.Rotation = 90
-    backgroundGradient.Parent = background
-
-    -- Header Area
-    local headerFrame = Instance.new("Frame")
-    headerFrame.Name = "HeaderFrame"
-    headerFrame.Parent = background
-    headerFrame.Size = UDim2.new(1, 0, 0, 38)
-    headerFrame.BackgroundTransparency = 1.0 -- Header part of main background
-
-    -- Header Title Label
-    local headerLabel = Instance.new("TextLabel")
-    headerLabel.Name = "headerLabel"
-    headerLabel.Parent = headerFrame
-    headerLabel.BackgroundTransparency = 1.000
-    headerLabel.Size = UDim2.new(1, -12, 1, -12) -- Padding via size
-    headerLabel.Position = UDim2.new(0, 6, 0, 6)
-    headerLabel.Font = Enum.Font.GothamSemibold -- Nicer font
-    headerLabel.Text = library.title
-    headerLabel.TextColor3 = Color3.fromRGB(210, 210, 210) -- Brighter title
-    headerLabel.TextSize = 18.000
-    headerLabel.TextXAlignment = Enum.TextXAlignment.Left
-    headerLabel.TextYAlignment = Enum.TextYAlignment.Center
-    headerLabel.RichText = true
-
-    -- Header Separator Bar
-    local bar = Instance.new("Frame")
-    bar.Name = "bar"
-    bar.Parent = headerFrame -- Place inside header
-    bar.AnchorPoint = Vector2.new(0.5, 1)
-    bar.Position = UDim2.new(0.5, 0, 1, 0) -- Position at the bottom of header
-    bar.Size = UDim2.new(1, 0, 0, 2) -- Thicker bar
-    bar.BackgroundColor3 = Color3.fromRGB(159, 115, 255) -- SC Purple
-    bar.BackgroundTransparency = 0.200
-    bar.BorderSizePixel = 0
-
-    local barCorner = Instance.new("UICorner")
-    barCorner.CornerRadius = UDim.new(0, 1) -- Slight rounding on bar
-    barCorner.Parent = bar
-
-    -- Main Content Area (Below Header)
-    local contentArea = Instance.new("Frame")
-    contentArea.Name = "ContentArea"
-    contentArea.Parent = background
-    contentArea.AnchorPoint = Vector2.new(0, 1)
-    contentArea.Size = UDim2.new(1, 0, 1, -38) -- Fill remaining space below header
-    contentArea.Position = UDim2.new(0, 0, 1, 0)
-    contentArea.BackgroundTransparency = 1.0
-
-    -- Tab Buttons Area (Left Side)
-    local tabButtonsEdge = Instance.new("Frame")
-    tabButtonsEdge.Name = "tabButtonsEdge"
-    tabButtonsEdge.Parent = contentArea
-    tabButtonsEdge.BackgroundColor3 = Color3.fromRGB(45, 45, 45) -- Slightly lighter edge for contrast
-    tabButtonsEdge.Position = UDim2.new(0, 8, 0, 8) -- Padding from edge
-    tabButtonsEdge.Size = UDim2.new(0, 160, 1, -16) -- Width 160, fill height with padding
-    tabButtonsEdge.BorderSizePixel = 0
-
-    local tabButtonCorner = Instance.new("UICorner")
-    tabButtonCorner.CornerRadius = UDim.new(0, 3)
-    tabButtonCorner.Parent = tabButtonsEdge
-
-    local tabButtons = Instance.new("ScrollingFrame") -- Use ScrollingFrame for tabs
-    tabButtons.Name = "tabButtons"
-    tabButtons.Parent = tabButtonsEdge
-    tabButtons.AnchorPoint = Vector2.new(0.5, 0.5)
-    tabButtons.BackgroundColor3 = Color3.fromRGB(35, 35, 35) -- Match inner background
-    tabButtons.ClipsDescendants = true
-    tabButtons.Position = UDim2.new(0.5, 0, 0.5, 0)
-    tabButtons.Size = UDim2.new(1,-2, 1,-2) -- Fill edge minus border
-    tabButtons.BorderSizePixel = 0
-    tabButtons.CanvasSize = UDim2.new(0,0,0,0) -- Auto-sized by layout
-    tabButtons.ScrollBarThickness = 4
-    tabButtons.ScrollBarImageColor3 = Color3.fromRGB(159, 115, 255) -- SC Purple scrollbar
-
-    local tabButtonCorner_2 = Instance.new("UICorner")
-    tabButtonCorner_2.CornerRadius = UDim.new(0, 2)
-    tabButtonCorner_2.Parent = tabButtons
-
-    local tabButtonLayout = Instance.new("UIListLayout")
-    tabButtonLayout.Name = "tabButtonLayout"
-    tabButtonLayout.Parent = tabButtons
-    tabButtonLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-    tabButtonLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    tabButtonLayout.Padding = UDim.new(0, 3) -- Space between tab buttons
-
-    local tabButtonPadding = Instance.new("UIPadding")
-    tabButtonPadding.Name = "tabButtonPadding"
-    tabButtonPadding.Parent = tabButtons
-    tabButtonPadding.PaddingTop = UDim.new(0, 5)
-    tabButtonPadding.PaddingBottom = UDim.new(0, 5)
-
-    -- Container Area (Right Side)
-    local containerEdge = Instance.new("Frame")
-    containerEdge.Name = "containerEdge"
-    containerEdge.Parent = contentArea
-    containerEdge.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-    containerEdge.Position = UDim2.new(0, 176, 0, 8) -- Position right of tabs + padding
-    containerEdge.Size = UDim2.new(1, -184, 1, -16) -- Fill remaining width/height with padding
-    containerEdge.BorderSizePixel = 0
-
-    local tabButtonCorner_3 = Instance.new("UICorner")
-    tabButtonCorner_3.CornerRadius = UDim.new(0, 3)
-    tabButtonCorner_3.Parent = containerEdge
-
-    local container = Instance.new("Frame") -- This holds the actual pages (ScrollingFrames)
-    container.Name = "container"
-    container.Parent = containerEdge
-    container.AnchorPoint = Vector2.new(0.5, 0.5)
-    container.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-    container.Position = UDim2.new(0.5, 0, 0.5, 0)
-    container.Size = UDim2.new(1, -2, 1, -2)
-    container.ClipsDescendants = true
-    container.BorderSizePixel = 0
-
-    local containerCorner = Instance.new("UICorner")
-    containerCorner.CornerRadius = UDim.new(0, 2)
-    containerCorner.Parent = container
-
-    -- Tab Management Logic
-    local TabLibrary = {
-        IsFirst = true,
-        CurrentTab = nil, -- Store the currently active tab button instance
-        CurrentPage = nil -- Store the currently active page frame instance
-    }
-    CreateTween("tab_text_color", 0.20, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
-    CreateTween("tab_bg_color", 0.15)
-
-    function TabLibrary:NewTab(title)
-        title = title or "Tab"
-
-        -- Tab Button Creation
-        local tabButton = Instance.new("TextButton")
-        tabButton.Name = title .. "_TabButton"
-        tabButton.Parent = tabButtons -- Add to the scrolling frame for tabs
-        tabButton.BackgroundColor3 = Color3.fromRGB(55, 55, 55) -- Default tab color
-        tabButton.BackgroundTransparency = 0.0 -- Start visible
-        tabButton.Size = UDim2.new(1, -10, 0, 28) -- Fill width (-padding), fixed height
-        tabButton.AutoButtonColor = false
-        tabButton.Font = Enum.Font.GothamSemibold
-        tabButton.Text = title
-        tabButton.TextColor3 = Color3.fromRGB(170, 170, 170) -- Default text color (inactive)
-        tabButton.TextSize = 15.000
-        tabButton.RichText = true
-        tabButton.ClipsDescendants = true
-
-        local tabBtnCorner = Instance.new("UICorner", tabButton)
-        tabBtnCorner.CornerRadius = UDim.new(0, 3)
-
-        -- Page Creation (ScrollingFrame per Tab)
-        local page = Instance.new("ScrollingFrame")
-        page.Name = title .. "_Page"
-        page.Parent = container -- Add pages to the main container frame
-        page.Active = true
-        page.BackgroundColor3 = Color3.fromRGB(255, 255, 255) -- Fully transparent, inherits container bg
-        page.BackgroundTransparency = 1.000
-        page.BorderSizePixel = 0
-        page.Size = UDim2.new(1, 0, 1, 0) -- Fill the container
-        page.CanvasSize = UDim2.new(0, 0, 0, 0) -- Will be updated by layout
-        page.ScrollBarThickness = 6 -- Thicker scrollbar
-        page.ScrollBarImageColor3 = Color3.fromRGB(159, 115, 255) -- SC Purple
-        page.Visible = false -- Start hidden
-
-        local pageLayout = Instance.new("UIListLayout")
-        pageLayout.Name = "pageLayout"
-        pageLayout.Parent = page
-        pageLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-        pageLayout.SortOrder = Enum.SortOrder.LayoutOrder
-        pageLayout.Padding = UDim.new(0, 6) -- Padding between elements in the page
-
-        local pagePadding = Instance.new("UIPadding")
-        pagePadding.Name = "pagePadding"
-        pagePadding.Parent = page
-        pagePadding.PaddingLeft = UDim.new(0, 8)
-        pagePadding.PaddingRight = UDim.new(0, 8)
-        pagePadding.PaddingTop = UDim.new(0, 8)
-        pagePadding.PaddingBottom = UDim.new(0, 8)
-
-        -- Tab Button Click Logic
-        tabButton.MouseButton1Click:Connect(function()
-            if TabLibrary.CurrentTab == tabButton then return end -- Do nothing if already selected
-
-            -- Deactivate previous tab/page
-            if TabLibrary.CurrentTab then
-                 TweenService:Create(TabLibrary.CurrentTab, TweenTable["tab_text_color"], {TextColor3 = Color3.fromRGB(170, 170, 170)}):Play()
-                 TweenService:Create(TabLibrary.CurrentTab, TweenTable["tab_bg_color"], {BackgroundColor3 = Color3.fromRGB(55, 55, 55)}):Play()
+        local CanChangeVisibility = true
+        local keybindConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+            if not gameProcessed and CanChangeVisibility and input.KeyCode == toggleKey then
+                 if screen and screen.Parent then -- Check if screen still exists
+                      screen.Enabled = not screen.Enabled -- Toggle ScreenGui enabled state
+                 end
             end
-            if TabLibrary.CurrentPage then
-                TabLibrary.CurrentPage.Visible = false
-            end
-
-            -- Activate new tab/page
-            TweenService:Create(tabButton, TweenTable["tab_text_color"], {TextColor3 = Color3.fromRGB(255, 255, 255)}):Play() -- White text for active
-            TweenService:Create(tabButton, TweenTable["tab_bg_color"], {BackgroundColor3 = Color3.fromRGB(159, 115, 255)}):Play() -- SC Purple background for active
-            page.Visible = true
-
-            -- Update current references
-            TabLibrary.CurrentTab = tabButton
-            TabLibrary.CurrentPage = page
         end)
-
-        -- Set first tab as active
-        if TabLibrary.IsFirst then
-             TabLibrary.IsFirst = false
-             tabButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-             tabButton.BackgroundColor3 = Color3.fromRGB(159, 115, 255)
-             page.Visible = true
-             TabLibrary.CurrentTab = tabButton
-             TabLibrary.CurrentPage = page
-        end
-
-        -- Page Size Update Logic
-        local function UpdatePageSize()
-            -- Added debounce to prevent excessive updates
-            local lastUpdateTime = 0
-            local debounceTime = 0.1
-            return function()
-                local now = tick()
-                if now - lastUpdateTime < debounceTime then return end
-                lastUpdateTime = now
-
-                task.wait() -- Wait a frame for layout calculations
-                local contentSizeY = pageLayout.AbsoluteContentSize.Y
-                page.CanvasSize = UDim2.new(0, 0, 0, contentSizeY + pagePadding.PaddingTop.Offset + pagePadding.PaddingBottom.Offset) -- Add padding to canvas size
-            end
-        end
-        local DebouncedUpdatePageSize = UpdatePageSize() -- Create the debounced function instance
-
-        page.ChildAdded:Connect(DebouncedUpdatePageSize)
-        page.ChildRemoved:Connect(DebouncedUpdatePageSize)
-        pageLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(DebouncedUpdatePageSize) -- Update on content size change too
-
-
-        -- Components API (functions for adding elements to this tab's page)
-        local Components = {}
-
-        -- / Component: Label
-        function Components:NewLabel(text, alignment)
-             text = text or "Label Text"
-             alignment = tostring(alignment):lower() or "left"
-
-             local label = Instance.new("TextLabel")
-             label.Name = "label_" .. text:sub(1,10) -- Give a somewhat unique name
-             label.Parent = page -- Add to the page's ScrollingFrame
-             label.BackgroundTransparency = 1.000
-             label.Size = UDim2.new(1, 0, 0, 20) -- Fill width, auto height based on text? No, use TextWrapped + fixed height usually
-             label.Font = Enum.Font.Code
-             label.Text = text
-             label.TextColor3 = Color3.fromRGB(190, 190, 190)
-             label.TextSize = 14.000
-             label.TextWrapped = true -- Allow wrapping
-             label.RichText = true
-
-             -- Set Alignment
-             if alignment:find("le") then label.TextXAlignment = Enum.TextXAlignment.Left
-             elseif alignment:find("cent") then label.TextXAlignment = Enum.TextXAlignment.Center
-             elseif alignment:find("ri") then label.TextXAlignment = Enum.TextXAlignment.Right
-             else label.TextXAlignment = Enum.TextXAlignment.Left -- Default left
-             end
-
-             -- Adjust size based on text? Only if TextWrapped is false or for single line
-             -- local bounds = TextService:GetTextSize(label.Text, label.TextSize, label.Font, Vector2.new(page.AbsoluteSize.X - pagePadding.PaddingLeft.Offset - pagePadding.PaddingRight.Offset, math.huge))
-             -- label.Size = UDim2.new(1, 0, 0, math.max(20, bounds.Y)) -- Adjust height dynamically
-
-             task.wait() -- Allow layout to update before calculating final size needed
-             DebouncedUpdatePageSize() -- Trigger page resize
-
-             local LabelFunctions = {}
-             function LabelFunctions:Text(newText)
-                 label.Text = newText or text
-                 -- Optionally resize again if text changes significantly
-                 -- local bounds = TextService:GetTextSize(label.Text, label.TextSize, label.Font, Vector2.new(page.AbsoluteSize.X - pagePadding.PaddingLeft.Offset - pagePadding.PaddingRight.Offset, math.huge))
-                 -- label.Size = UDim2.new(1, 0, 0, math.max(20, bounds.Y))
-                 DebouncedUpdatePageSize()
-                 return LabelFunctions
-             end
-             function LabelFunctions:Remove() label:Destroy() DebouncedUpdatePageSize() return nil end
-             function LabelFunctions:Hide() label.Visible = false DebouncedUpdatePageSize() return LabelFunctions end
-             function LabelFunctions:Show() label.Visible = true DebouncedUpdatePageSize() return LabelFunctions end
-             function LabelFunctions:Align(newAlign)
-                  newAlign = tostring(newAlign):lower()
-                  if newAlign:find("le") then label.TextXAlignment = Enum.TextXAlignment.Left
-                  elseif newAlign:find("cent") then label.TextXAlignment = Enum.TextXAlignment.Center
-                  elseif newAlign:find("ri") then label.TextXAlignment = Enum.TextXAlignment.Right end
-                  return LabelFunctions
-             end
-             return LabelFunctions
-         end
-
-        -- / Component: Button (Improved Style)
-        function Components:NewButton(text, callback)
-            text = text or "Button"
-            callback = callback or function() print(text .. " clicked") end
-
-            local buttonFrame = Instance.new("Frame") -- Container for potential multiple buttons
-            buttonFrame.Name = "buttonFrame_" .. text:sub(1,10)
-            buttonFrame.Parent = page
-            buttonFrame.BackgroundTransparency = 1.000
-            buttonFrame.Size = UDim2.new(1, 0, 0, 30) -- Standard button height
-
-            local buttonLayout = Instance.new("UIListLayout") -- Layout for multiple buttons side-by-side
-            buttonLayout.Parent = buttonFrame
-            buttonLayout.FillDirection = Enum.FillDirection.Horizontal
-            buttonLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-            buttonLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-            buttonLayout.SortOrder = Enum.SortOrder.LayoutOrder
-            buttonLayout.Padding = UDim.new(0, 5) -- Space between buttons if multiple are added
-
-            local function CreateSingleButton(btnText, btnCallback, parentFrame, isFirstButton)
-                local button = Instance.new("TextButton")
-                button.Name = "button_" .. btnText:sub(1,10)
-                button.Parent = parentFrame
-                button.BackgroundColor3 = Color3.fromRGB(55, 55, 55) -- Default Button Color
-                -- Size will be handled by layout if multiple, or fill if single
-                 button.Size = isFirstButton and UDim2.new(1, 0, 1, 0) or UDim2.new(0, 100, 1, 0) -- Placeholder size for layout, real size depends on siblings
-                 button.LayoutOrder = parentFrame.ChildAdded:Connect(function() end) -- Use event connection for order
-                 if isFirstButton then
-                      button.Size = UDim2.new(1, 0, 1, 0) -- First button fills frame initially
-                 end
-
-                button.AutoButtonColor = false
-                button.Font = Enum.Font.GothamSemibold
-                button.Text = btnText
-                button.TextColor3 = Color3.fromRGB(200, 200, 200)
-                button.TextSize = 14.000
-                button.ClipsDescendants = true
-
-                local buttonCorner = Instance.new("UICorner")
-                buttonCorner.CornerRadius = UDim.new(0, 3)
-                buttonCorner.Parent = button
-
-                -- Hover/Click Effects
-                button.MouseEnter:Connect(function()
-                    TweenService:Create(button, TweenTable["btn_hover"], {BackgroundColor3 = Color3.fromRGB(70, 70, 70)}):Play()
-                end)
-                button.MouseLeave:Connect(function()
-                    TweenService:Create(button, TweenTable["btn_hover"], {BackgroundColor3 = Color3.fromRGB(55, 55, 55)}):Play()
-                end)
-                 button.MouseButton1Down:Connect(function()
-                     TweenService:Create(button, TweenTable["btn_hover"], {BackgroundColor3 = Color3.fromRGB(159, 115, 255)}):Play() -- Click Flash SC Purple
-                 end)
-                 button.MouseButton1Up:Connect(function()
-                     TweenService:Create(button, TweenTable["btn_hover"], {BackgroundColor3 = Color3.fromRGB(70, 70, 70)}):Play() -- Return to hover color
-                 end)
-
-                -- Callback Execution (Wrapped)
-                button.MouseButton1Click:Connect(function()
-                    local success, err = pcall(btnCallback)
-                    if not success then
-                        warn("SC Lib Button Error:", err)
-                        -- Potentially show a notification here
-                         if library.Notify then -- Check if notification system is initialized
-                              library.Notify("Button Callback Error: " .. tostring(err), 5, "error")
-                         end
-                    end
-                end)
-
-                local SingleButtonFunctions = {}
-                 function SingleButtonFunctions:Text(newText) button.Text = newText or "Button" return SingleButtonFunctions end
-                 function SingleButtonFunctions:Remove() button:Destroy(); DebouncedUpdatePageSize(); return nil end
-                 function SingleButtonFunctions:Hide() button.Visible = false; DebouncedUpdatePageSize(); return SingleButtonFunctions end
-                 function SingleButtonFunctions:Show() button.Visible = true; DebouncedUpdatePageSize(); return SingleButtonFunctions end
-                 function SingleButtonFunctions:Fire() pcall(btnCallback) return SingleButtonFunctions end -- Add Fire method
-                 function SingleButtonFunctions:SetFunction(newCallback) btnCallback = newCallback or function()end return SingleButtonFunctions end
-                 return button, SingleButtonFunctions
-            end
-
-            -- Create the first button and its functions
-            local firstButton, ButtonFunctions = CreateSingleButton(text, callback, buttonFrame, true)
-
-             -- Function to dynamically resize buttons within the frame
-             local function UpdateButtonSizes()
-                 task.wait() -- Ensure layout calculation completes
-                 local buttons = {}
-                 for _, child in ipairs(buttonFrame:GetChildren()) do
-                     if child:IsA("TextButton") then
-                         table.insert(buttons, child)
-                     end
-                 end
-                 local count = #buttons
-                 if count > 0 then
-                     local totalPadding = buttonLayout.Padding.Offset * (count - 1)
-                     local availableWidth = buttonFrame.AbsoluteSize.X - totalPadding
-                     local buttonWidth = availableWidth / count
-                     for _, btn in ipairs(buttons) do
-                         btn.Size = UDim2.new(0, buttonWidth, 1, 0) -- Set size based on calculation
-                     end
-                 end
-                 DebouncedUpdatePageSize() -- Update the page size after resizing buttons
-             end
-
-             -- Connect size updates to child added/removed
-             buttonFrame.ChildAdded:Connect(UpdateButtonSizes)
-             buttonFrame.ChildRemoved:Connect(UpdateButtonSizes)
-
-
-            -- AddButton method for the *group*
-            function ButtonFunctions:AddButton(addText, addCallback)
-                 local buttonsInFrame = 0
-                 for _, child in ipairs(buttonFrame:GetChildren()) do
-                      if child:IsA("TextButton") then buttonsInFrame = buttonsInFrame + 1 end
-                 end
-
-                 if buttonsInFrame >= 4 then
-                      warn("SC Lib: Maximum of 4 buttons per row is recommended.")
-                      -- return ButtonFunctions -- Optionally prevent adding more
-                 end
-
-                 local newButton, NewButtonFunctions = CreateSingleButton(addText or "New Button", addCallback or function() end, buttonFrame, false)
-
-                 -- Trigger resize after adding
-                 UpdateButtonSizes()
-
-                 return NewButtonFunctions -- Return functions for the *newly added* button
-            end
-
-             task.wait()
-             DebouncedUpdatePageSize() -- Initial page size update
-
-            return ButtonFunctions -- Return functions for the *first* button / group controller
-        end
-
-        -- / Component: Section Separator
-        function Components:NewSection(text)
-            text = text or "Section Title"
-
-            local sectionFrame = Instance.new("Frame")
-            sectionFrame.Name = "sectionFrame_" .. text:sub(1,10)
-            sectionFrame.Parent = page
-            sectionFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-            sectionFrame.BackgroundTransparency = 1.000
-            sectionFrame.Size = UDim2.new(1, 0, 0, 22) -- Height for section
-
-            local sectionLayout = Instance.new("UIListLayout")
-            sectionLayout.Parent = sectionFrame
-            sectionLayout.FillDirection = Enum.FillDirection.Horizontal
-            sectionLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-            sectionLayout.SortOrder = Enum.SortOrder.LayoutOrder
-            sectionLayout.Padding = UDim.new(0, 6) -- Padding between line and text
-
-            -- Left decorative line (optional)
-            local leftBar = Instance.new("Frame")
-            leftBar.Name = "leftBar"
-            leftBar.Parent = sectionFrame
-            leftBar.BackgroundColor3 = Color3.fromRGB(70, 70, 70) -- Darker grey line
-            leftBar.BorderSizePixel = 0
-            leftBar.Size = UDim2.new(0, 30, 0, 1) -- Fixed width line
-
-            -- Section Title Label
-            local sectionLabel = Instance.new("TextLabel")
-            sectionLabel.Name = "sectionLabel"
-            sectionLabel.Parent = sectionFrame
-            sectionLabel.BackgroundTransparency = 1.000
-            sectionLabel.Size = UDim2.new(0, 0, 1, 0) -- Auto width, fill height
-            sectionLabel.Font = Enum.Font.GothamSemibold -- Bolder section title
-            sectionLabel.Text = text
-            sectionLabel.TextColor3 = Color3.fromRGB(190, 190, 190)
-            sectionLabel.TextSize = 14.000
-            sectionLabel.TextXAlignment = Enum.TextXAlignment.Left
-            sectionLabel.RichText = true
-            -- Calculate size needed for the text
-            local textSize = TextService:GetTextSize(sectionLabel.Text, sectionLabel.TextSize, sectionLabel.Font, Vector2.new(math.huge, sectionFrame.AbsoluteSize.Y))
-            sectionLabel.Size = UDim2.new(0, textSize.X, 1, 0) -- Set width dynamically
-
-            -- Right fill line
-            local rightBar = Instance.new("Frame")
-            rightBar.Name = "rightBar"
-            rightBar.Parent = sectionFrame
-            rightBar.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
-            rightBar.BorderSizePixel = 0
-            rightBar.Size = UDim2.new(1, - (30 + 6 + textSize.X + 6), 0, 1) -- Fill remaining space
-
-            task.wait()
-            DebouncedUpdatePageSize()
-
-            local SectionFunctions = {}
-            function SectionFunctions:Text(newText)
-                 sectionLabel.Text = newText or text
-                 -- Recalculate sizes
-                 local newTextSize = TextService:GetTextSize(sectionLabel.Text, sectionLabel.TextSize, sectionLabel.Font, Vector2.new(math.huge, sectionFrame.AbsoluteSize.Y))
-                 sectionLabel.Size = UDim2.new(0, newTextSize.X, 1, 0)
-                 rightBar.Size = UDim2.new(1, - (30 + 6 + newTextSize.X + 6), 0, 1)
-                 return SectionFunctions
-             end
-             function SectionFunctions:Remove() sectionFrame:Destroy(); DebouncedUpdatePageSize(); return nil end
-             function SectionFunctions:Hide() sectionFrame.Visible = false; DebouncedUpdatePageSize(); return SectionFunctions end
-             function SectionFunctions:Show() sectionFrame.Visible = true; DebouncedUpdatePageSize(); return SectionFunctions end
-             return SectionFunctions
-        end
-
-        -- / Component: Simple Separator Line
-        function Components:NewSeparator()
-             local separatorFrame = Instance.new("Frame")
-             separatorFrame.Name = "SeparatorLine"
-             separatorFrame.Parent = page
-             separatorFrame.BackgroundColor3 = Color3.fromRGB(60, 60, 60) -- Separator color
-             separatorFrame.BorderSizePixel = 0
-             separatorFrame.Size = UDim2.new(1, 0, 0, 1) -- Fill width, 1 pixel high
-
-             task.wait()
-             DebouncedUpdatePageSize()
-
-             local SeparatorFunctions = {}
-             function SeparatorFunctions:Remove() separatorFrame:Destroy(); DebouncedUpdatePageSize(); return nil end
-             function SeparatorFunctions:Hide() separatorFrame.Visible = false; DebouncedUpdatePageSize(); return SeparatorFunctions end
-             function SeparatorFunctions:Show() separatorFrame.Visible = true; DebouncedUpdatePageSize(); return SeparatorFunctions end
-             return SeparatorFunctions
-        end
-
-
-        -- / Component: Toggle (Checkbox Style)
-        function Components:NewToggle(text, default, callback)
-             text = text or "Toggle Option"
-             default = default or false
-             callback = callback or function(state) print(text .. " set to " .. tostring(state)) end
-
-             local toggleFrame = Instance.new("Frame") -- Main container for the toggle row
-             toggleFrame.Name = "toggleFrame_" .. text:sub(1,10)
-             toggleFrame.Parent = page
-             toggleFrame.BackgroundTransparency = 1.0
-             toggleFrame.Size = UDim2.new(1, 0, 0, 24) -- Standard height for toggle row
-
-             local toggleLayout = Instance.new("UIListLayout") -- Layout for checkbox and label
-             toggleLayout.Parent = toggleFrame
-             toggleLayout.FillDirection = Enum.FillDirection.Horizontal
-             toggleLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-             toggleLayout.SortOrder = Enum.SortOrder.LayoutOrder
-             toggleLayout.Padding = UDim.new(0, 8) -- Space between checkbox and label
-
-             -- Checkbox Visual Frame (Button)
-             local toggleButton = Instance.new("TextButton") -- Use button for click detection
-             toggleButton.Name = "toggleButton"
-             toggleButton.Parent = toggleFrame
-             toggleButton.Size = UDim2.new(0, 18, 0, 18) -- Checkbox size
-             toggleButton.Text = ""
-             toggleButton.AutoButtonColor = false
-             toggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50) -- Checkbox border color
-             toggleButton.BorderSizePixel = 0
-
-             local btnCorner = Instance.new("UICorner", toggleButton)
-             btnCorner.CornerRadius = UDim.new(0, 3)
-
-             -- Inner background of the checkbox
-             local toggleBg = Instance.new("Frame")
-             toggleBg.Name = "toggleBg"
-             toggleBg.Parent = toggleButton
-             toggleBg.AnchorPoint = Vector2.new(0.5, 0.5)
-             toggleBg.Position = UDim2.new(0.5, 0, 0.5, 0)
-             toggleBg.Size = UDim2.new(1, -2, 1, -2) -- Fill minus border
-             toggleBg.BackgroundColor3 = Color3.fromRGB(35, 35, 35) -- Checkbox inner color
-             toggleBg.BorderSizePixel = 0
-
-             local bgCorner = Instance.new("UICorner", toggleBg)
-             bgCorner.CornerRadius = UDim.new(0, 2)
-
-             -- The actual checkmark graphic (Frame)
-             local toggleCheck = Instance.new("Frame")
-             toggleCheck.Name = "toggleCheck"
-             toggleCheck.Parent = toggleBg -- Inside the inner background
-             toggleCheck.AnchorPoint = Vector2.new(0.5, 0.5)
-             toggleCheck.Position = UDim2.new(0.5, 0, 0.5, 0)
-             toggleCheck.Size = UDim2.new(0.7, 0, 0.7, 0) -- Checkmark size relative to inner bg
-             toggleCheck.BackgroundColor3 = Color3.fromRGB(159, 115, 255) -- SC Purple Checkmark
-             toggleCheck.BackgroundTransparency = 1.0 -- Start hidden (if default is false)
-             toggleCheck.BorderSizePixel = 0
-
-             local checkCorner = Instance.new("UICorner", toggleCheck)
-             checkCorner.CornerRadius = UDim.new(0, 1)
-
-             -- Label for the Toggle
-             local toggleLabel = Instance.new("TextLabel")
-             toggleLabel.Name = "toggleLabel"
-             toggleLabel.Parent = toggleFrame
-             toggleLabel.BackgroundTransparency = 1.0
-             toggleLabel.Size = UDim2.new(1, - (18 + 8 + 100), 0, 22) -- Fill remaining width (minus checkbox, padding, and space for keybind potentially)
-             toggleLabel.Font = Enum.Font.Code
-             toggleLabel.Text = text
-             toggleLabel.TextColor3 = Color3.fromRGB(190, 190, 190)
-             toggleLabel.TextSize = 14.000
-             toggleLabel.TextXAlignment = Enum.TextXAlignment.Left
-             toggleLabel.RichText = true
-
-            -- Extras container (for keybinds etc.) aligned to the right
-            local Extras = Instance.new("Frame")
-            Extras.Name = "Extras"
-            Extras.Parent = toggleFrame
-            Extras.BackgroundTransparency = 1.0
-            Extras.Size = UDim2.new(0, 100, 1, 0) -- Reserve space for extras
-
-            local ExtrasLayout = Instance.new("UIListLayout")
-            ExtrasLayout.Parent = Extras
-            ExtrasLayout.FillDirection = Enum.FillDirection.Horizontal
-            ExtrasLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right -- Align content to the right
-            ExtrasLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-            ExtrasLayout.SortOrder = Enum.SortOrder.LayoutOrder
-            ExtrasLayout.Padding = UDim.new(0, 4)
-
-
-             -- Toggle Logic
-             local On = default
-             CreateTween("toggle_check_anim", 0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-             local function SetToggleState(state, runCallback)
-                 On = state
-                 local targetTransparency = On and 0 or 1
-                 TweenService:Create(toggleCheck, TweenTable["toggle_check_anim"], {BackgroundTransparency = targetTransparency}):Play()
-                 if runCallback then
-                     local success, err = pcall(callback, On)
-                     if not success then
-                          warn("SC Lib Toggle Error:", err)
-                          if library.Notify then library.Notify("Toggle Callback Error: " .. tostring(err), 5, "error") end
-                     end
-                 end
-             end
-
-             -- Initial State
-             SetToggleState(On, false) -- Set initial state without running callback
-
-             toggleButton.MouseButton1Click:Connect(function()
-                 SetToggleState(not On, true) -- Toggle state and run callback
-             end)
-
-             -- Label click also toggles
-             toggleLabel.InputBegan:Connect(function(input)
-                  if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                       SetToggleState(not On, true)
-                  end
-             end)
-
-             task.wait()
-             DebouncedUpdatePageSize()
-
-             -- Toggle Functions API
-             local ToggleFunctions = {}
-             function ToggleFunctions:Text(newText)
-                 toggleLabel.Text = newText or text
-                 return ToggleFunctions
-             end
-             function ToggleFunctions:Hide() toggleFrame.Visible = false; DebouncedUpdatePageSize(); return ToggleFunctions end
-             function ToggleFunctions:Show() toggleFrame.Visible = true; DebouncedUpdatePageSize(); return ToggleFunctions end
-             function ToggleFunctions:Change() SetToggleState(not On, true); return ToggleFunctions end -- Manually trigger change + callback
-             function ToggleFunctions:Remove() toggleFrame:Destroy(); DebouncedUpdatePageSize(); return nil end
-             function ToggleFunctions:Set(state) SetToggleState(state, true); return ToggleFunctions end -- Set specific state + callback
-             function ToggleFunctions:GetState() return On end -- Get current state
-             function ToggleFunctions:SetFunction(newCallback)
-                 callback = newCallback or function() end
-                 return ToggleFunctions
-             end
-
-             -- / Sub-Component: AddKeybind for Toggle
-             function ToggleFunctions:AddKeybind(defaultKey, keybindCallback)
-                 defaultKey = defaultKey or Enum.KeyCode.P -- Default keybind
-                 local currentKey = defaultKey
-                 local keybindActive = true
-                 local listening = false
-
-                 -- Optional separate callback for the keybind itself
-                 local kbCallback = keybindCallback or callback -- Use toggle's callback if none specific provided
-
-                 local keybindButton = Instance.new("TextButton")
-                 keybindButton.Name = "keybindButton"
-                 keybindButton.Parent = Extras -- Add to the Extras frame
-                 keybindButton.Size = UDim2.new(0, 60, 0, 20) -- Size for the keybind display
-                 keybindButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-                 keybindButton.BorderSizePixel = 0
-                 keybindButton.AutoButtonColor = false
-                 keybindButton.Font = Enum.Font.Code
-                 keybindButton.Text = currentKey.Name -- Display initial key name
-                 keybindButton.TextColor3 = Color3.fromRGB(160, 160, 160)
-                 keybindButton.TextSize = 12
-
-                 local kbCorner = Instance.new("UICorner", keybindButton)
-                 kbCorner.CornerRadius = UDim.new(0, 3)
-
-                 -- Resize based on text
-                 local function ResizeKeybindButton()
-                      local keyTextSize = TextService:GetTextSize(keybindButton.Text, keybindButton.TextSize, keybindButton.Font, Vector2.new(math.huge, keybindButton.AbsoluteSize.Y))
-                      local newWidth = math.max(40, keyTextSize.X + 10) -- Minimum width 40
-                      keybindButton.Size = UDim2.new(0, newWidth, 0, 20)
-                 end
-                 ResizeKeybindButton() -- Initial resize
-
-                 -- Keybind Click Logic (To Change Key)
-                 keybindButton.MouseButton1Click:Connect(function()
-                     if listening then return end -- Prevent multi-clicks while listening
-                     listening = true
-                     keybindButton.Text = "..."
-                     keybindButton.TextColor3 = Color3.fromRGB(255, 255, 255) -- White while listening
-                     ResizeKeybindButton()
-
-                     local connection
-                     connection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
-                         if not gameProcessed and input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.MouseButton2 and input.KeyCode ~= Enum.KeyCode.Unknown then
-                             currentKey = input.KeyCode
-                             keybindButton.Text = currentKey.Name
-                             listening = false
-                             keybindButton.TextColor3 = Color3.fromRGB(160, 160, 160) -- Back to default color
-                             ResizeKeybindButton()
-                             if connection then connection:Disconnect() end -- Disconnect listener
-                         elseif input.KeyCode == Enum.KeyCode.Escape then -- Allow canceling with Escape
-                              keybindButton.Text = currentKey.Name -- Revert to old key
-                              listening = false
-                              keybindButton.TextColor3 = Color3.fromRGB(160, 160, 160)
-                              ResizeKeybindButton()
-                              if connection then connection:Disconnect() end
-                         end
-                     end)
-                 end)
-
-                 -- Actual Keybind Activation Logic
-                 UserInputService.InputBegan:Connect(function(input, gameProcessed)
-                      if keybindActive and not gameProcessed and not listening and input.KeyCode == currentKey then
-                          -- Check if a TextBox is focused (basic check)
-                          local focused = UserInputService:GetFocusedTextBox()
-                          if not focused then
-                               SetToggleState(not On, true) -- Toggle the main toggle's state and run its callback
-                          end
-                      end
-                 end)
-
-                local KeybindFunctions = {}
-                function KeybindFunctions:SetKey(newKeyEnum)
-                    if newKeyEnum and typeof(newKeyEnum) == "EnumItem" and newKeyEnum.EnumType == Enum.KeyCode then
-                         currentKey = newKeyEnum
-                         keybindButton.Text = currentKey.Name
-                         ResizeKeybindButton()
-                    else
-                         warn("SC Lib SetKey: Invalid KeyCode Enum provided.")
-                    end
-                    return KeybindFunctions -- Return keybind functions for chaining
-                end
-                 function KeybindFunctions:Hide() keybindButton.Visible = false return KeybindFunctions end
-                 function KeybindFunctions:Show() keybindButton.Visible = true return KeybindFunctions end
-                 function KeybindFunctions:Remove() keybindButton:Destroy(); return ToggleFunctions end -- Return main toggle funcs after removal
-                 function KeybindFunctions:Disable() keybindActive = false; keybindButton.TextColor3 = Color3.fromRGB(100,100,100) return KeybindFunctions end
-                 function KeybindFunctions:Enable() keybindActive = true; keybindButton.TextColor3 = Color3.fromRGB(160,160,160) return KeybindFunctions end
-
-                 return KeybindFunctions -- Return functions specific to the keybind
-             end -- End of AddKeybind
-
-             return ToggleFunctions -- Return main toggle functions
-        end
-
-        -- / Component: Keybind (Standalone)
-        function Components:NewKeybind(text, defaultKey, callback)
-             text = text or "Keybind Action"
-             defaultKey = defaultKey or Enum.KeyCode.P
-             callback = callback or function(key) print(text .. " activated with key " .. key.Name) end
-
-             local keybindFrame = Instance.new("Frame") -- Main container row
-             keybindFrame.Name = "keybindFrame_" .. text:sub(1,10)
-             keybindFrame.Parent = page
-             keybindFrame.BackgroundTransparency = 1.0
-             keybindFrame.Size = UDim2.new(1, 0, 0, 24) -- Standard height
-
-             local keybindLayout = Instance.new("UIListLayout") -- Layout for label and button
-             keybindLayout.Parent = keybindFrame
-             keybindLayout.FillDirection = Enum.FillDirection.Horizontal
-             keybindLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-             keybindLayout.SortOrder = Enum.SortOrder.LayoutOrder
-             keybindLayout.Padding = UDim.new(0, 8)
-
-             -- Keybind Label
-             local keybindLabel = Instance.new("TextLabel")
-             keybindLabel.Name = "keybindLabel"
-             keybindLabel.Parent = keybindFrame
-             keybindLabel.BackgroundTransparency = 1.0
-             keybindLabel.Size = UDim2.new(1, -78, 1, 0) -- Fill width minus button space and padding
-             keybindLabel.Font = Enum.Font.Code
-             keybindLabel.Text = text
-             keybindLabel.TextColor3 = Color3.fromRGB(190, 190, 190)
-             keybindLabel.TextSize = 14.000
-             keybindLabel.TextXAlignment = Enum.TextXAlignment.Left
-             keybindLabel.RichText = true
-
-             -- Keybind Button (Shows current key, allows changing)
-             local currentKey = defaultKey
-             local listening = false
-             local keybindActive = true -- Allows disabling the keybind trigger
-
-             local keybindButton = Instance.new("TextButton")
-             keybindButton.Name = "keybindButtonDisplay"
-             keybindButton.Parent = keybindFrame
-             keybindButton.Size = UDim2.new(0, 70, 0, 20) -- Initial size, will resize
-             keybindButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-             keybindButton.BorderSizePixel = 0
-             keybindButton.AutoButtonColor = false
-             keybindButton.Font = Enum.Font.Code
-             keybindButton.Text = currentKey.Name
-             keybindButton.TextColor3 = Color3.fromRGB(160, 160, 160)
-             keybindButton.TextSize = 12
-
-             local kbCorner = Instance.new("UICorner", keybindButton)
-             kbCorner.CornerRadius = UDim.new(0, 3)
-
-             -- Resize function (same as toggle's keybind)
-             local function ResizeKeybindButton()
-                  local keyTextSize = TextService:GetTextSize(keybindButton.Text, keybindButton.TextSize, keybindButton.Font, Vector2.new(math.huge, keybindButton.AbsoluteSize.Y))
-                  local newWidth = math.max(40, keyTextSize.X + 10)
-                  keybindButton.Size = UDim2.new(0, newWidth, 0, 20)
-                  -- Adjust label size based on button width
-                  keybindLabel.Size = UDim2.new(1, -(newWidth + keybindLayout.Padding.Offset), 1, 0)
-             end
-             ResizeKeybindButton()
-
-             -- Click to change key (same logic as toggle's keybind)
-             keybindButton.MouseButton1Click:Connect(function()
-                  if listening then return end
-                  listening = true
-                  keybindButton.Text = "..."
-                  keybindButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-                  ResizeKeybindButton()
-
-                  local connection
-                  connection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
-                      if not gameProcessed and input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.MouseButton2 and input.KeyCode ~= Enum.KeyCode.Unknown then
-                           currentKey = input.KeyCode
-                           keybindButton.Text = currentKey.Name
-                           listening = false
-                           keybindButton.TextColor3 = Color3.fromRGB(160, 160, 160)
-                           ResizeKeybindButton()
-                           if connection then connection:Disconnect() end
-                      elseif input.KeyCode == Enum.KeyCode.Escape then
-                           keybindButton.Text = currentKey.Name
-                           listening = false
-                           keybindButton.TextColor3 = Color3.fromRGB(160, 160, 160)
-                           ResizeKeybindButton()
-                           if connection then connection:Disconnect() end
-                      end
-                  end)
-             end)
-
-             -- Keybind Activation Logic
-             UserInputService.InputBegan:Connect(function(input, gameProcessed)
-                  if keybindActive and not gameProcessed and not listening and input.KeyCode == currentKey then
-                       local focused = UserInputService:GetFocusedTextBox()
-                       if not focused then
-                           local success, err = pcall(callback, currentKey) -- Pass the key pressed to the callback
-                            if not success then
-                                 warn("SC Lib Keybind Error:", err)
-                                 if library.Notify then library.Notify("Keybind Callback Error: " .. tostring(err), 5, "error") end
-                            end
-                       end
-                  end
-             end)
-
-             task.wait()
-             DebouncedUpdatePageSize()
-
-             -- Keybind Functions API
-             local KeybindFunctions = {}
-             function KeybindFunctions:Text(newText) keybindLabel.Text = newText or text; ResizeKeybindButton(); return KeybindFunctions end
-             function KeybindFunctions:Hide() keybindFrame.Visible = false; DebouncedUpdatePageSize(); return KeybindFunctions end
-             function KeybindFunctions:Show() keybindFrame.Visible = true; DebouncedUpdatePageSize(); return KeybindFunctions end
-             function KeybindFunctions:Remove() keybindFrame:Destroy(); DebouncedUpdatePageSize(); return nil end
-             function KeybindFunctions:SetKey(newKeyEnum)
-                 if newKeyEnum and typeof(newKeyEnum) == "EnumItem" and newKeyEnum.EnumType == Enum.KeyCode then
-                      currentKey = newKeyEnum
-                      keybindButton.Text = currentKey.Name
-                      ResizeKeybindButton()
-                 else warn("SC Lib SetKey: Invalid KeyCode Enum provided.") end
-                 return KeybindFunctions
-             end
-             function KeybindFunctions:GetKey() return currentKey end
-             function KeybindFunctions:SetFunction(newCallback) callback = newCallback or function() end; return KeybindFunctions end
-             function KeybindFunctions:Disable() keybindActive = false; keybindButton.TextColor3 = Color3.fromRGB(100,100,100); return KeybindFunctions end
-             function KeybindFunctions:Enable() keybindActive = true; keybindButton.TextColor3 = Color3.fromRGB(160,160,160); return KeybindFunctions end
-             function KeybindFunctions:Fire() pcall(callback, currentKey) return KeybindFunctions end -- Add Fire method
-
-             return KeybindFunctions
-        end
-
-        -- / Component: Textbox (Multiple Sizes)
-        function Components:NewTextbox(text, options)
-            text = text or "Textbox Input"
-            options = options or {}
-            local default = options.default or ""
-            local placeholder = options.placeholder or "Enter text..."
-            local format = tostring(options.format or "all"):lower() -- all, numbers, lower, upper, none
-            local sizeType = tostring(options.size or "small"):lower() -- small, medium, large
-            local multiLine = sizeType == "large" -- large implies multi-line
-            local autoExecute = options.autoExecute -- Execute callback on FocusLost (true by default if not specified?) -> Let's make it true default
-             if autoExecute == nil then autoExecute = true end
-            local clearOnFocus = options.clearOnFocus or false
-            local callback = options.callback or function(value) print(text .. " value: " .. value) end
-
-            local textboxFrame = Instance.new("Frame")
-            textboxFrame.Name = "textboxFrame_" .. text:sub(1,10)
-            textboxFrame.Parent = page
-            textboxFrame.BackgroundTransparency = 1.0
-
-            local frameLayout = Instance.new("UIListLayout")
-            frameLayout.Parent = textboxFrame
-            frameLayout.SortOrder = Enum.SortOrder.LayoutOrder
-            frameLayout.Padding = UDim.new(0, 4) -- Space between label and input box
-
-            -- Label (Optional, based on sizeType?) - Let's always include it for consistency
-            local textboxLabel = Instance.new("TextLabel")
-            textboxLabel.Name = "textboxLabel"
-            textboxLabel.Parent = textboxFrame
-            textboxLabel.BackgroundTransparency = 1.0
-            textboxLabel.Size = UDim2.new(1, 0, 0, 18) -- Label height
-            textboxLabel.Font = Enum.Font.Code
-            textboxLabel.Text = text
-            textboxLabel.TextColor3 = Color3.fromRGB(190, 190, 190)
-            textboxLabel.TextSize = 14.000
-            textboxLabel.TextXAlignment = Enum.TextXAlignment.Left
-            textboxLabel.RichText = true
-
-            -- Input Box Container (for border effect)
-            local inputContainer = Instance.new("Frame")
-            inputContainer.Name = "inputContainer"
-            inputContainer.Parent = textboxFrame
-            inputContainer.BackgroundColor3 = Color3.fromRGB(60, 60, 60) -- Border color
-            inputContainer.BorderSizePixel = 0
-
-            local containerCorner = Instance.new("UICorner", inputContainer)
-            containerCorner.CornerRadius = UDim.new(0, 3)
-
-            -- Actual TextBox Element
-            local textBox = Instance.new("TextBox")
-            textBox.Name = "textBoxInput"
-            textBox.Parent = inputContainer
-            textBox.AnchorPoint = Vector2.new(0.5, 0.5)
-            textBox.Position = UDim2.new(0.5, 0, 0.5, 0)
-            textBox.Size = UDim2.new(1, -2, 1, -2) -- Fill container minus border
-            textBox.Font = Enum.Font.Code
-            textBox.Text = default
-            textBox.PlaceholderText = placeholder
-            textBox.PlaceholderColor3 = Color3.fromRGB(120, 120, 120)
-            textBox.TextColor3 = Color3.fromRGB(210, 210, 210)
-            textBox.TextSize = 14.000
-            textBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30) -- Input background color
-            textBox.BorderSizePixel = 0
-            textBox.ClearTextOnFocus = clearOnFocus
-            textBox.MultiLine = multiLine
-            textBox.TextWrapped = multiLine -- Only wrap if multiline
-            textBox.TextXAlignment = Enum.TextXAlignment.Left
-            textBox.TextYAlignment = multiLine and Enum.TextYAlignment.Top or Enum.TextYAlignment.Center
-
-            local textCorner = Instance.new("UICorner", textBox)
-            textCorner.CornerRadius = UDim.new(0, 2) -- Inner rounding
-
-            -- Set Heights based on sizeType
-            local inputHeight = 28 -- Default small
-            if sizeType == "medium" then
-                inputHeight = 34
-            elseif sizeType == "large" then
-                inputHeight = 90 -- Larger for multiline
-            end
-            inputContainer.Size = UDim2.new(1, 0, 0, inputHeight)
-            textboxFrame.Size = UDim2.new(1, 0, 0, inputHeight + 18 + frameLayout.Padding.Offset) -- Total height
-
-            -- Input Formatting and Callback Logic
-            local function HandleInput()
-                local currentText = textBox.Text
-                local originalText = currentText -- Store original for comparison
-
-                if format == "numbers" then
-                     currentText = currentText:gsub("[^%d%.%-]", "") -- Allow digits, period, hyphen
-                     -- Optional: More complex number validation if needed
-                elseif format == "lower" then
-                     currentText = currentText:lower()
-                elseif format == "upper" then
-                     currentText = currentText:upper()
-                -- else 'all' or 'none' requires no change
-                end
-
-                 if currentText ~= originalText then
-                     textBox.Text = currentText -- Update text only if formatting changed it
-                     -- Moving cursor might be tricky here, often better to just let it reset
-                 end
-            end
-
-            textBox:GetPropertyChangedSignal("Text"):Connect(HandleInput)
-
-            -- Focus Lost Logic (Callback Execution)
-            textBox.FocusLost:Connect(function(enterPressed)
-                 HandleInput() -- Ensure formatting is applied before callback
-                 if autoExecute then
-                      local success, err = pcall(callback, textBox.Text)
-                       if not success then
-                            warn("SC Lib Textbox Error:", err)
-                            if library.Notify then library.Notify("Textbox Callback Error: " .. tostring(err), 5, "error") end
-                       end
-                 elseif enterPressed then -- Execute only if Enter was pressed and autoExecute is off
-                      local success, err = pcall(callback, textBox.Text)
-                       if not success then
-                            warn("SC Lib Textbox Error:", err)
-                            if library.Notify then library.Notify("Textbox Callback Error: " .. tostring(err), 5, "error") end
-                       end
-                 end
-
-                 -- Visual cue for focus lost
-                 TweenService:Create(inputContainer, TweenTable["Fast"], {BackgroundColor3 = Color3.fromRGB(60, 60, 60)}):Play()
-            end)
-
-            -- Focus Gained Visual Cue
-            textBox.Focused:Connect(function()
-                 TweenService:Create(inputContainer, TweenTable["Fast"], {BackgroundColor3 = Color3.fromRGB(159, 115, 255)}):Play() -- Highlight border on focus
-            end)
-
-            task.wait()
-            DebouncedUpdatePageSize()
-
-            -- Textbox Functions API
-            local TextboxFunctions = {}
-            function TextboxFunctions:Input(newValue) -- Renamed from :Value to :Input
-                 textBox.Text = newValue or ""
-                 HandleInput() -- Apply formatting
-                 return TextboxFunctions
-            end
-            function TextboxFunctions:Fire() -- Manually trigger callback
-                 HandleInput()
-                 pcall(callback, textBox.Text)
-                 return TextboxFunctions
-            end
-            function TextboxFunctions:SetFunction(newCallback) callback = newCallback or function() end; return TextboxFunctions end
-            function TextboxFunctions:Text(newLabelText) textboxLabel.Text = newLabelText or text; return TextboxFunctions end
-            function TextboxFunctions:Hide() textboxFrame.Visible = false; DebouncedUpdatePageSize(); return TextboxFunctions end
-            function TextboxFunctions:Show() textboxFrame.Visible = true; DebouncedUpdatePageSize(); return TextboxFunctions end
-            function TextboxFunctions:Remove() textboxFrame:Destroy(); DebouncedUpdatePageSize(); return nil end
-            function TextboxFunctions:Place(newPlaceholder) textBox.PlaceholderText = newPlaceholder or ""; return TextboxFunctions end
-            function TextboxFunctions:Clear() textBox.Text = ""; return TextboxFunctions end
-             function TextboxFunctions:GetValue() return textBox.Text end -- Add GetValue method
-
-            return TextboxFunctions
-        end
-
-
-        -- / Component: Dropdown/Selector (Improved Style & Functionality)
-        function Components:NewSelector(text, list, default, callback)
-            text = text or "Select Option"
-            list = list or {"Option 1", "Option 2", "Option 3"}
-            default = default or list[1] -- Default to first item if not specified
-            callback = callback or function(selected) print(text .. " selected: " .. selected) end
-
-            local isOpen = false
-            local currentSelection = default
-
-            local selectorFrame = Instance.new("Frame") -- Main container row
-            selectorFrame.Name = "selectorFrame_" .. text:sub(1,10)
-            selectorFrame.Parent = page
-            selectorFrame.BackgroundTransparency = 1.0
-            selectorFrame.Size = UDim2.new(1, 0, 0, 52) -- Label + Dropdown height + padding
-            selectorFrame.ClipsDescendants = false -- Allow dropdown list to overflow
-            selectorFrame.ZIndex = 1 -- Base ZIndex
-
-            local frameLayout = Instance.new("UIListLayout")
-            frameLayout.Parent = selectorFrame
-            frameLayout.SortOrder = Enum.SortOrder.LayoutOrder
-            frameLayout.Padding = UDim.new(0, 4)
-
-            -- Selector Label
-            local selectorLabel = Instance.new("TextLabel")
-            selectorLabel.Name = "selectorLabel"
-            selectorLabel.Parent = selectorFrame
-            selectorLabel.BackgroundTransparency = 1.0
-            selectorLabel.Size = UDim2.new(1, 0, 0, 18) -- Label height
-            selectorLabel.Font = Enum.Font.Code
-            selectorLabel.Text = text
-            selectorLabel.TextColor3 = Color3.fromRGB(190, 190, 190)
-            selectorLabel.TextSize = 14.000
-            selectorLabel.TextXAlignment = Enum.TextXAlignment.Left
-            selectorLabel.RichText = true
-
-            -- Dropdown Display Button (shows current selection)
-            local displayButton = Instance.new("TextButton")
-            displayButton.Name = "displayButton"
-            displayButton.Parent = selectorFrame
-            displayButton.Size = UDim2.new(1, 0, 0, 28) -- Height of the closed dropdown
-            displayButton.BackgroundColor3 = Color3.fromRGB(55, 55, 55) -- Closed dropdown bg
-            displayButton.BorderSizePixel = 1
-            displayButton.BorderColor3 = Color3.fromRGB(70, 70, 70)
-            displayButton.AutoButtonColor = false
-            displayButton.Font = Enum.Font.Code
-            displayButton.Text = tostring(currentSelection) -- Show default initially
-            displayButton.TextColor3 = Color3.fromRGB(200, 200, 200)
-            displayButton.TextSize = 14.000
-            displayButton.TextXAlignment = Enum.TextXAlignment.Left
-            displayButton.ZIndex = 2 -- Above base frame
-
-            local displayCorner = Instance.new("UICorner", displayButton)
-            displayCorner.CornerRadius = UDim.new(0, 3)
-            local displayPadding = Instance.new("UIPadding", displayButton)
-            displayPadding.PaddingLeft = UDim.new(0, 8)
-            displayPadding.PaddingRight = UDim.new(0, 25) -- Space for the dropdown arrow
-
-            -- Dropdown Arrow Indicator
-            local arrow = Instance.new("ImageLabel")
-            arrow.Name = "Arrow"
-            arrow.Parent = displayButton
-            arrow.AnchorPoint = Vector2.new(1, 0.5)
-            arrow.Position = UDim2.new(1, -8, 0.5, 0)
-            arrow.Size = UDim2.new(0, 12, 0, 12)
-            arrow.Image = "rbxassetid://3926305904" -- Chevron down icon
-            arrow.ImageColor3 = Color3.fromRGB(160, 160, 160)
-            arrow.BackgroundTransparency = 1.0
-            arrow.Rotation = 0 -- Points down when closed
-            arrow.ZIndex = 3
-
-            -- Dropdown List Container (ScrollingFrame)
-            local listContainer = Instance.new("ScrollingFrame")
-            listContainer.Name = "listContainer"
-            listContainer.Parent = selectorFrame -- Parent to main frame to allow overflow
-            listContainer.Position = UDim2.new(0, 0, 1, 0) -- Position below the display button
-            listContainer.Size = UDim2.new(1, 0, 0, 0) -- Start height 0, expands when open
-            listContainer.BackgroundColor3 = Color3.fromRGB(55, 55, 55) -- List bg color
-            listContainer.BorderSizePixel = 1
-            listContainer.BorderColor3 = Color3.fromRGB(70, 70, 70)
-            listContainer.ClipsDescendants = true
-            listContainer.Visible = false -- Start hidden
-            listContainer.CanvasSize = UDim2.new(0,0,0,0)
-            listContainer.ScrollBarThickness = 4
-            listContainer.ScrollBarImageColor3 = Color3.fromRGB(159, 115, 255)
-            listContainer.ZIndex = 10 -- High ZIndex to appear over other elements when open
-
-            local listCorner = Instance.new("UICorner", listContainer)
-            listCorner.CornerRadius = UDim.new(0, 3)
-
-            local listLayout = Instance.new("UIListLayout")
-            listLayout.Parent = listContainer
-            listLayout.SortOrder = Enum.SortOrder.LayoutOrder
-            listLayout.Padding = UDim.new(0, 1) -- Small gap between options
-
-            -- Animation Tweens
-            CreateTween("dropdown_toggle", 0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-            CreateTween("arrow_rotate", 0.2)
-            CreateTween("option_hover", 0.1)
-
-            -- Populate List Function
-            local optionButtons = {} -- Store references to option buttons
-            local function PopulateList()
-                -- Clear existing options first
-                 for _, btn in ipairs(optionButtons) do if btn and btn.Parent then btn:Destroy() end end
-                 table.clear(optionButtons)
-
-                 local totalHeight = 0
-                 for i, optionText in ipairs(list) do
-                     local optionButton = Instance.new("TextButton")
-                     optionButton.Name = "option_" .. tostring(optionText):sub(1,10)
-                     optionButton.Parent = listContainer
-                     optionButton.Size = UDim2.new(1, 0, 0, 24) -- Height of each option
-                     optionButton.BackgroundColor3 = Color3.fromRGB(55, 55, 55) -- Default option bg
-                     optionButton.AutoButtonColor = false
-                     optionButton.Font = Enum.Font.Code
-                     optionButton.Text = tostring(optionText)
-                     optionButton.TextColor3 = Color3.fromRGB(180, 180, 180) -- Default option text color
-                     optionButton.TextSize = 14.000
-                     optionButton.TextXAlignment = Enum.TextXAlignment.Left
-
-                     local optPadding = Instance.new("UIPadding", optionButton)
-                     optPadding.PaddingLeft = UDim.new(0, 8)
-
-                      -- Highlight the currently selected option
-                      if tostring(optionText) == tostring(currentSelection) then
-                           optionButton.BackgroundColor3 = Color3.fromRGB(75, 75, 75) -- Highlight selected
-                           optionButton.TextColor3 = Color3.fromRGB(220, 220, 220)
-                      end
-
-                      table.insert(optionButtons, optionButton)
-                      totalHeight = totalHeight + optionButton.AbsoluteSize.Y + listLayout.Padding.Offset
-
-                      -- Option Hover Effect
-                      optionButton.MouseEnter:Connect(function()
-                           if tostring(optionButton.Text) ~= tostring(currentSelection) then
-                                TweenService:Create(optionButton, TweenTable["option_hover"], {BackgroundColor3 = Color3.fromRGB(70, 70, 70)}):Play()
-                           end
-                      end)
-                      optionButton.MouseLeave:Connect(function()
-                           if tostring(optionButton.Text) ~= tostring(currentSelection) then
-                                TweenService:Create(optionButton, TweenTable["option_hover"], {BackgroundColor3 = Color3.fromRGB(55, 55, 55)}):Play()
-                           end
-                      end)
-
-                      -- Option Click Logic
-                      optionButton.MouseButton1Click:Connect(function()
-                           if tostring(currentSelection) == tostring(optionText) then -- Clicked selected item again
-                                isOpen = false -- Just close the dropdown
-                                listContainer.Visible = false
-                                listContainer.Size = UDim2.new(1, 0, 0, 0)
-                                TweenService:Create(arrow, TweenTable["arrow_rotate"], {Rotation = 0}):Play()
-                                selectorFrame.ZIndex = 1 -- Reset ZIndex
-                                return
-                           end
-
-                           currentSelection = optionText
-                           displayButton.Text = tostring(currentSelection)
-                           isOpen = false -- Close dropdown after selection
-                           listContainer.Visible = false
-                           listContainer.Size = UDim2.new(1, 0, 0, 0)
-                           TweenService:Create(arrow, TweenTable["arrow_rotate"], {Rotation = 0}):Play()
-                           selectorFrame.ZIndex = 1 -- Reset ZIndex
-
-                           -- Update highlights in the list
-                           PopulateList() -- Repopulate to update highlights correctly
-
-                           -- Run Callback
-                           local success, err = pcall(callback, currentSelection)
-                            if not success then
-                                 warn("SC Lib Selector Error:", err)
-                                 if library.Notify then library.Notify("Selector Callback Error: " .. tostring(err), 5, "error") end
-                            end
-                      end)
-                 end
-                 -- Update CanvasSize based on calculated total height
-                 listContainer.CanvasSize = UDim2.new(0, 0, 0, totalHeight - listLayout.Padding.Offset) -- Subtract last padding
-             end
-
-             -- Toggle Dropdown Logic
-             displayButton.MouseButton1Click:Connect(function()
-                 isOpen = not isOpen
-                 if isOpen then
-                      PopulateList() -- Ensure list is up-to-date before opening
-                      local listHeight = math.min(150, listContainer.CanvasSize.Y.Offset + 4) -- Max height 150px, + border
-                      listContainer.Visible = true
-                      selectorFrame.ZIndex = 10 -- Bring whole control to front
-                      TweenService:Create(listContainer, TweenTable["dropdown_toggle"], {Size = UDim2.new(1, 0, 0, listHeight)}):Play()
-                      TweenService:Create(arrow, TweenTable["arrow_rotate"], {Rotation = 180}):Play() -- Point arrow up
-                 else
-                      TweenService:Create(listContainer, TweenTable["dropdown_toggle"], {Size = UDim2.new(1, 0, 0, 0)}):Play()
-                      TweenService:Create(arrow, TweenTable["arrow_rotate"], {Rotation = 0}):Play() -- Point arrow down
-                      task.delay(0.2, function() -- Hide after animation finishes
-                           if not isOpen then -- Check again in case it was reopened quickly
-                                listContainer.Visible = false
-                                selectorFrame.ZIndex = 1 -- Reset ZIndex
-                           end
-                      end)
-                 end
-             end)
-
-            -- Close dropdown if clicking outside (basic implementation)
-            local function CloseIfClickedOutside(input)
-                 if not isOpen then return end
-                 local guiObject = input.UserInputType == Enum.UserInputType.MouseButton1 and input.Position or nil
-                 if guiObject then
-                      local objects = Players.LocalPlayer:GetGuiObjectsAtPosition(guiObject.X, guiObject.Y)
-                      local clickedInside = false
-                      for _, obj in ipairs(objects) do
-                           if obj:IsDescendantOf(selectorFrame) then
-                                clickedInside = true
-                                break
-                           end
-                      end
-                      if not clickedInside then
-                           isOpen = false
-                           TweenService:Create(listContainer, TweenTable["dropdown_toggle"], {Size = UDim2.new(1, 0, 0, 0)}):Play()
-                           TweenService:Create(arrow, TweenTable["arrow_rotate"], {Rotation = 0}):Play()
-                           task.delay(0.2, function() listContainer.Visible = false; selectorFrame.ZIndex = 1 end)
-                      end
-                 end
-            end
-            UserInputService.InputBegan:Connect(CloseIfClickedOutside)
-
-
-             task.wait()
-             DebouncedUpdatePageSize()
-
-             -- Selector Functions API
-             local SelectorFunctions = {}
-             function SelectorFunctions:AddOption(option)
-                 if not table.find(list, option) then
-                     table.insert(list, option)
-                     if isOpen then PopulateList() end -- Update list if open
-                 end
-                 return SelectorFunctions
-             end
-             function SelectorFunctions:RemoveOption(option)
-                 local index = table.find(list, tostring(option))
-                 if index then
-                     table.remove(list, index)
-                     if tostring(currentSelection) == tostring(option) then
-                          -- If removed option was selected, select the first available or none
-                          currentSelection = list[1] or "..." -- Select first or placeholder
-                          displayButton.Text = tostring(currentSelection)
-                          pcall(callback, currentSelection) -- Run callback for the new selection
-                     end
-                     if isOpen then PopulateList() end -- Update list if open
-                 end
-                 return SelectorFunctions
-             end
-             function SelectorFunctions:ClearOptions()
-                 list = {}
-                 currentSelection = "..."
-                 displayButton.Text = currentSelection
-                 if isOpen then PopulateList() end
-                 pcall(callback, nil) -- Indicate nothing is selected
-                 return SelectorFunctions
-             end
-             function SelectorFunctions:SetOptions(newList)
-                  if type(newList) == "table" then
-                      list = newList
-                      -- Check if current selection is still valid
-                      if not table.find(list, currentSelection) then
-                           currentSelection = list[1] or "..."
-                           displayButton.Text = tostring(currentSelection)
-                           pcall(callback, currentSelection)
-                      end
-                      if isOpen then PopulateList() end
-                  else
-                      warn("SC Lib SetOptions: Input must be a table.")
-                  end
-                  return SelectorFunctions
-             end
-             function SelectorFunctions:Select(optionToSelect)
-                  local found = false
-                  for _, opt in ipairs(list) do
-                       if tostring(opt) == tostring(optionToSelect) then
-                            currentSelection = opt
-                            displayButton.Text = tostring(currentSelection)
-                            if isOpen then PopulateList() end -- Update highlight if open
-                            pcall(callback, currentSelection) -- Run callback
-                            found = true
-                            break
-                       end
-                  end
-                  if not found then warn("SC Lib Select: Option not found in list - ", tostring(optionToSelect)) end
-                  return SelectorFunctions
-             end
-             function SelectorFunctions:GetSelected() return currentSelection end
-             function SelectorFunctions:GetOptions() return list end
-             function SelectorFunctions:SetFunction(newCallback) callback = newCallback or function() end; return SelectorFunctions end
-             function SelectorFunctions:Text(newLabelText) selectorLabel.Text = newLabelText or text; return SelectorFunctions end
-             function SelectorFunctions:Hide() selectorFrame.Visible = false; DebouncedUpdatePageSize(); return SelectorFunctions end
-             function SelectorFunctions:Show() selectorFrame.Visible = true; DebouncedUpdatePageSize(); return SelectorFunctions end
-             function SelectorFunctions:Remove() selectorFrame:Destroy(); DebouncedUpdatePageSize(); return nil end
-
-             return SelectorFunctions
-        end
-
-
-        -- / Component: Slider (Improved Visuals)
-        function Components:NewSlider(text, options)
-            text = text or "Slider Control"
-            options = options or {}
-            local minVal = options.min or 0
-            local maxVal = options.max or 100
-            local defaultVal = options.default or minVal
-            local increment = options.increment or 1 -- Step value
-            local suffix = options.suffix or ""
-            local showValue = options.showValue -- Show current value next to label (true by default)
-             if showValue == nil then showValue = true end
-            local callback = options.callback or function(value) print(text .. " set to " .. value) end
-
-            local currentValue = defaultVal
-            local isDragging = false
-
-            local sliderFrame = Instance.new("Frame") -- Main container row
-            sliderFrame.Name = "sliderFrame_" .. text:sub(1,10)
-            sliderFrame.Parent = page
-            sliderFrame.BackgroundTransparency = 1.0
-            sliderFrame.Size = UDim2.new(1, 0, 0, 42) -- Label + Slider height + padding
-
-            local frameLayout = Instance.new("UIListLayout")
-            frameLayout.Parent = sliderFrame
-            frameLayout.SortOrder = Enum.SortOrder.LayoutOrder
-            frameLayout.Padding = UDim.new(0, 4)
-
-            -- Top Row (Label + Value Display)
-            local topRowFrame = Instance.new("Frame")
-            topRowFrame.Name = "TopRow"
-            topRowFrame.Parent = sliderFrame
-            topRowFrame.BackgroundTransparency = 1.0
-            topRowFrame.Size = UDim2.new(1, 0, 0, 18)
-
-            local topRowLayout = Instance.new("UIListLayout")
-            topRowLayout.Parent = topRowFrame
-            topRowLayout.FillDirection = Enum.FillDirection.Horizontal
-            topRowLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-
-            -- Slider Label
-            local sliderLabel = Instance.new("TextLabel")
-            sliderLabel.Name = "sliderLabel"
-            sliderLabel.Parent = topRowFrame
-            sliderLabel.BackgroundTransparency = 1.0
-            sliderLabel.Size = UDim2.new(0, 100, 1, 0) -- Dynamic width later
-            sliderLabel.Font = Enum.Font.Code
-            sliderLabel.Text = text
-            sliderLabel.TextColor3 = Color3.fromRGB(190, 190, 190)
-            sliderLabel.TextSize = 14.000
-            sliderLabel.TextXAlignment = Enum.TextXAlignment.Left
-            sliderLabel.RichText = true
-
-            -- Slider Value Display
-            local valueLabel = Instance.new("TextLabel")
-            valueLabel.Name = "valueLabel"
-            valueLabel.Parent = topRowFrame
-            valueLabel.BackgroundTransparency = 1.0
-            valueLabel.Size = UDim2.new(1, -100, 1, 0) -- Fill remaining space
-            valueLabel.Font = Enum.Font.Code
-            valueLabel.Text = tostring(currentValue) .. suffix
-            valueLabel.TextColor3 = Color3.fromRGB(160, 160, 160) -- Dimmer value text
-            valueLabel.TextSize = 14.000
-            valueLabel.TextXAlignment = Enum.TextXAlignment.Right
-            valueLabel.Visible = showValue -- Hide if option is false
-
-            -- Calculate initial label sizes
-            local labelWidth = TextService:GetTextSize(sliderLabel.Text, sliderLabel.TextSize, sliderLabel.Font, Vector2.new(math.huge, 18)).X
-            local valueWidth = TextService:GetTextSize(valueLabel.Text, valueLabel.TextSize, valueLabel.Font, Vector2.new(math.huge, 18)).X
-            sliderLabel.Size = UDim2.new(0, labelWidth, 1, 0)
-            valueLabel.Size = UDim2.new(1, -(labelWidth + 10), 1, 0) -- Fill space minus label and padding
-
-
-            -- Slider Track Area (Button for click/drag detection)
-            local trackButton = Instance.new("TextButton")
-            trackButton.Name = "TrackButton"
-            trackButton.Parent = sliderFrame
-            trackButton.Size = UDim2.new(1, 0, 0, 18) -- Height of the track area
-            trackButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60) -- Track background border
-            trackButton.BorderSizePixel = 0
-            trackButton.AutoButtonColor = false
-            trackButton.Text = ""
-
-            local trackCorner = Instance.new("UICorner", trackButton)
-            trackCorner.CornerRadius = UDim.new(1, 0) -- Fully rounded track ends
-
-            -- Inner Track Background
-            local trackInnerBg = Instance.new("Frame")
-            trackInnerBg.Name = "TrackInnerBg"
-            trackInnerBg.Parent = trackButton
-            trackInnerBg.AnchorPoint = Vector2.new(0.5, 0.5)
-            trackInnerBg.Position = UDim2.new(0.5, 0, 0.5, 0)
-            trackInnerBg.Size = UDim2.new(1, -2, 1, -6) -- Slightly inset track
-            trackInnerBg.BackgroundColor3 = Color3.fromRGB(30, 30, 30) -- Dark inner track
-            trackInnerBg.BorderSizePixel = 0
-
-            local innerCorner = Instance.new("UICorner", trackInnerBg)
-            innerCorner.CornerRadius = UDim.new(1, 0)
-
-            -- Filled Part of the Track
-            local fillTrack = Instance.new("Frame")
-            fillTrack.Name = "FillTrack"
-            fillTrack.Parent = trackInnerBg -- Inside the inner track
-            fillTrack.BackgroundColor3 = Color3.fromRGB(159, 115, 255) -- SC Purple fill
-            fillTrack.BorderSizePixel = 0
-            fillTrack.Size = UDim2.new(0, 0, 1, 0) -- Width calculated based on value
-            fillTrack.ZIndex = 2
-
-            local fillCorner = Instance.new("UICorner", fillTrack)
-            fillCorner.CornerRadius = UDim.new(1, 0) -- Match rounding
-
-            -- Slider Thumb (Circle/Handle) - Optional visual element
-             local thumb = Instance.new("Frame")
-             thumb.Name = "Thumb"
-             thumb.Parent = trackButton -- On top of the main track button
-             thumb.AnchorPoint = Vector2.new(0.5, 0.5)
-             thumb.Position = UDim2.new(0, 0, 0.5, 0) -- Position calculated based on value
-             thumb.Size = UDim2.new(0, 12, 0, 12) -- Thumb size
-             thumb.BackgroundColor3 = Color3.fromRGB(200, 200, 200) -- Thumb color
-             thumb.BorderSizePixel = 1
-             thumb.BorderColor3 = Color3.fromRGB(120,120,120)
-             thumb.ZIndex = 3
-
-             local thumbCorner = Instance.new("UICorner", thumb)
-             thumbCorner.CornerRadius = UDim.new(1, 0) -- Make it a circle
-
-
-            -- Update Function (Sets value, updates visuals, runs callback)
-             CreateTween("slider_fill", 0.05, Enum.EasingStyle.Linear) -- Fast fill update
-             local function UpdateSliderValue(newValue, runCallback)
-                 -- Clamp and snap value to increment
-                 local snappedValue = math.clamp(math.floor((newValue - minVal) / increment + 0.5) * increment + minVal, minVal, maxVal)
-
-                 if snappedValue == currentValue then return end -- No change needed
-
-                 currentValue = snappedValue
-
-                 -- Calculate fill percentage
-                 local percentage = (currentValue - minVal) / (maxVal - minVal)
-                 if (maxVal - minVal) == 0 then percentage = 0 end -- Avoid division by zero
-
-                 -- Update Visuals
-                 local targetFill = UDim2.new(percentage, 0, 1, 0)
-                 TweenService:Create(fillTrack, TweenTable["slider_fill"], {Size = targetFill}):Play()
-
-                 -- Update Thumb Position
-                 local thumbPosition = UDim2.new(percentage, 0, 0.5, 0)
-                 TweenService:Create(thumb, TweenTable["slider_fill"], {Position = thumbPosition}):Play()
-
-
-                 -- Update Value Label
-                 if showValue then
-                     valueLabel.Text = tostring(currentValue) .. suffix
-                      -- Recalculate label sizes if value text length changes significantly (optional optimization)
-                      -- local newValueWidth = TextService:GetTextSize(valueLabel.Text, valueLabel.TextSize, valueLabel.Font, Vector2.new(math.huge, 18)).X
-                      -- valueLabel.Size = UDim2.new(1, -(labelWidth + 10), 1, 0) -- Needs adjustment based on new width
-                 end
-
-                 -- Run Callback
-                 if runCallback then
-                     local success, err = pcall(callback, currentValue)
-                      if not success then
-                           warn("SC Lib Slider Error:", err)
-                           if library.Notify then library.Notify("Slider Callback Error: " .. tostring(err), 5, "error") end
-                      end
-                 end
-             end
-
-             -- Set Initial Value
-             UpdateSliderValue(defaultVal, false) -- Set default without running callback initially
-
-             -- Drag Logic
-             local function HandleDrag(input)
-                  local trackStartX = trackButton.AbsolutePosition.X
-                  local trackWidth = trackButton.AbsoluteSize.X
-                  local mouseX = input.Position.X
-                  local relativeX = math.clamp(mouseX - trackStartX, 0, trackWidth)
-                  local percentage = relativeX / trackWidth
-                  local newValue = minVal + percentage * (maxVal - minVal)
-                  UpdateSliderValue(newValue, true) -- Update value and run callback during drag
-             end
-
-             trackButton.InputBegan:Connect(function(input)
-                  if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                       isDragging = true
-                       HandleDrag(input) -- Update immediately on click
-                       thumb.BackgroundColor3 = Color3.fromRGB(255, 255, 255) -- Highlight thumb on drag
-                       thumb.Size = UDim2.new(0, 14, 0, 14) -- Make thumb slightly larger on drag
-                  end
-             end)
-
-             trackButton.InputChanged:Connect(function(input)
-                  if isDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-                       HandleDrag(input)
-                  end
-             end)
-
-             trackButton.InputEnded:Connect(function(input)
-                 if isDragging and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
-                     isDragging = false
-                     thumb.BackgroundColor3 = Color3.fromRGB(200, 200, 200) -- Return thumb to normal
-                     thumb.Size = UDim2.new(0, 12, 0, 12)
-                     -- Final callback run might be redundant if handled in InputChanged, but ensures final state
-                     -- pcall(callback, currentValue)
-                 end
-             end)
-
-
-             task.wait()
-             DebouncedUpdatePageSize()
-
-             -- Slider Functions API
-             local SliderFunctions = {}
-             function SliderFunctions:Value(newValue) -- Renamed from :Set to :Value for clarity
-                  UpdateSliderValue(newValue, true) -- Set value and run callback
-                  return SliderFunctions
-             end
-             function SliderFunctions:SilentValue(newValue) -- Set value without running callback
-                  UpdateSliderValue(newValue, false)
-                  return SliderFunctions
-             end
-             function SliderFunctions:GetValue() return currentValue end
-             function SliderFunctions:SetFunction(newCallback) callback = newCallback or function() end; return SliderFunctions end
-             function SliderFunctions:Text(newLabelText)
-                  sliderLabel.Text = newLabelText or text
-                  -- Recalculate sizes
-                  labelWidth = TextService:GetTextSize(sliderLabel.Text, sliderLabel.TextSize, sliderLabel.Font, Vector2.new(math.huge, 18)).X
-                  sliderLabel.Size = UDim2.new(0, labelWidth, 1, 0)
-                  valueLabel.Size = UDim2.new(1, -(labelWidth + 10), 1, 0)
-                  return SliderFunctions
-             end
-             function SliderFunctions:Hide() sliderFrame.Visible = false; DebouncedUpdatePageSize(); return SliderFunctions end
-             function SliderFunctions:Show() sliderFrame.Visible = true; DebouncedUpdatePageSize(); return SliderFunctions end
-             function SliderFunctions:Remove() sliderFrame:Destroy(); DebouncedUpdatePageSize(); return nil end
-
-             return SliderFunctions
-         end
-
-
-        -- Tab Control Functions (Belong to the specific tab instance)
-        function Components:Open()
-             tabButton:MouseButton1Click() -- Simulate clicking the tab button
-             return Components
-        end
-        function Components:Remove()
-             local wasActive = (TabLibrary.CurrentTab == tabButton)
-             tabButton:Destroy()
-             page:Destroy()
-             if wasActive then
-                  -- Find the next available tab and activate it
-                  local nextTabButton = tabButtons:FindFirstChildWhichIsA("TextButton")
-                  if nextTabButton then
-                       TabLibrary.CurrentTab = nil -- Clear current so click works
-                       TabLibrary.CurrentPage = nil
-                       nextTabButton:MouseButton1Click()
-                  else -- No tabs left
-                       TabLibrary.CurrentTab = nil
-                       TabLibrary.CurrentPage = nil
-                       TabLibrary.IsFirst = true -- Reset for next potential tab
-                  end
-             end
-             return nil -- Indicate removal
-        end
-        function Components:Hide()
-            tabButton.Visible = false
-            if TabLibrary.CurrentTab == tabButton then
-                 page.Visible = false
-                 -- Potentially find and show another tab? Or just leave container blank?
-                 -- For simplicity, just hide the page too. User must manually show another tab.
-            end
-            return Components
-        end
-        function Components:Show()
-            tabButton.Visible = true
-            -- If this tab is supposed to be the active one, ensure its page is visible
-            if TabLibrary.CurrentTab == tabButton then
-                 page.Visible = true
-            end
-            return Components
-        end
-        function Components:Text(newTitle)
-             tabButton.Text = newTitle or title
-             page.Name = newTitle .. "_Page"
-             return Components
-        end
-
-        return Components -- Return the API for this tab
-    end -- End of NewTab
-
-    -- Main Library Window Control Functions
-    function TabLibrary:Remove()
-        -- Save time before destroying
-        library:SaveUsageTime()
-        library.trackingEnabled = false -- Stop tracking
-        screen:Destroy()
-        library.UI_Initialized = false -- Mark as uninitialized
-        return nil -- Indicate removal
-    end
-    function TabLibrary:Text(newTitle)
-        library.title = newTitle or "SC UI"
+        -- Store connection for later cleanup if needed (e.g., in TabLibrary:Remove)
+        -- TabLibrary._internal.KeybindConnection = keybindConnection -- Need TabLibrary._internal defined first
+
+        local edgeCorner = Instance.new("UICorner")
+        edgeCorner.CornerRadius = UDim.new(0, 4) -- Slightly more rounded
+        edgeCorner.Parent = edge
+
+        -- Main Background Frame
+        local background = Instance.new("Frame")
+        background.Name = "background"
+        background.Parent = edge
+        background.AnchorPoint = Vector2.new(0.5, 0.5)
+        background.BackgroundColor3 = Color3.fromRGB(30, 30, 30) -- Dark main background
+        background.Position = UDim2.new(0.5, 0, 0.5, 0)
+        background.Size = UDim2.new(1, -2, 1, -2) -- Fill edge minus 1px border on each side
+        background.ClipsDescendants = true
+        background.BorderSizePixel = 0
+
+        local backgroundCorner = Instance.new("UICorner")
+        backgroundCorner.CornerRadius = UDim.new(0, 3) -- Inner frame slightly less rounded
+        backgroundCorner.Parent = background
+
+        local backgroundGradient = Instance.new("UIGradient")
+        backgroundGradient.Color = ColorSequence.new{
+            ColorSequenceKeypoint.new(0.00, Color3.fromRGB(42, 42, 42)), -- Slightly lighter top
+            ColorSequenceKeypoint.new(1.00, Color3.fromRGB(30, 30, 30)) -- Darker bottom
+        }
+        backgroundGradient.Rotation = 90
+        backgroundGradient.Parent = background
+
+        -- Header Area
+        local headerFrame = Instance.new("Frame")
+        headerFrame.Name = "HeaderFrame"
+        headerFrame.Parent = background
+        headerFrame.Size = UDim2.new(1, 0, 0, 38)
+        headerFrame.BackgroundTransparency = 1.0 -- Header part of main background
+
+        -- Header Title Label (assign to outer scope variable)
+        headerLabel = Instance.new("TextLabel")
+        headerLabel.Name = "headerLabel"
+        headerLabel.Parent = headerFrame
+        headerLabel.BackgroundTransparency = 1.000
+        headerLabel.Size = UDim2.new(1, -12, 1, -12) -- Padding via size
+        headerLabel.Position = UDim2.new(0, 6, 0, 6)
+        headerLabel.Font = Enum.Font.GothamSemibold -- Nicer font
         headerLabel.Text = library.title
-        return TabLibrary
-    end
-    function TabLibrary:UpdateKeybind(newKey)
-        if newKey and typeof(newKey) == "EnumItem" and newKey.EnumType == Enum.KeyCode then
-             toggleKey = newKey
-        else
-             warn("SC Lib UpdateKeybind: Invalid KeyCode Enum provided.")
+        headerLabel.TextColor3 = Color3.fromRGB(210, 210, 210) -- Brighter title
+        headerLabel.TextSize = 18.000
+        headerLabel.TextXAlignment = Enum.TextXAlignment.Left
+        headerLabel.TextYAlignment = Enum.TextYAlignment.Center
+        headerLabel.RichText = true
+
+        -- Header Separator Bar
+        local bar = Instance.new("Frame")
+        bar.Name = "bar"
+        bar.Parent = headerFrame -- Place inside header
+        bar.AnchorPoint = Vector2.new(0.5, 1)
+        bar.Position = UDim2.new(0.5, 0, 1, 0) -- Position at the bottom of header
+        bar.Size = UDim2.new(1, 0, 0, 2) -- Thicker bar
+        bar.BackgroundColor3 = Color3.fromRGB(159, 115, 255) -- SC Purple
+        bar.BackgroundTransparency = 0.200
+        bar.BorderSizePixel = 0
+
+        local barCorner = Instance.new("UICorner")
+        barCorner.CornerRadius = UDim.new(0, 1) -- Slight rounding on bar
+        barCorner.Parent = bar
+
+        -- Main Content Area (Below Header)
+        local contentArea = Instance.new("Frame")
+        contentArea.Name = "ContentArea"
+        contentArea.Parent = background
+        contentArea.AnchorPoint = Vector2.new(0, 0) -- Top-left anchor
+        contentArea.Position = UDim2.new(0, 0, 0, 38) -- Position below header
+        contentArea.Size = UDim2.new(1, 0, 1, -38) -- Fill remaining space below header
+        contentArea.BackgroundTransparency = 1.0
+
+        -- Tab Buttons Area (Left Side)
+        local tabButtonsEdge = Instance.new("Frame")
+        tabButtonsEdge.Name = "tabButtonsEdge"
+        tabButtonsEdge.Parent = contentArea
+        tabButtonsEdge.BackgroundColor3 = Color3.fromRGB(45, 45, 45) -- Slightly lighter edge for contrast
+        tabButtonsEdge.Position = UDim2.new(0, 8, 0, 8) -- Padding from edge
+        tabButtonsEdge.Size = UDim2.new(0, 160, 1, -16) -- Width 160, fill height with padding
+        tabButtonsEdge.BorderSizePixel = 0
+
+        local tabButtonCorner = Instance.new("UICorner")
+        tabButtonCorner.CornerRadius = UDim.new(0, 3)
+        tabButtonCorner.Parent = tabButtonsEdge
+
+        local tabButtons = Instance.new("ScrollingFrame") -- Use ScrollingFrame for tabs
+        tabButtons.Name = "tabButtons"
+        tabButtons.Parent = tabButtonsEdge
+        tabButtons.AnchorPoint = Vector2.new(0.5, 0.5)
+        tabButtons.BackgroundColor3 = Color3.fromRGB(35, 35, 35) -- Match inner background
+        tabButtons.ClipsDescendants = true
+        tabButtons.Position = UDim2.new(0.5, 0, 0.5, 0)
+        tabButtons.Size = UDim2.new(1,-2, 1,-2) -- Fill edge minus border
+        tabButtons.BorderSizePixel = 0
+        tabButtons.CanvasSize = UDim2.new(0,0,0,0) -- Auto-sized by layout
+        tabButtons.ScrollBarThickness = 4
+        tabButtons.ScrollBarImageColor3 = Color3.fromRGB(159, 115, 255) -- SC Purple scrollbar
+
+        local tabButtonCorner_2 = Instance.new("UICorner")
+        tabButtonCorner_2.CornerRadius = UDim.new(0, 2)
+        tabButtonCorner_2.Parent = tabButtons
+
+        local tabButtonLayout = Instance.new("UIListLayout")
+        tabButtonLayout.Name = "tabButtonLayout"
+        tabButtonLayout.Parent = tabButtons
+        tabButtonLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+        tabButtonLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        tabButtonLayout.Padding = UDim.new(0, 3) -- Space between tab buttons
+
+        local tabButtonPadding = Instance.new("UIPadding")
+        tabButtonPadding.Name = "tabButtonPadding"
+        tabButtonPadding.Parent = tabButtons
+        tabButtonPadding.PaddingTop = UDim.new(0, 5)
+        tabButtonPadding.PaddingBottom = UDim.new(0, 5)
+
+        -- Container Area (Right Side)
+        local containerEdge = Instance.new("Frame")
+        containerEdge.Name = "containerEdge"
+        containerEdge.Parent = contentArea
+        containerEdge.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+        containerEdge.Position = UDim2.new(0, 176, 0, 8) -- Position right of tabs + padding
+        containerEdge.Size = UDim2.new(1, -184, 1, -16) -- Fill remaining width/height with padding
+        containerEdge.BorderSizePixel = 0
+
+        local tabButtonCorner_3 = Instance.new("UICorner")
+        tabButtonCorner_3.CornerRadius = UDim.new(0, 3)
+        tabButtonCorner_3.Parent = containerEdge
+
+        local container = Instance.new("Frame") -- This holds the actual pages (ScrollingFrames)
+        container.Name = "container"
+        container.Parent = containerEdge
+        container.AnchorPoint = Vector2.new(0.5, 0.5)
+        container.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+        container.Position = UDim2.new(0.5, 0, 0.5, 0)
+        container.Size = UDim2.new(1, -2, 1, -2)
+        container.ClipsDescendants = true
+        container.BorderSizePixel = 0
+
+        local containerCorner = Instance.new("UICorner")
+        containerCorner.CornerRadius = UDim.new(0, 2)
+        containerCorner.Parent = container
+
+        -- Tab Management Logic (Define TabLibrary methods inside pcall)
+        TabLibrary._internal = { -- Store internal state safely
+            IsFirst = true,
+            CurrentTab = nil,
+            CurrentPage = nil,
+            PageUpdateDebounce = {},
+            ComponentCleanup = {},
+            KeybindConnection = keybindConnection -- Assign stored connection
+        }
+
+        CreateTween("tab_text_color", 0.20, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+        CreateTween("tab_bg_color", 0.15)
+
+        function TabLibrary:NewTab(title)
+            title = title or "Tab"
+            local pageName = title .. "_Page"
+            local tabButtonName = title .. "_TabButton"
+            local internal = TabLibrary._internal
+
+            -- Tab Button Creation
+            local tabButton = Instance.new("TextButton")
+            tabButton.Name = tabButtonName
+            tabButton.Parent = tabButtons -- Add to the scrolling frame for tabs
+            tabButton.BackgroundColor3 = Color3.fromRGB(55, 55, 55) -- Default tab color
+            tabButton.BackgroundTransparency = 0.0 -- Start visible
+            tabButton.Size = UDim2.new(1, -10, 0, 28) -- Fill width (-padding), fixed height
+            tabButton.AutoButtonColor = false
+            tabButton.Font = Enum.Font.GothamSemibold
+            tabButton.Text = title
+            tabButton.TextColor3 = Color3.fromRGB(170, 170, 170) -- Default text color (inactive)
+            tabButton.TextSize = 15.000
+            tabButton.RichText = true
+            tabButton.ClipsDescendants = true
+
+            local tabBtnCorner = Instance.new("UICorner", tabButton)
+            tabBtnCorner.CornerRadius = UDim.new(0, 3)
+
+            -- Page Creation (ScrollingFrame per Tab)
+            local page = Instance.new("ScrollingFrame")
+            page.Name = pageName
+            page.Parent = container -- Add pages to the main container frame
+            page.Active = true
+            page.BackgroundColor3 = Color3.fromRGB(255, 255, 255) -- Fully transparent, inherits container bg
+            page.BackgroundTransparency = 1.000
+            page.BorderSizePixel = 0
+            page.Size = UDim2.new(1, 0, 1, 0) -- Fill the container
+            page.CanvasSize = UDim2.new(0, 0, 0, 0) -- Will be updated by layout
+            page.ScrollBarThickness = 6 -- Thicker scrollbar
+            page.ScrollBarImageColor3 = Color3.fromRGB(159, 115, 255) -- SC Purple
+            page.Visible = false -- Start hidden
+
+            local pageLayout = Instance.new("UIListLayout")
+            pageLayout.Name = "pageLayout"
+            pageLayout.Parent = page
+            pageLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+            pageLayout.SortOrder = Enum.SortOrder.LayoutOrder
+            pageLayout.Padding = UDim.new(0, 6) -- Padding between elements in the page
+
+            local pagePadding = Instance.new("UIPadding")
+            pagePadding.Name = "pagePadding"
+            pagePadding.Parent = page
+            pagePadding.PaddingLeft = UDim.new(0, 8)
+            pagePadding.PaddingRight = UDim.new(0, 8)
+            pagePadding.PaddingTop = UDim.new(0, 8)
+            pagePadding.PaddingBottom = UDim.new(0, 8)
+
+            -- Tab Button Click Logic
+            local clickConn = tabButton.MouseButton1Click:Connect(function()
+                if internal.CurrentTab == tabButton then return end -- Do nothing if already selected
+
+                -- Deactivate previous tab/page
+                if internal.CurrentTab and internal.CurrentTab.Parent then
+                     pcall(function() TweenService:Create(internal.CurrentTab, TweenTable["tab_text_color"], {TextColor3 = Color3.fromRGB(170, 170, 170)}):Play() end)
+                     pcall(function() TweenService:Create(internal.CurrentTab, TweenTable["tab_bg_color"], {BackgroundColor3 = Color3.fromRGB(55, 55, 55)}):Play() end)
+                end
+                if internal.CurrentPage and internal.CurrentPage.Parent then
+                    internal.CurrentPage.Visible = false
+                end
+
+                -- Activate new tab/page
+                 if tabButton and tabButton.Parent then
+                     pcall(function() TweenService:Create(tabButton, TweenTable["tab_text_color"], {TextColor3 = Color3.fromRGB(255, 255, 255)}):Play() end) -- White text for active
+                     pcall(function() TweenService:Create(tabButton, TweenTable["tab_bg_color"], {BackgroundColor3 = Color3.fromRGB(159, 115, 255)}):Play() end) -- SC Purple background for active
+                 end
+                 if page and page.Parent then
+                     page.Visible = true
+                 end
+
+                -- Update current references
+                internal.CurrentTab = tabButton
+                internal.CurrentPage = page
+            end)
+
+            -- Set first tab as active
+            if internal.IsFirst then
+                 internal.IsFirst = false
+                 if tabButton and tabButton.Parent then
+                     tabButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+                     tabButton.BackgroundColor3 = Color3.fromRGB(159, 115, 255)
+                 end
+                 if page and page.Parent then page.Visible = true end
+                 internal.CurrentTab = tabButton
+                 internal.CurrentPage = page
+            end
+
+            -- Page Size Update Logic (Debounced)
+            local function CreateDebouncer(func, delay)
+                 local lastUpdateTime = 0; local debounceTime = delay or 0.05; local waiting = false
+                 return function(...) local now = tick(); if now - lastUpdateTime >= debounceTime and not waiting then lastUpdateTime = now; waiting = true; task.spawn(function() local s,e = pcall(func, ...); if not s then warn("SC Lib Debounce Error:", e) end; waiting = false end) end end
+             end
+             local UpdatePageSizeFunc = function() if not page or not page.Parent or not pageLayout or not pageLayout.Parent then return end; task.wait(); local contentSizeY = pageLayout.AbsoluteContentSize.Y; page.CanvasSize = UDim2.new(0, 0, 0, contentSizeY + pagePadding.PaddingTop.Offset + pagePadding.PaddingBottom.Offset) end
+
+             internal.PageUpdateDebounce[page] = CreateDebouncer(UpdatePageSizeFunc)
+             local DebouncedUpdatePageSize = internal.PageUpdateDebounce[page]
+
+             local childAddedConn = page.ChildAdded:Connect(DebouncedUpdatePageSize)
+             local childRemovedConn = page.ChildRemoved:Connect(DebouncedUpdatePageSize)
+             local layoutSizeConn = pageLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(DebouncedUpdatePageSize)
+
+             -- Setup cleanup for this page
+             internal.ComponentCleanup[page] = {}
+             local componentCleanup = internal.ComponentCleanup[page]
+             table.insert(componentCleanup, function() clickConn:Disconnect() end) -- Disconnect click listener
+             table.insert(componentCleanup, function() childAddedConn:Disconnect() end)
+             table.insert(componentCleanup, function() childRemovedConn:Disconnect() end)
+             table.insert(componentCleanup, function() layoutSizeConn:Disconnect() end)
+             table.insert(componentCleanup, function() internal.PageUpdateDebounce[page] = nil end)
+
+            -- Components API (functions for adding elements to this tab's page)
+            local Components = {}
+            function Components:NewLabel(...) local el, fn = library:_CreateLabel(page, DebouncedUpdatePageSize, ...); if el then table.insert(componentCleanup, function() pcall(el.Destroy, el) end) end return fn end
+            function Components:NewButton(...) local el, fn = library:_CreateButton(page, DebouncedUpdatePageSize, ...); if el then table.insert(componentCleanup, function() pcall(el.Destroy, el) end) end return fn end
+            function Components:NewSection(...) local el, fn = library:_CreateSection(page, DebouncedUpdatePageSize, ...); if el then table.insert(componentCleanup, function() pcall(el.Destroy, el) end) end return fn end
+            function Components:NewSeparator(...) local el, fn = library:_CreateSeparator(page, DebouncedUpdatePageSize, ...); if el then table.insert(componentCleanup, function() pcall(el.Destroy, el) end) end return fn end
+            function Components:NewToggle(...) local el, fn = library:_CreateToggle(page, DebouncedUpdatePageSize, ...); if el then table.insert(componentCleanup, function() pcall(el.Destroy, el) end) end return fn end
+            function Components:NewKeybind(...) local el, fn = library:_CreateKeybind(page, DebouncedUpdatePageSize, ...); if el then table.insert(componentCleanup, function() pcall(el.Destroy, el) end) end return fn end
+            function Components:NewTextbox(...) local el, fn = library:_CreateTextbox(page, DebouncedUpdatePageSize, ...); if el then table.insert(componentCleanup, function() pcall(el.Destroy, el) end) end return fn end
+            function Components:NewSelector(...) local el, fn = library:_CreateSelector(page, DebouncedUpdatePageSize, ...); if el then table.insert(componentCleanup, function() pcall(el.Destroy, el) end) end return fn end
+            function Components:NewSlider(...) local el, fn = library:_CreateSlider(page, DebouncedUpdatePageSize, ...); if el then table.insert(componentCleanup, function() pcall(el.Destroy, el) end) end return fn end
+
+            -- Tab Control Functions
+            function Components:Open() if tabButton and tabButton.Parent then tabButton:MouseButton1Click() end return Components end
+            function Components:Remove()
+                local wasActive = (internal.CurrentTab == tabButton)
+                local cleanupFuncs = internal.ComponentCleanup[page]; if cleanupFuncs then for i = #cleanupFuncs, 1, -1 do pcall(cleanupFuncs[i]) end; internal.ComponentCleanup[page] = nil end
+                if tabButton and tabButton.Parent then pcall(tabButton.Destroy, tabButton) end
+                if page and page.Parent then pcall(page.Destroy, page) end
+                if wasActive then local nextBtn = tabButtons:FindFirstChildWhichIsA("TextButton"); if nextBtn then internal.CurrentTab=nil; internal.CurrentPage=nil; pcall(nextBtn.MouseButton1Click, nextBtn) else internal.CurrentTab=nil; internal.CurrentPage=nil; internal.IsFirst=true end end; return nil
+            end
+            function Components:Hide() if tabButton and tabButton.Parent then tabButton.Visible=false end; if internal.CurrentTab==tabButton and page and page.Parent then page.Visible=false end; return Components end
+            function Components:Show() if tabButton and tabButton.Parent then tabButton.Visible=true end; if internal.CurrentTab==tabButton and page and page.Parent then page.Visible=true end; return Components end
+            function Components:Text(newTitle) title = newTitle or "Tab"; if tabButton and tabButton.Parent then tabButton.Text=title end; if page and page.Parent then page.Name=title.."_Page" end; return Components end
+
+            return Components -- Return the API for this tab
+        end -- End of NewTab
+
+
+        -- Main Library Window Control Functions (Define methods on the outer TabLibrary table)
+        function TabLibrary:Remove()
+            library:SaveUsageTime(); library.trackingEnabled = false
+            if TabLibrary._internal.KeybindConnection then pcall(TabLibrary._internal.KeybindConnection.Disconnect, TabLibrary._internal.KeybindConnection); TabLibrary._internal.KeybindConnection = nil end
+            if screen and screen.Parent then pcall(screen.Destroy, screen) end
+            library.UI_Initialized = false; library._ExistingControl = nil; TabLibrary = nil; return nil
         end
-        return TabLibrary
+        function TabLibrary:Text(newTitle) library.title = newTitle or "SC UI"; if headerLabel and headerLabel.Parent then headerLabel.Text = library.title end; return TabLibrary end
+        function TabLibrary:UpdateKeybind(newKey) if newKey and typeof(newKey)=="EnumItem" and newKey.EnumType==Enum.KeyCode then toggleKey=newKey else warn("SC Lib UpdateKeybind: Invalid KeyCode") end; return TabLibrary end
+
+        -- Initialize Notification System if not already done
+        if not library.Notify then library:InitNotifications() end
+        -- Create default watermark
+        library:Watermark()
+
+        -- Ensure flags are set *inside* the pcall if it succeeds
+        print("SC Lib: Init pcall finished setup. Setting flags...") --> DEBUG PRINT
+        library.UI_Initialized = true
+        if screen and screen.Parent then screen.Enabled = true end -- Check screen exists
+        library._ExistingControl = TabLibrary
+        print("SC Lib: Flags set inside pcall.") --> DEBUG PRINT
+
+    end) -- End of pcall
+
+    if not success then
+        warn("!!!!!!!! SC Lib: CRITICAL ERROR DURING Init execution !!!!!!!!", err)
+        library.UI_Initialized = false -- Ensure flag is false on error
+        library._ExistingControl = nil
+        -- Optionally show an error notification
+        if library.Notify then library.Notify("UI Init Failed: "..tostring(err), 10, "error") end
+        return nil -- Return nil on failure
+    else
+         print("SC Lib: Init function completed successfully. Returning TabLibrary.") --> DEBUG PRINT
+         return TabLibrary -- Return the created TabLibrary table on success
     end
-
-    library.UI_Initialized = true -- Mark as initialized *after* setup
-    screen.Enabled = true -- Ensure the screen is enabled initially
-
-    return TabLibrary -- Return the main Tab management API
 end -- End of library:Init
 
 
