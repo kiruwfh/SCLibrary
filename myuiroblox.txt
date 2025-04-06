@@ -136,20 +136,6 @@ function library:SendTimeToDiscord(totalSeconds)
     end
 end
 
--- Attempt to save time when game closes
-game:BindToClose(function()
-    if library.UI_Initialized and library.KeyAccepted then
-        print("SC Lib: Game closing, attempting to save final usage time...")
-        library:SaveUsageTime()
-        -- Optionally send final time to Discord
-        -- local currentTime = os.time()
-        -- local sessionTime = currentTime - library.startTime
-        -- local finalTotal = library.totalElapsedTime + sessionTime
-        -- library:SendTimeToDiscord(finalTotal)
-        wait(0.5) -- Give save/request a moment
-    end
-end)
-
 
 -- / FPS Counter Coroutine
 coroutine.wrap(function()
