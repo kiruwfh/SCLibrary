@@ -1,1572 +1,326 @@
 --[[
-  UI lib made by SupremeCreativity (formerly bungie#0001)
-  Revised and Enhanced Version
-
-  - Please do not use this without permission. Significant effort has gone into this UI.
-    If you wish to use it, please contact the owner.
+    MyNewUI Library v1.1.1
+    - Перенесено объявление 'player' в начало для возможного исправления ошибки парсинга в некоторых средах.
 ]]
-
--- / Locals
-local Workspace = game:GetService("Workspace")
-local Players = game:GetService("Players")
-local Player = Players.LocalPlayer
-local Mouse = Player:GetMouse()
 
 -- / Services
 local UserInputService = game:GetService("UserInputService")
 local TextService = game:GetService("TextService")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
-local CoreGuiService = game:GetService("CoreGui")
-local ContentService = game:GetService("ContentProvider")
-local TeleportService = game:GetService("TeleportService")
-local HttpService -- Lazily loaded if needed for Discord webhook
+local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
 
--- / SC Library Core Table
-local library = {
-    version = "3.0.0-SC",
-    title = "SC UI " .. tostring(math.random(1, 1000)), -- Default title
-    fps = 0,
-    rank = "private",
-    KeyAccepted = false, -- Flag for key system
-    CorrectKey = "hh.hg**@@", -- The key needed to use the UI
-    owner = "SupremeCreativity",
-    UI_Initialized = false, -- Flag to check if main UI is up
-    startTime = 0,
-    totalElapsedTime = 0,
-    trackingEnabled = false,
-    lastSaveTime = 0,
-    saveInterval = 60 -- Save usage time every 60 seconds
-}
+-- / Locals
+local player = Players.LocalPlayer -- << ПЕРЕМЕЩЕНО СЮДА
 
--- / Synapse-Specific Functions Check
-local hasSynapse = (syn and syn.request and syn.writefile and syn.readfile and isfile and writefile and readfile)
+-- / Core Library Table
+local MyUILibrary = {}
+MyUILibrary.Version = "1.1.1"
+MyUILibrary._IsKeyAccepted = false
 
--- / Usage Time Tracking Functions
-local usageTimeSaveFile = "SC_UsageTime_" .. (Player and Player.UserId or "UnknownUser") .. ".dat"
-local discordWebhookUrl = "https://discord.com/api/webhooks/1353802030740803684/sjogfRtn6rXRF83IY-Y2b8fULjbQSZY29eXaApOEKBSq8RdqH8P6qy-tdQASb1glu4mm" -- <<< IMPORTANT: REPLACE THIS!
-
-function library:FormatTime(totalSeconds)
-    if not totalSeconds or totalSeconds < 0 then return "00:00:00" end
-    local hours = math.floor(totalSeconds / 3600)
-    local minutes = math.floor((totalSeconds % 3600) / 60)
-    local seconds = math.floor(totalSeconds % 60)
-    return string.format("%02d:%02d:%02d", hours, minutes, seconds)
+-- / Private Helper Functions
+local function CreateElement(elementType, properties)
+    local element = Instance.new(elementType)
+    for prop, value in pairs(properties or {}) do
+        pcall(function() element[prop] = value end)
+    end
+    return element
 end
 
-function library:LoadUsageTime()
-    if hasSynapse then
-        if isfile(usageTimeSaveFile) then
-            local success, data = pcall(readfile, usageTimeSaveFile)
-            if success and data then
-                library.totalElapsedTime = tonumber(data) or 0
-            else
-                library.totalElapsedTime = 0
-                print("SC Lib: Failed to read usage time file or file is corrupted.")
-            end
-        else
-            library.totalElapsedTime = 0
-            print("SC Lib: No previous usage time file found.")
-        end
-    else
-        library.totalElapsedTime = 0 -- Reset if Synapse isn't available for persistence
-        print("SC Lib: Synapse file functions not found. Usage time will not persist.")
-    end
-    library.startTime = os.time()
-    library.trackingEnabled = true
-    library.lastSaveTime = os.time()
-    print("SC Lib: Usage time tracking started. Previous total:", library:FormatTime(library.totalElapsedTime))
-end
-
-function library:SaveUsageTime()
-    if not library.trackingEnabled then return end
-
-    if hasSynapse then
-        local currentTime = os.time()
-        local sessionTime = currentTime - library.startTime
-        local finalTotal = library.totalElapsedTime + sessionTime
-        local success, err = pcall(writefile, usageTimeSaveFile, tostring(finalTotal))
-        if not success then
-            warn("SC Lib: Failed to save usage time -", err)
-        else
-            -- Optionally print save confirmation, can be spammy
-            -- print("SC Lib: Usage time saved:", library:FormatTime(finalTotal))
-        end
-    end
-    -- No else needed, as non-Synapse time isn't persistent anyway
-end
-
-function library:SendTimeToDiscord(totalSeconds)
-    if not hasSynapse or discordWebhookUrl == "YOUR_DISCORD_WEBHOOK_URL" then
-        -- Silently fail or print a warning if not configured/supported
-        -- print("SC Lib: Discord webhook not configured or Synapse HTTP not available.")
-        return
-    end
-
-    if not HttpService then HttpService = game:GetService("HttpService") end -- Load service if needed
-
-    local data = {
-        content = nil,
-        embeds = {{
-            title = "SC UI Usage Update",
-            description = string.format("User **%s** (ID: %d) has used the UI for a total of **%s**.",
-                                      Player.Name, Player.UserId, library:FormatTime(totalSeconds)),
-            color = 10433279, -- A purple-ish color
-            timestamp = os.date("!%Y-%m-%dT%H:%M:%S.000Z"), -- ISO 8601 format
-            footer = { text = "SC Library v" .. library.version }
-        }},
-        username = "SC Usage Tracker",
-        avatar_url = "http://www.roblox.com/asset/?id=9365069861" -- Using the old hash logo URL as an example avatar
-    }
-
-    local headers = {["Content-Type"] = "application/json"}
-    local body = HttpService:JSONEncode(data)
-
-    local success, response = pcall(syn.request, {
-        Url = discordWebhookUrl,
-        Method = "POST",
-        Headers = headers,
-        Body = body
-    })
-
-    if not success then
-        warn("SC Lib: Failed to send usage time to Discord -", response)
-    -- else -- Optional: Log successful Discord post
-       -- print("SC Lib: Successfully sent usage time to Discord.")
-    end
-end
-
-
--- / FPS Counter Coroutine
-coroutine.wrap(function()
-    while RunService.RenderStepped:Wait() do
-        local dt = RunService.RenderStepped:Wait() -- Get delta time more accurately
-        library.fps = math.round(1 / dt)
-
-        -- Periodic Usage Time Saving & Discord Update
-        if library.trackingEnabled and os.time() - library.lastSaveTime >= library.saveInterval then
-             library:SaveUsageTime()
-             -- Send update to discord periodically
-             local currentTime = os.time()
-             local sessionTime = currentTime - library.startTime
-             local currentTotalTime = library.totalElapsedTime + sessionTime
-            -- library:SendTimeToDiscord(currentTotalTime) -- Uncomment if Discord webhook is set up
-             library.lastSaveTime = os.time() -- Update last save time *after* saving
-        end
-    end
-end)()
-
-
--- / Tween table & function
-local TweenTable = {
-    Default = TweenInfo.new(0.17, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, 0, false, 0)
-}
-local CreateTween = function(name, speed, style, direction, loop, reverse, delay)
-    -- Simplified: Ensure name is treated as a string key
-    local tweenName = tostring(name)
-    speed = speed or 0.17
-    style = style or Enum.EasingStyle.Sine
-    direction = direction or Enum.EasingDirection.InOut
-    loop = loop or 0
-    reverse = reverse or false
-    delay = delay or 0
-
-    TweenTable[tweenName] = TweenInfo.new(speed, style, direction, loop, reverse, delay)
-end
-
--- Pre-create common tweens
-CreateTween("Fast", 0.1)
-CreateTween("Slow", 0.5)
-CreateTween("Medium", 0.25)
-CreateTween("VerySlow", 1.0)
-CreateTween("ElasticOut", 0.6, Enum.EasingStyle.Elastic, Enum.EasingDirection.Out)
-CreateTween("BounceOut", 0.6, Enum.EasingStyle.Bounce, Enum.EasingDirection.Out)
-CreateTween("Smooth", 0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-
-
--- / Dragging (Improved slightly for robustness)
-local drag = function(obj, latency)
-    obj = obj
-    latency = latency or 0.05 -- Slightly faster default latency
-
+local function EnableDrag(guiObject)
     local dragging = false
-    local inputObject = nil
+    local dragInput = nil
     local dragStart = nil
     local startPos = nil
-    local dragTween = nil
+    local originalZIndex = guiObject.Parent and guiObject.Parent.DisplayOrder or 1
 
-    local function updateInput(input)
-        if not startPos or not dragStart then return end -- Guard clause
-        local delta = input.Position - dragStart
-        local newPosition = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-
-        -- Cancel existing tween if any
-        if dragTween and dragTween.PlaybackState == Enum.PlaybackState.Playing then
-            dragTween:Cancel()
-        end
-
-        -- Create and play new tween
-        dragTween = TweenService:Create(obj, TweenInfo.new(latency, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {Position = newPosition})
-        dragTween:Play()
-    end
-
-    obj.InputBegan:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+    guiObject.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
-            dragStart = inp.Position
-            startPos = obj.Position
-            inputObject = inp -- Store the specific input object
-
-            -- Disconnect previous Changed connection if it exists to avoid multiple listeners
-            local changedConnection
-            changedConnection = inp.Changed:Connect(function()
-                if inp.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                    inputObject = nil -- Clear the input object
-                    if changedConnection then changedConnection:Disconnect() end -- Disconnect self
-                end
-            end)
-        end
-    end)
-
-    -- Use UserInputService.InputChanged for more reliable tracking
-    UserInputService.InputChanged:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseMovement or inp.UserInputType == Enum.UserInputType.Touch then
-            if dragging and inputObject then -- Check if we are dragging with a valid start input
-                updateInput(inp)
+            dragStart = input.Position
+            startPos = guiObject.Position
+            dragInput = input
+            if guiObject.Parent and guiObject.Parent:IsA("ScreenGui") then
+                 originalZIndex = guiObject.Parent.DisplayOrder
+                 guiObject.Parent.DisplayOrder = 9999
             end
         end
     end)
 
-     obj.InputEnded:Connect(function(inp)
-         if inp == inputObject then -- Check if the input ending is the one that started the drag
-             dragging = false
-             inputObject = nil
-         end
-     end)
-end
-
-
--- / Library Utility Functions
-function library:RoundNumber(int, float)
-    return tonumber(string.format("%." .. (int or 0) .. "f", float))
-end
-
-function library:GetUsername()
-    return Player.Name
-end
-
-function library:CheckIfLoaded()
-    return game:IsLoaded()
-end
-
-function library:GetUserId()
-    return Player.UserId
-end
-
-function library:GetPlaceId()
-    return game.PlaceId
-end
-
-function library:GetJobId()
-    return game.JobId
-end
-
-function library:Rejoin()
-    local placeId = library:GetPlaceId()
-    local jobId = library:GetJobId()
-    local userId = library:GetUserId()
-    if placeId and jobId and userId then
-         local success, err = pcall(TeleportService.TeleportToPlaceInstance, TeleportService, placeId, jobId, Player)
-         if not success then
-             warn("SC Lib Rejoin Failed:", err)
-             -- Fallback or notify user?
-         end
-    else
-         warn("SC Lib Rejoin Failed: Could not get PlaceID, JobID, or UserID.")
-    end
-end
-
-function library:Copy(input) -- only works with synapse
-    if hasSynapse then
-        local success, err = pcall(syn.write_clipboard, input)
-        if not success then warn("SC Lib Copy Failed:", err) end
-    else
-        warn("SC Lib Copy Failed: Synapse not detected.")
-    end
-end
-
--- Date/Time functions remain largely the same, good use of os.date
-function library:GetDay(type)
-    type = tostring(type):lower()
-    if type == "word" then return os.date("%A")
-    elseif type == "short" then return os.date("%a")
-    elseif type == "month" then return os.date("%d")
-    elseif type == "year" then return os.date("%j")
-    else return os.date("%A") -- Default to full word
-    end
-end
-
-function library:GetTime(type)
-     type = tostring(type):lower()
-     if type == "24h" then return os.date("%H")
-     elseif type == "12h" then return os.date("%I")
-     elseif type == "minute" then return os.date("%M")
-     elseif type == "half" then return os.date("%p")
-     elseif type == "second" then return os.date("%S")
-     elseif type == "full" then return os.date("%X")
-     elseif type == "iso" then return os.date("%z") -- ISO / UTC offset
-     elseif type == "zone" then return os.date("%Z")
-     else return os.date("%X") -- Default to full time
-     end
-end
-
-function library:GetMonth(type)
-    type = tostring(type):lower()
-    if type == "word" then return os.date("%B")
-    elseif type == "short" then return os.date("%b")
-    elseif type == "digit" then return os.date("%m")
-    else return os.date("%B") -- Default to full word
-    end
-end
-
-function library:GetWeek(type)
-     type = tostring(type):lower()
-     if type == "year_s" then return os.date("%U") -- Week of year (Sunday start)
-     elseif type == "day" then return os.date("%w") -- Day of week (0=Sunday)
-     elseif type == "year_m" then return os.date("%W") -- Week of year (Monday start)
-     else return os.date("%U") -- Default to Sunday start
-     end
-end
-
-function library:GetYear(type)
-    type = tostring(type):lower()
-    if type == "digits" then return os.date("%y") -- Last two digits
-    elseif type == "full" then return os.date("%Y") -- Full year
-    else return os.date("%Y") -- Default to full year
-    end
-end
-
-function library:UnlockFps(new) -- syn only
-    if hasSynapse then
-        local success, err = pcall(setfpscap, new)
-        if not success then warn("SC Lib UnlockFps Failed:", err) end
-    else
-        warn("SC Lib UnlockFps Failed: Synapse not detected.")
-    end
-end
-
--- / Watermark Function (Updated text and potentially time display)
-function library:Watermark(text)
-    -- Cleanup existing watermark
-    for _,v in pairs(CoreGuiService:GetChildren()) do
-        if v.Name == "SC_Watermark" then
-            v:Destroy()
-        end
-    end
-
-    local baseText = text or ("SC v" .. library.version) -- Use library version
-
-    -- Create UI Elements
-    local watermark = Instance.new("ScreenGui")
-    watermark.Name = "SC_Watermark"
-    watermark.Parent = CoreGuiService
-    watermark.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    watermark.DisplayOrder = 999 -- Ensure it's on top
-
-    local watermarkLayout = Instance.new("UIListLayout")
-    watermarkLayout.Parent = watermark
-    watermarkLayout.FillDirection = Enum.FillDirection.Horizontal
-    watermarkLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    watermarkLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
-    watermarkLayout.Padding = UDim.new(0, 5) -- Slightly more padding
-
-    local watermarkPadding = Instance.new("UIPadding")
-    watermarkPadding.Parent = watermark
-    watermarkPadding.PaddingBottom = UDim.new(0, 8)
-    watermarkPadding.PaddingLeft = UDim.new(0, 8)
-
-    -- Main Watermark Element Function
-    local function CreateWatermarkElement(elementText, isTimeElement)
-        local edge = Instance.new("Frame")
-        edge.Name = "edge"
-        edge.Parent = watermark
-        edge.BackgroundColor3 = Color3.fromRGB(55, 55, 55) -- Slightly darker edge
-        edge.BorderSizePixel = 0
-        edge.Size = UDim2.new(0, 0, 0, 26) -- Start small
-        edge.BackgroundTransparency = 1 -- Start transparent
-
-        local edgeCorner = Instance.new("UICorner")
-        edgeCorner.CornerRadius = UDim.new(0, 3) -- Slightly rounder
-        edgeCorner.Parent = edge
-
-        local background = Instance.new("Frame")
-        background.Name = "background"
-        background.Parent = edge
-        background.AnchorPoint = Vector2.new(0.5, 0.5)
-        background.BackgroundColor3 = Color3.fromRGB(28, 28, 28) -- Base dark color
-        background.BackgroundTransparency = 1 -- Start transparent
-        background.ClipsDescendants = true
-        background.Position = UDim2.new(0.5, 0, 0.5, 0)
-        background.Size = UDim2.new(0, 0, 0, 24) -- Start small
-        background.BorderSizePixel = 0
-
-        local backgroundGradient = Instance.new("UIGradient")
-        backgroundGradient.Color = ColorSequence.new{
-            ColorSequenceKeypoint.new(0.00, Color3.fromRGB(40, 40, 40)),
-            ColorSequenceKeypoint.new(1.00, Color3.fromRGB(30, 30, 30)) -- Subtle gradient
-        }
-        backgroundGradient.Rotation = 90
-        backgroundGradient.Parent = background
-
-        local backgroundCorner = Instance.new("UICorner")
-        backgroundCorner.CornerRadius = UDim.new(0, 2)
-        backgroundCorner.Parent = background
-
-        -- Top Accent Bar
-        local bar = Instance.new("Frame")
-        bar.Name = "bar"
-        bar.Parent = background
-        bar.BackgroundColor3 = Color3.fromRGB(159, 115, 255) -- SC Purple
-        bar.BackgroundTransparency = 1 -- Start transparent
-        bar.Size = UDim2.new(0, 0, 0, 2) -- Thicker bar
-        bar.Position = UDim2.new(0,0,0,0) -- Position at top
-        bar.ZIndex = 2
-        bar.BorderSizePixel = 0
-
-        local barCorner = Instance.new("UICorner")
-        barCorner.CornerRadius = UDim.new(0, 2)
-        barCorner.Parent = bar
-
-        -- Text Label
-        local waterText = Instance.new("TextLabel")
-        waterText.Name = "waterText"
-        waterText.Parent = background
-        waterText.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        waterText.BackgroundTransparency = 1.000
-        waterText.Size = UDim2.new(1, -8, 1, -8) -- Use relative size minus padding
-        waterText.Position = UDim2.new(0, 4, 0, 4)
-        waterText.Font = Enum.Font.Code
-        waterText.Text = elementText
-        waterText.TextColor3 = Color3.fromRGB(200, 200, 200) -- Brighter text
-        waterText.TextTransparency = 1 -- Start transparent
-        waterText.TextSize = 14.000
-        waterText.TextXAlignment = Enum.TextXAlignment.Center
-        waterText.TextYAlignment = Enum.TextYAlignment.Center
-        waterText.RichText = true
-        waterText.ZIndex = 3
-
-        -- Calculate size and animate
-        local NewSize = TextService:GetTextSize(waterText.Text, waterText.TextSize, waterText.Font, Vector2.new(math.huge, math.huge))
-        local targetWidth = NewSize.X + 16 -- More padding
-
-        CreateTween("wm_appear", 0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-        CreateTween("wm_bar", 0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, false, 0.1)
-        CreateTween("wm_text", 0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, false, 0.2)
-
-        coroutine.wrap(function()
-            TweenService:Create(edge, TweenTable["wm_appear"], {Size = UDim2.new(0, targetWidth, 0, 26), BackgroundTransparency = 0}):Play()
-            TweenService:Create(background, TweenTable["wm_appear"], {Size = UDim2.new(0, targetWidth - 2, 0, 24), BackgroundTransparency = 0.1}):Play() -- Slight transparency
-            wait(0.1)
-            TweenService:Create(bar, TweenTable["wm_bar"], {Size = UDim2.new(1, 0, 0, 2), BackgroundTransparency = 0.1}):Play() -- Animate bar width too
-            wait(0.1)
-            TweenService:Create(waterText, TweenTable["wm_text"], {TextTransparency = 0}):Play()
-        end)()
-
-        -- Updater function for this specific element
-        local function UpdateText(newText)
-            local currentText = waterText.Text
-            if newText == currentText then return end -- No change needed
-
-            local oldSize = TextService:GetTextSize(currentText, waterText.TextSize, waterText.Font, Vector2.new(math.huge, math.huge))
-            local newSize = TextService:GetTextSize(newText, waterText.TextSize, waterText.Font, Vector2.new(math.huge, math.huge))
-            local newTargetWidth = newSize.X + 16
-
-            CreateTween("wm_resize", 0.15)
-            -- Only resize if needed significantly (optional optimization)
-             -- if math.abs((newSize.X + 16) - edge.AbsoluteSize.X) > 2 then
-                 TweenService:Create(edge, TweenTable["wm_resize"], {Size = UDim2.new(0, newTargetWidth, 0, 26)}):Play()
-                 TweenService:Create(background, TweenTable["wm_resize"], {Size = UDim2.new(0, newTargetWidth - 2, 0, 24)}):Play()
-                 -- Bar size is relative (UDim2.new(1,0,...)), so it resizes automatically with parent
-             -- end
-
-            -- Update text content
-            waterText.Text = newText
-        end
-
-        -- If it's the time element, start the updater loop
-        if isTimeElement then
-            coroutine.wrap(function()
-                while edge and edge.Parent do -- Keep updating as long as the element exists
-                     if library.trackingEnabled then
-                         local currentTime = os.time()
-                         local sessionTime = currentTime - library.startTime
-                         local displayTime = library.totalElapsedTime + sessionTime
-                         UpdateText(library:FormatTime(displayTime))
-                     else
-                         UpdateText("00:00:00") -- Show zero if not tracking yet
-                     end
-                    wait(1) -- Update every second
-                end
-            end)()
-        end
-
-        return edge, UpdateText -- Return the main frame and its update function
-    end
-
-    -- Create the main watermark text element
-    local mainElement, mainUpdater = CreateWatermarkElement(baseText, false)
-
-    -- Create the time tracking element
-    local timeElement, timeUpdater = CreateWatermarkElement("00:00:00", true) -- isTimeElement = true
-
-     -- Create the FPS element (optional, can be added to main text too)
-    local fpsElement, fpsUpdater
-    coroutine.wrap(function()
-        wait(0.5) -- Stagger appearance slightly
-        fpsElement, fpsUpdater = CreateWatermarkElement("FPS: 0", false)
-        while fpsElement and fpsElement.Parent do
-            fpsUpdater("FPS: " .. library.fps)
-            wait(0.5) -- Update FPS twice per second
-        end
-    end)()
-
-
-    -- Watermark Functions Table (Controls the entire watermark group)
-    local WatermarkFunctions = {}
-
-    function WatermarkFunctions:AddWatermark(newText)
-        -- This function now adds *another* independent element, like the time/FPS ones
-        local newElement, newUpdater = CreateWatermarkElement(newText or "New Element", false)
-
-        -- Return controls for the *newly added* element
-        local NewWatermarkElementFunctions = {}
-        function NewWatermarkElementFunctions:Hide() newElement.Visible = false return NewWatermarkElementFunctions end
-        function NewWatermarkElementFunctions:Show() newElement.Visible = true return NewWatermarkElementFunctions end
-        function NewWatermarkElementFunctions:Text(txt) newUpdater(txt or "...") return NewWatermarkElementFunctions end
-        function NewWatermarkElementFunctions:Remove() newElement:Destroy() return NewWatermarkElementFunctions end
-        return NewWatermarkElementFunctions
-    end
-
-    function WatermarkFunctions:Hide()
-        watermark.Enabled = false
-        return WatermarkFunctions
-    end
-
-    function WatermarkFunctions:Show()
-        watermark.Enabled = true
-        return WatermarkFunctions
-    end
-
-    function WatermarkFunctions:Text(new) -- Updates the *main* text element
-        mainUpdater(new or baseText)
-        return WatermarkFunctions
-    end
-
-    function WatermarkFunctions:Remove()
-        watermark:Destroy()
-        -- Optionally clear related update loops if needed (though checking element.Parent should handle it)
-        return nil -- Indicate removal
-    end
-
-    return WatermarkFunctions
-end
-
-
--- / Notification System (InitNotifications and Notify)
-function library:InitNotifications()
-    -- Clean up existing notifications GUI
-    for _,v in next, CoreGuiService:GetChildren() do
-        if v.Name == "SC_Notifications" then
-            v:Destroy()
-        end
-    end
-
-    local Notifications = Instance.new("ScreenGui")
-    Notifications.Name = "SC_Notifications"
-    Notifications.Parent = CoreGuiService
-    Notifications.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    Notifications.DisplayOrder = 998 -- Below watermark but high
-
-    local notificationsLayout = Instance.new("UIListLayout")
-    notificationsLayout.Name = "notificationsLayout"
-    notificationsLayout.Parent = Notifications
-    notificationsLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    notificationsLayout.Padding = UDim.new(0, 6) -- Increased padding
-    notificationsLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
-    notificationsLayout.VerticalAlignment = Enum.VerticalAlignment.Top -- Top-left corner
-
-    local notificationsPadding = Instance.new("UIPadding")
-    notificationsPadding.Name = "notificationsPadding"
-    notificationsPadding.Parent = Notifications
-    notificationsPadding.PaddingLeft = UDim.new(0, 10)
-    notificationsPadding.PaddingTop = UDim.new(0, 10) -- Push down from the very top
-
-    -- Pre-create notification tweens
-    CreateTween("notification_slide_in", 0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-    CreateTween("notification_fade_out", 0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-    CreateTween("notification_bar_fill", 5, Enum.EasingStyle.Linear) -- Default duration 5s
-    CreateTween("notification_resize", 0.2)
-
-    -- Notification Object Creator
-    local Notification = {}
-    function Notification:Notify(text, duration, type, callback)
-
-        text = text or "Notification."
-        duration = duration or 5
-        type = tostring(type):lower() or "notification"
-        callback = callback or function() end
-
-        -- Notification Elements
-        local edge = Instance.new("Frame")
-        local edgeCorner = Instance.new("UICorner")
-        local background = Instance.new("Frame")
-        local bar = Instance.new("Frame") -- Progress/timer bar
-        local barCorner = Instance.new("UICorner")
-        local backgroundGradient = Instance.new("UIGradient")
-        local backgroundCorner = Instance.new("UICorner")
-        local notifText = Instance.new("TextLabel")
-        local notifPadding = Instance.new("UIPadding")
-        local backgroundLayout = Instance.new("UIListLayout") -- Use layout for text vs bar
-
-        edge.Name = "edge"
-        edge.Parent = Notifications -- Add to the main container
-        edge.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-        edge.BackgroundTransparency = 1.000 -- Start hidden
-        edge.Size = UDim2.new(0, 0, 0, 30) -- Slightly taller
-        edge.BorderSizePixel = 0
-        edge.ClipsDescendants = true -- Clip contents
-
-        edgeCorner.CornerRadius = UDim.new(0, 3)
-        edgeCorner.Parent = edge
-
-        background.Name = "background"
-        background.Parent = edge
-        background.AnchorPoint = Vector2.new(0.5, 0.5)
-        background.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-        background.BackgroundTransparency = 1.000 -- Start hidden
-        background.Position = UDim2.new(0.5, 0, 0.5, 0)
-        background.Size = UDim2.new(1, -2, 1, -2) -- Fill edge minus border
-        background.BorderSizePixel = 0
-        background.ClipsDescendants = true
-
-        backgroundGradient.Color = ColorSequence.new{
-            ColorSequenceKeypoint.new(0.00, Color3.fromRGB(45, 45, 45)),
-            ColorSequenceKeypoint.new(1.00, Color3.fromRGB(35, 35, 35))
-        }
-        backgroundGradient.Rotation = 90
-        backgroundGradient.Parent = background
-
-        backgroundCorner.CornerRadius = UDim.new(0, 2)
-        backgroundCorner.Parent = background
-
-        -- Configure the layout inside the background
-        backgroundLayout.Parent = background
-        backgroundLayout.SortOrder = Enum.SortOrder.LayoutOrder
-        backgroundLayout.Padding = UDim.new(0, 0) -- No padding between elements
-        backgroundLayout.FillDirection = Enum.FillDirection.Vertical
-
-        -- Configure Text Label
-        notifText.Name = "notifText"
-        notifText.Parent = background -- Add to layout parent
-        notifText.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        notifText.BackgroundTransparency = 1.000
-        notifText.Size = UDim2.new(1, 0, 1, -3) -- Fill width, height minus bar space
-        notifText.Font = Enum.Font.Code
-        notifText.Text = text
-        notifText.TextColor3 = Color3.fromRGB(210, 210, 210)
-        notifText.TextSize = 14.000
-        notifText.TextTransparency = 1.000 -- Start hidden
-        notifText.TextWrapped = true
-        notifText.RichText = true
-        notifText.TextXAlignment = Enum.TextXAlignment.Left
-        notifText.TextYAlignment = Enum.TextYAlignment.Center
-
-        notifPadding.Parent = notifText
-        notifPadding.PaddingLeft = UDim.new(0, 6)
-        notifPadding.PaddingRight = UDim.new(0, 6)
-
-        -- Configure Progress Bar
-        bar.Name = "bar"
-        bar.Parent = background -- Add to layout parent
-        bar.BackgroundColor3 = Color3.fromRGB(159, 115, 255) -- Default SC Purple
-        bar.BackgroundTransparency = 0.300 -- Make it semi-transparent
-        bar.Size = UDim2.new(0, 0, 0, 3) -- Start width 0, height 3 pixels
-        bar.BorderSizePixel = 0
-
-        -- Set bar color based on type
-        if type == "alert" then bar.BackgroundColor3 = Color3.fromRGB(255, 200, 50) -- Yellow/Orange
-        elseif type == "error" then bar.BackgroundColor3 = Color3.fromRGB(255, 70, 70) -- Red
-        elseif type == "success" then bar.BackgroundColor3 = Color3.fromRGB(70, 255, 100) -- Green
-        elseif type == "information" then bar.BackgroundColor3 = Color3.fromRGB(70, 150, 255) -- Blue
-        end
-
-        barCorner.CornerRadius = UDim.new(0, 2)
-        barCorner.Parent = bar
-
-        -- Calculate initial size
-        local textSize = TextService:GetTextSize(notifText.Text, notifText.TextSize, notifText.Font, Vector2.new(280, math.huge)) -- Max width 280
-        local targetWidth = math.max(150, textSize.X + 14) -- Minimum width 150, plus padding
-        local targetHeight = math.max(30, textSize.Y + 12 + 3) -- Min height 30, plus padding and bar height
-
-        -- Animation Coroutine
-        local barTween -- Store the bar tween to potentially cancel/modify
-        local isRunning = true
-        local fadeOutTween = nil
-
-        coroutine.wrap(function()
-            -- Animate In
-            TweenService:Create(edge, TweenTable["notification_slide_in"], {
-                Size = UDim2.new(0, targetWidth, 0, targetHeight),
-                BackgroundTransparency = 0
-            }):Play()
-            TweenService:Create(background, TweenTable["notification_slide_in"], { BackgroundTransparency = 0.1 }):Play()
-
-            local textTween = TweenService:Create(notifText, TweenTable["notification_slide_in"], { TextTransparency = 0 })
-            textTween:Play()
-            textTween.Completed:Wait() -- Wait for text to be visible before starting timer
-
-            -- Animate Bar Fill
-             if duration > 0 then
-                 TweenTable["notification_bar_fill"] = TweenInfo.new(duration, Enum.EasingStyle.Linear) -- Update tween info duration
-                 barTween = TweenService:Create(bar, TweenTable["notification_bar_fill"], {Size = UDim2.new(1, 0, 0, 3)})
-                 barTween:Play()
-                 barTween.Completed:Wait()
-             else -- If duration is 0 or less, fill instantly and don't auto-fade
-                 bar.Size = UDim2.new(1, 0, 0, 3)
-                 isRunning = false -- Prevent auto-fade if duration <= 0
-                 return -- End coroutine here for infinite notifications
-             end
-
-            if not isRunning then return end -- Check if cancelled before fading
-
-            -- Animate Out
-            fadeOutTween = TweenService:Create(edge, TweenTable["notification_fade_out"], { BackgroundTransparency = 1 })
-            TweenService:Create(background, TweenTable["notification_fade_out"], { BackgroundTransparency = 1 }):Play()
-            TweenService:Create(notifText, TweenTable["notification_fade_out"], { TextTransparency = 1 }):Play()
-            TweenService:Create(bar, TweenTable["notification_fade_out"], { BackgroundTransparency = 1 }):Play() -- Fade bar too
-            fadeOutTween:Play()
-            fadeOutTween.Completed:Wait()
-
-            isRunning = false
-            pcall(callback) -- Call callback after fade out
-            edge:Destroy() -- Clean up
-        end)()
-
-        -- Functions returned to control this specific notification
-        local NotificationFunctions = {}
-        function NotificationFunctions:Text(new)
-            if not isRunning then return NotificationFunctions end -- Don't update if fading out
-            new = new or text
-            notifText.Text = new
-
-            -- Recalculate size and resize smoothly
-            local newTextSize = TextService:GetTextSize(notifText.Text, notifText.TextSize, notifText.Font, Vector2.new(280, math.huge))
-            local newTargetWidth = math.max(150, newTextSize.X + 14)
-            local newTargetHeight = math.max(30, newTextSize.Y + 12 + 3)
-
-            TweenService:Create(edge, TweenTable["notification_resize"], { Size = UDim2.new(0, newTargetWidth, 0, newTargetHeight) }):Play()
-            -- Background and text size use relative UDim2 (1, -offset), so they adjust automatically.
-
-            return NotificationFunctions
-        end
-
-        function NotificationFunctions:Remove()
-             if isRunning then
-                 isRunning = false
-                 if barTween and barTween.PlaybackState == Enum.PlaybackState.Playing then
-                     barTween:Cancel()
-                 end
-                 if fadeOutTween and fadeOutTween.PlaybackState == Enum.PlaybackState.Playing then
-                      fadeOutTween:Cancel() -- Stop fade out if already happening
-                 end
-                 -- Force fade out immediately
-                 TweenService:Create(edge, TweenTable["Fast"], { BackgroundTransparency = 1 }):Play()
-                 TweenService:Create(background, TweenTable["Fast"], { BackgroundTransparency = 1 }):Play()
-                 TweenService:Create(notifText, TweenTable["Fast"], { TextTransparency = 1 }):Play()
-                 TweenService:Create(bar, TweenTable["Fast"], { BackgroundTransparency = 1 }):Play()
-                 task.wait(0.15) -- Allow fade tween to finish
-                 edge:Destroy()
-             elseif edge and edge.Parent then -- If already faded but not destroyed yet
-                 edge:Destroy()
-             end
-             return nil
-        end
-
-        return NotificationFunctions
-    end
-    return Notification -- Return the creator function
-end
-
--- / Enhanced Greeting Animation
-function library:ShowGreeting()
-    -- Clean up previous greetings if any
-    for _,v in pairs(CoreGuiService:GetChildren()) do
-        if v.Name == "SC_GreetingScreen" then
-            v:Destroy()
-        end
-    end
-
-    local greetingScreen = Instance.new("ScreenGui")
-    greetingScreen.Name = "SC_GreetingScreen"
-    greetingScreen.Parent = CoreGuiService
-    greetingScreen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    greetingScreen.DisplayOrder = 1001 -- Highest priority
-
-    -- Full screen semi-transparent background
-    local overlay = Instance.new("Frame")
-    overlay.Name = "Overlay"
-    overlay.Parent = greetingScreen
-    overlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    overlay.BackgroundTransparency = 1.0 -- Start fully transparent
-    overlay.Size = UDim2.new(1, 0, 1, 0)
-    overlay.BorderSizePixel = 0
-
-    -- Main Content Frame (Centered)
-    local contentFrame = Instance.new("Frame")
-    contentFrame.Name = "ContentFrame"
-    contentFrame.Parent = overlay
-    contentFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-    contentFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-    contentFrame.Size = UDim2.new(0, 400, 0, 250) -- Size of the greeting box
-    contentFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    contentFrame.BackgroundTransparency = 1.0 -- Start transparent
-    contentFrame.BorderSizePixel = 1
-    contentFrame.BorderColor3 = Color3.fromRGB(159, 115, 255) -- SC Purple Border
-    contentFrame.ClipsDescendants = true
-
-    local frameCorner = Instance.new("UICorner")
-    frameCorner.CornerRadius = UDim.new(0, 5)
-    frameCorner.Parent = contentFrame
-
-    local frameGradient = Instance.new("UIGradient")
-    frameGradient.Color = ColorSequence.new{
-        ColorSequenceKeypoint.new(0.00, Color3.fromRGB(45, 45, 45)),
-        ColorSequenceKeypoint.new(1.00, Color3.fromRGB(25, 25, 25))
-    }
-    frameGradient.Rotation = 45 -- Diagonal gradient
-    frameGradient.Parent = contentFrame
-
-    -- Logo (using the hash logo provided earlier)
-    local logo = Instance.new("ImageLabel")
-    logo.Name = "Logo"
-    logo.Parent = contentFrame
-    logo.AnchorPoint = Vector2.new(0.5, 0.5)
-    logo.Size = UDim2.new(0, 100, 0, 100)
-    logo.Position = UDim2.new(0.5, 0, 0.4, 0) -- Positioned slightly above center
-    logo.Image = "http://www.roblox.com/asset/?id=9365069861"
-    logo.ImageColor3 = Color3.fromRGB(159, 115, 255)
-    logo.BackgroundTransparency = 1.0
-    logo.ImageTransparency = 1.0 -- Start hidden
-    logo.Rotation = -180 -- Start rotated
-
-    -- Welcome Text
-    local welcomeText = Instance.new("TextLabel")
-    welcomeText.Name = "WelcomeText"
-    welcomeText.Parent = contentFrame
-    welcomeText.AnchorPoint = Vector2.new(0.5, 0.5)
-    welcomeText.Size = UDim2.new(0.9, 0, 0, 30)
-    welcomeText.Position = UDim2.new(0.5, 0, 0.75, 0) -- Positioned below logo
-    welcomeText.Font = Enum.Font.GothamBold -- Use a bolder font
-    welcomeText.Text = "Welcome, " .. library:GetUsername()
-    welcomeText.TextColor3 = Color3.fromRGB(220, 220, 220)
-    welcomeText.TextSize = 20
-    welcomeText.BackgroundTransparency = 1.0
-    welcomeText.TextTransparency = 1.0 -- Start hidden
-
-    -- Loading/Status Bar
-    local loadingBarBg = Instance.new("Frame")
-    loadingBarBg.Name = "LoadingBarBg"
-    loadingBarBg.Parent = contentFrame
-    loadingBarBg.AnchorPoint = Vector2.new(0.5, 1)
-    loadingBarBg.Size = UDim2.new(0.8, 0, 0, 6) -- Thin bar at the bottom
-    loadingBarBg.Position = UDim2.new(0.5, 0, 0.95, 0)
-    loadingBarBg.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-    loadingBarBg.BackgroundTransparency = 1.0 -- Start hidden
-    loadingBarBg.BorderSizePixel = 0
-
-    local barBgCorner = Instance.new("UICorner")
-    barBgCorner.CornerRadius = UDim.new(0, 3)
-    barBgCorner.Parent = loadingBarBg
-
-    local loadingBarFill = Instance.new("Frame")
-    loadingBarFill.Name = "LoadingBarFill"
-    loadingBarFill.Parent = loadingBarBg
-    loadingBarFill.Size = UDim2.new(0, 0, 1, 0) -- Start at 0 width
-    loadingBarFill.BackgroundColor3 = Color3.fromRGB(159, 115, 255) -- SC Purple
-    loadingBarFill.BorderSizePixel = 0
-
-    local barFillCorner = Instance.new("UICorner")
-    barFillCorner.CornerRadius = UDim.new(0, 3)
-    barFillCorner.Parent = loadingBarFill
-
-    -- Animation Sequence
-    CreateTween("greet_fade_in", 0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-    CreateTween("greet_logo_spin", 0.7, Enum.EasingStyle.Back, Enum.EasingDirection.Out, 0, false, 0.2)
-    CreateTween("greet_text_fade", 0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, false, 0.5)
-    CreateTween("greet_bar_appear", 0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, false, 0.7)
-    CreateTween("greet_bar_fill", 1.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, 0, false, 0.9) -- Loading simulation
-    CreateTween("greet_fade_out_all", 0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, 0.3) -- Fade out delay
-
-    local animCoroutine = coroutine.wrap(function()
-        -- Fade in overlay and content frame background
-        TweenService:Create(overlay, TweenTable["greet_fade_in"], {BackgroundTransparency = 0.5}):Play()
-        local contentTween = TweenService:Create(contentFrame, TweenTable["greet_fade_in"], {BackgroundTransparency = 0})
-        contentTween:Play()
-        contentTween.Completed:Wait()
-
-        -- Animate Logo
-        TweenService:Create(logo, TweenTable["greet_logo_spin"], {ImageTransparency = 0, Rotation = 0}):Play()
-
-        -- Animate Text
-        TweenService:Create(welcomeText, TweenTable["greet_text_fade"], {TextTransparency = 0}):Play()
-
-        -- Animate Loading Bar Background
-        local barBgTween = TweenService:Create(loadingBarBg, TweenTable["greet_bar_appear"], {BackgroundTransparency = 0.5})
-        barBgTween:Play()
-        barBgTween.Completed:Wait()
-
-        -- Animate Loading Bar Fill
-        local barFillTween = TweenService:Create(loadingBarFill, TweenTable["greet_bar_fill"], {Size = UDim2.new(1, 0, 1, 0)})
-        barFillTween:Play()
-        barFillTween.Completed:Wait()
-
-        -- Fade Out Everything
-        local fadeOutGroup = {overlay, contentFrame, logo, welcomeText, loadingBarBg, loadingBarFill} -- Added loadingBarFill to fade out too
-        for _, element in ipairs(fadeOutGroup) do
-            if element and element.Parent and element:IsA("GuiObject") then -- Check if it's a valid GUI object
-                 -- Always try to fade BackgroundTransparency for Frames/GuiObjects
-                 local targetBgTransparency = 1.0
-                 -- Special case for overlay if you want a different end transparency, otherwise keep 1.0
-                 -- if element == overlay then targetBgTransparency = 0.8 else targetBgTransparency = 1.0 end
-                 pcall(function() TweenService:Create(element, TweenTable["greet_fade_out_all"], {BackgroundTransparency = targetBgTransparency}):Play() end)
-
-                 -- Only tween Text/Image transparency if the property exists
-                 if element:IsA("TextLabel") or element:IsA("TextButton") then
-                      pcall(function() TweenService:Create(element, TweenTable["greet_fade_out_all"], {TextTransparency = 1.0}):Play() end)
-                 elseif element:IsA("ImageLabel") or element:IsA("ImageButton") then
-                      pcall(function() TweenService:Create(element, TweenTable["greet_fade_out_all"], {ImageTransparency = 1.0}):Play() end)
-                 end
+    guiObject.InputEnded:Connect(function(input)
+        if input == dragInput then
+            dragging = false
+            dragInput = nil
+            if guiObject.Parent and guiObject.Parent:IsA("ScreenGui") then
+                 guiObject.Parent.DisplayOrder = originalZIndex
             end
         end
-
-        wait(0.7) -- Wait for fade out animation to complete
-
-        -- Initialization finished, can now show the main UI
-        library:Init() -- Call the main UI initializer
-        print("SC Lib: Init call returned.") --> ADD THIS LINE
-
-        if greetingScreen and greetingScreen.Parent then pcall(greetingScreen.Destroy, greetingScreen) end
     end)
 
-    animCoroutine()
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            guiObject.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
 end
 
--- / Key System Prompt
-function library:RequestKey()
-    -- Clean up previous prompts
-    for _,v in pairs(CoreGuiService:GetChildren()) do
-        if v.Name == "SC_KeyPrompt" then
-            v:Destroy()
+-- / Window Object
+local Window = {}
+Window.__index = Window
+
+function Window:NewTab(title)
+    title = title or "Вкладка"
+
+    local tabButton = CreateElement("TextButton", {
+        Name = title .. "_TabButton", Parent = self._tabButtonContainer, Size = UDim2.new(1, -10, 0, 28),
+        BackgroundColor3 = Color3.fromRGB(55, 55, 55), TextColor3 = Color3.fromRGB(170, 170, 170),
+        Font = Enum.Font.GothamSemibold, TextSize = 15, Text = title, AutoButtonColor = false,
+        LayoutOrder = #self._tabButtonContainer:GetChildren() + 1
+    })
+    CreateElement("UICorner", { CornerRadius = UDim.new(0, 3), Parent = tabButton })
+
+    local page = CreateElement("ScrollingFrame", {
+        Name = title .. "_Page", Parent = self._contentContainer, Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1.0, BorderSizePixel = 0, Visible = false, ScrollBarThickness = 5,
+        ScrollBarImageColor3 = Color3.fromRGB(100, 100, 100), CanvasSize = UDim2.new(0, 0, 0, 0)
+    })
+    local pageLayout = CreateElement("UIListLayout", { Name = "PageLayout", Parent = page, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 6), HorizontalAlignment = Enum.HorizontalAlignment.Center })
+    local pagePadding = CreateElement("UIPadding", { Parent = page, PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8), PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8) })
+
+    tabButton.MouseButton1Click:Connect(function()
+        if self._activeTabButton == tabButton then return end
+        if self._activeTabButton then
+            TweenService:Create(self._activeTabButton, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(55, 55, 55)}):Play()
+            TweenService:Create(self._activeTabButton, TweenInfo.new(0.15), {TextColor3 = Color3.fromRGB(170, 170, 170)}):Play()
         end
+        if self._activePage then self._activePage.Visible = false end
+        TweenService:Create(tabButton, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(85, 85, 85)}):Play()
+        TweenService:Create(tabButton, TweenInfo.new(0.15), {TextColor3 = Color3.fromRGB(230, 230, 230)}):Play()
+        page.Visible = true
+        self._activeTabButton = tabButton
+        self._activePage = page
+    end)
+
+    if not self._activeTabButton then
+         task.wait(0.1)
+         pcall(function() tabButton:MouseButton1Click() end)
     end
 
-    -- Create Prompt UI
-    local keyPromptScreen = Instance.new("ScreenGui")
-    keyPromptScreen.Name = "SC_KeyPrompt"
-    keyPromptScreen.Parent = CoreGuiService
-    keyPromptScreen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    keyPromptScreen.DisplayOrder = 1002 -- Absolutely highest
+    local Tab = {}
+    Tab.Page = page
+    Tab._pageLayout = pageLayout
+    Tab._pagePadding = pagePadding
 
-    -- Darkening Overlay
-    local overlay = Instance.new("Frame")
-    overlay.Name = "Overlay"
-    overlay.Parent = keyPromptScreen
-    overlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    overlay.BackgroundTransparency = 0.3 -- Semi-transparent dark
-    overlay.Size = UDim2.new(1, 0, 1, 0)
-    overlay.Active = true -- Block clicks behind
+    function Tab:_UpdateCanvasSize()
+        if self._debounceUpdate then return end
+        self._debounceUpdate = true
+        task.wait()
+        if self.Page and self._pageLayout then
+             local topPad = self._pagePadding and self._pagePadding.PaddingTop.Offset or 0
+             local bottomPad = self._pagePadding and self._pagePadding.PaddingBottom.Offset or 0
+             self.Page.CanvasSize = UDim2.new(0, 0, 0, self._pageLayout.AbsoluteContentSize.Y + topPad + bottomPad)
+        end
+        self._debounceUpdate = false
+    end
 
-    -- Prompt Box
-    local promptBox = Instance.new("Frame")
-    promptBox.Name = "PromptBox"
-    promptBox.Parent = overlay
-    promptBox.AnchorPoint = Vector2.new(0.5, 0.5)
-    promptBox.Position = UDim2.new(0.5, 0, 0.5, 0)
-    promptBox.Size = UDim2.new(0, 350, 0, 180)
-    promptBox.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    promptBox.BorderSizePixel = 1
-    promptBox.BorderColor3 = Color3.fromRGB(80, 80, 80)
+    self.Page.ChildAdded:Connect(function() Tab:_UpdateCanvasSize() end)
+    self.Page.ChildRemoved:Connect(function() Tab:_UpdateCanvasSize() end)
+    self._pageLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() Tab:_UpdateCanvasSize() end)
 
-    local boxCorner = Instance.new("UICorner")
-    boxCorner.CornerRadius = UDim.new(0, 4)
-    boxCorner.Parent = promptBox
+    function Tab:NewLabel(text, alignment)
+        local label = CreateElement("TextLabel", { Name = "Label", Parent = self.Page, Text = text or "Label", Font = Enum.Font.Code, TextSize = 14, TextColor3 = Color3.fromRGB(210, 210, 210), BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 18), TextWrapped = true, TextXAlignment = alignment or Enum.TextXAlignment.Left })
+        self:_UpdateCanvasSize()
+        return label
+    end
 
-    -- Title
-    local titleLabel = Instance.new("TextLabel")
-    titleLabel.Name = "TitleLabel"
-    titleLabel.Parent = promptBox
-    titleLabel.Size = UDim2.new(1, 0, 0, 40)
-    titleLabel.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
-    titleLabel.Font = Enum.Font.GothamSemibold
-    titleLabel.Text = "SC UI - Authentication Required"
-    titleLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-    titleLabel.TextSize = 18
+    function Tab:NewButton(text, callback)
+        callback = callback or function() print("Button '"..tostring(text).."' clicked") end
+        local button = CreateElement("TextButton", { Name = "Button", Parent = self.Page, Text = text or "Button", Font = Enum.Font.GothamSemibold, TextSize = 14, TextColor3 = Color3.fromRGB(220, 220, 220), BackgroundColor3 = Color3.fromRGB(80, 80, 80), Size = UDim2.new(1, 0, 0, 28), AutoButtonColor = false })
+        CreateElement("UICorner", { CornerRadius = UDim.new(0, 3), Parent = button })
+        button.MouseEnter:Connect(function() TweenService:Create(button, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(100, 100, 100)}):Play() end)
+        button.MouseLeave:Connect(function() TweenService:Create(button, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(80, 80, 80)}):Play() end)
+        button.MouseButton1Click:Connect(function() pcall(callback) end)
+        self:_UpdateCanvasSize()
+        return button
+    end
 
-    local titleCorner = Instance.new("UICorner", titleLabel)
-    titleCorner.CornerRadius = UDim.new(0,4)
-    local titlePadding = Instance.new("UIPadding", titleLabel)
-    titlePadding.PaddingLeft = UDim.new(0, 10)
+     function Tab:NewToggle(text, defaultState, callback)
+        defaultState = defaultState or false
+        callback = callback or function(state) print("Toggle '"..tostring(text).."' state:", state) end
+        local currentState = defaultState
+        local frame = CreateElement("Frame", {Name = "ToggleFrame", Parent = self.Page, Size = UDim2.new(1, 0, 0, 24), BackgroundTransparency = 1})
+        local layout = CreateElement("UIListLayout", {Parent = frame, FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8)})
+        local checkbox = CreateElement("TextButton", {Name = "Checkbox", Parent = frame, Size = UDim2.new(0, 18, 0, 18), BackgroundColor3 = Color3.fromRGB(60, 60, 60), BorderSizePixel = 0, Text = "", AutoButtonColor = false})
+        CreateElement("UICorner", {CornerRadius = UDim.new(0, 3), Parent = checkbox})
+        local checkmark = CreateElement("Frame", {Name = "Checkmark", Parent = checkbox, Size = UDim2.new(0.7, 0, 0.7, 0), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), BackgroundColor3 = Color3.fromRGB(150, 100, 255), BorderSizePixel = 0, Visible = currentState})
+        CreateElement("UICorner", {CornerRadius = UDim.new(0, 2), Parent = checkmark})
+        local label = CreateElement("TextLabel", {Name = "ToggleLabel", Parent = frame, Text = text or "Toggle", Font = Enum.Font.Code, TextSize = 14, TextColor3 = Color3.fromRGB(210, 210, 210), BackgroundTransparency = 1, Size = UDim2.new(1, -30, 1, 0), TextXAlignment = Enum.TextXAlignment.Left})
+        local function UpdateState(newState) currentState = newState; checkmark.Visible = currentState; pcall(callback, currentState) end
+        checkbox.MouseButton1Click:Connect(function() UpdateState(not currentState) end)
+        self:_UpdateCanvasSize()
+        local control = {}; function control:Set(state) UpdateState(state) end; function control:Get() return currentState end; function control:Remove() frame:Destroy() Tab:_UpdateCanvasSize() end; return control
+    end
+    -- TODO: Add other components (Slider, Textbox, Selector, Keybind, Separator)
 
-    -- Info/Error Label
-    local infoLabel = Instance.new("TextLabel")
-    infoLabel.Name = "InfoLabel"
-    infoLabel.Parent = promptBox
-    infoLabel.AnchorPoint = Vector2.new(0.5, 0)
-    infoLabel.Position = UDim2.new(0.5, 0, 0, 50)
-    infoLabel.Size = UDim2.new(0.9, 0, 0, 20)
-    infoLabel.Font = Enum.Font.Code
-    infoLabel.Text = "Please enter the access key:"
-    infoLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
-    infoLabel.TextSize = 14
-    infoLabel.BackgroundTransparency = 1.0
+    return Tab
+end
 
-    -- Key Input Textbox
-    local keyInput = Instance.new("TextBox")
-    keyInput.Name = "KeyInput"
-    keyInput.Parent = promptBox
-    keyInput.AnchorPoint = Vector2.new(0.5, 0)
-    keyInput.Position = UDim2.new(0.5, 0, 0, 80)
-    keyInput.Size = UDim2.new(0.8, 0, 0, 35)
-    keyInput.Font = Enum.Font.Code
-    keyInput.Text = ""
-    keyInput.PlaceholderText = "Enter Key..."
-    keyInput.PlaceholderColor3 = Color3.fromRGB(120, 120, 120)
-    keyInput.TextColor3 = Color3.fromRGB(210, 210, 210)
-    keyInput.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    keyInput.BorderSizePixel = 1
-    keyInput.BorderColor3 = Color3.fromRGB(60, 60, 60)
-    keyInput.ClearTextOnFocus = false
-    keyInput.TextXAlignment = Enum.TextXAlignment.Center
+function Window:ToggleVisible()
+    if self.ScreenGui then self.ScreenGui.Enabled = not self.ScreenGui.Enabled; print("[MyNewUI] Visibility toggled to:", self.ScreenGui.Enabled) end
+end
 
-    local inputCorner = Instance.new("UICorner", keyInput)
-    inputCorner.CornerRadius = UDim.new(0, 3)
+function Window:SetTitle(title)
+    if self._headerLabel then self._headerLabel.Text = title or "My UI Library" end
+end
 
-    -- Submit Button
-    local submitButton = Instance.new("TextButton")
-    submitButton.Name = "SubmitButton"
-    submitButton.Parent = promptBox
-    submitButton.AnchorPoint = Vector2.new(0.5, 0)
-    submitButton.Position = UDim2.new(0.5, 0, 0, 125)
-    submitButton.Size = UDim2.new(0.5, 0, 0, 35)
-    submitButton.Font = Enum.Font.GothamSemibold
-    submitButton.Text = "Submit"
-    submitButton.TextColor3 = Color3.fromRGB(220, 220, 220)
-    submitButton.TextSize = 16
-    submitButton.BackgroundColor3 = Color3.fromRGB(159, 115, 255) -- SC Purple
-    submitButton.AutoButtonColor = false
+function Window:Remove()
+    if self._toggleConnection then self._toggleConnection:Disconnect(); self._toggleConnection = nil end
+    if self.ScreenGui then print("[MyNewUI] Removing UI."); self.ScreenGui:Destroy(); for k, v in pairs(self) do self[k] = nil end end
+end
 
-    local submitCorner = Instance.new("UICorner", submitButton)
-    submitCorner.CornerRadius = UDim.new(0, 3)
+-- / Key System
+function MyUILibrary:RequestKey(options)
+    options = options or {}
+    local correctKey = options.CorrectKey or "DEFAULT_KEY"
+    local onSuccess = options.OnSuccess or function() print("[MyNewUI] Key Correct!") end
+    local keyPromptName = "MyNewUI_KeyPrompt"
+    local existingPrompt = CoreGui:FindFirstChild(keyPromptName)
+    if existingPrompt then existingPrompt:Destroy() end
 
-    -- Button Hover/Click Effects
-    CreateTween("btn_hover", 0.1)
-    submitButton.MouseEnter:Connect(function()
-        TweenService:Create(submitButton, TweenTable["btn_hover"], {BackgroundColor3 = Color3.fromRGB(179, 135, 255)}):Play()
-    end)
-    submitButton.MouseLeave:Connect(function()
-         TweenService:Create(submitButton, TweenTable["btn_hover"], {BackgroundColor3 = Color3.fromRGB(159, 115, 255)}):Play()
-    end)
-    submitButton.MouseButton1Down:Connect(function()
-        TweenService:Create(submitButton, TweenTable["btn_hover"], {BackgroundColor3 = Color3.fromRGB(139, 95, 235)}):Play()
-    end)
-     submitButton.MouseButton1Up:Connect(function()
-         TweenService:Create(submitButton, TweenTable["btn_hover"], {BackgroundColor3 = Color3.fromRGB(179, 135, 255)}):Play()
-     end)
+    local screenGui = CreateElement("ScreenGui", {Name = keyPromptName, Parent = CoreGui, DisplayOrder = 10000, ZIndexBehavior = Enum.ZIndexBehavior.Sibling})
+    local overlay = CreateElement("Frame", {Name = "Overlay", Parent = screenGui, Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.6, Active = true})
+    local promptBox = CreateElement("Frame", {Name = "PromptBox", Parent = overlay, Size = UDim2.new(0, 300, 0, 160), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), BackgroundColor3 = Color3.fromRGB(40, 40, 45), BorderSizePixel = 0})
+    CreateElement("UICorner", { CornerRadius = UDim.new(0, 4), Parent = promptBox })
+    local title = CreateElement("TextLabel", {Name = "Title", Parent = promptBox, Size = UDim2.new(1, 0, 0, 35), BackgroundColor3 = Color3.fromRGB(55, 55, 60), Text = "Требуется Ключ", Font = Enum.Font.GothamSemibold, TextSize = 16, TextColor3 = Color3.fromRGB(220, 220, 225)})
+    local infoLabel = CreateElement("TextLabel", {Name = "Info", Parent = promptBox, Size = UDim2.new(0.9, 0, 0, 20), Position = UDim2.new(0.5, 0, 0, 45), AnchorPoint = Vector2.new(0.5, 0), Text = "Введите ключ доступа:", Font = Enum.Font.Code, TextSize = 14, TextColor3 = Color3.fromRGB(180, 180, 180), BackgroundTransparency = 1})
+    local keyInput = CreateElement("TextBox", {Name = "Input", Parent = promptBox, Size = UDim2.new(0.8, 0, 0, 30), Position = UDim2.new(0.5, 0, 0, 75), AnchorPoint = Vector2.new(0.5, 0), BackgroundColor3 = Color3.fromRGB(30, 30, 35), BorderSizePixel = 0, Font = Enum.Font.Code, TextSize = 14, TextColor3 = Color3.fromRGB(210, 210, 210), PlaceholderText = "Ключ...", PlaceholderColor3 = Color3.fromRGB(100, 100, 100), ClearTextOnFocus = false})
+    CreateElement("UICorner", { CornerRadius = UDim.new(0, 3), Parent = keyInput })
+    local submitButton = CreateElement("TextButton", {Name = "Submit", Parent = promptBox, Size = UDim2.new(0.5, 0, 0, 30), Position = UDim2.new(0.5, 0, 0, 115), AnchorPoint = Vector2.new(0.5, 0), BackgroundColor3 = Color3.fromRGB(80, 80, 90), Font = Enum.Font.GothamSemibold, Text = "Ввод", TextSize = 14, TextColor3 = Color3.fromRGB(220, 220, 220), AutoButtonColor = false})
+    CreateElement("UICorner", { CornerRadius = UDim.new(0, 3), Parent = submitButton })
 
-    -- Submit Logic
+    submitButton.MouseEnter:Connect(function() submitButton.BackgroundColor3 = Color3.fromRGB(100, 100, 110) end)
+    submitButton.MouseLeave:Connect(function() submitButton.BackgroundColor3 = Color3.fromRGB(80, 80, 90) end)
+
     local function checkKey()
-        if keyInput.Text == library.CorrectKey then
-            library.KeyAccepted = true
-            infoLabel.TextColor3 = Color3.fromRGB(70, 255, 100) -- Green
-            infoLabel.Text = "Access Granted. Initializing..."
-            submitButton.Active = false -- Disable button after success
-            --keyInput.Editable = false
-             -- Start Usage Time Tracking
-            library:LoadUsageTime()
-            task.wait(0.5)
-            keyPromptScreen:Destroy() -- Destroy prompt
-            library:ShowGreeting() -- Show the fancy greeting
+        if keyInput.Text == correctKey then
+            MyUILibrary._IsKeyAccepted = true
+            screenGui:Destroy()
+            pcall(onSuccess)
         else
-            library.KeyAccepted = false
-            infoLabel.TextColor3 = Color3.fromRGB(255, 70, 70) -- Red
-            infoLabel.Text = "Incorrect Key. Please try again."
-            keyInput.Text = "" -- Clear input on failure
-
-            -- Shake Animation for promptBox on error
-            CreateTween("shake", 0.08, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, 4, true)
-            local startPos = promptBox.Position
-            local shakeTween = TweenService:Create(promptBox, TweenTable["shake"], {Position = startPos + UDim2.new(0, 5, 0, 0)})
-            shakeTween:Play()
-            shakeTween.Completed:Connect(function()
-                promptBox.Position = startPos -- Reset position after shake
-            end)
+            infoLabel.Text = "Неверный ключ!"
+            infoLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
+            keyInput.Text = ""
+            local originalPos = promptBox.Position
+            local tween = TweenService:Create(promptBox, TweenInfo.new(0.08, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, 4, true), {Position = originalPos + UDim2.new(0, 5, 0, 0)})
+            tween:Play()
+            tween.Completed:Connect(function() promptBox.Position = originalPos end)
         end
     end
 
     submitButton.MouseButton1Click:Connect(checkKey)
-    keyInput.FocusLost:Connect(function(enterPressed)
-        if enterPressed then
-            checkKey()
+    keyInput.FocusLost:Connect(function(enterPressed) if enterPressed then checkKey() end end)
+    print("[MyNewUI] Key prompt displayed.")
+end
+
+-- / Greeting Screen
+function MyUILibrary:ShowGreeting(options, callback)
+    options = options or {}
+    callback = callback or function() print("[MyNewUI] Greeting finished.") end
+    local duration = options.Duration or 2.5
+    local greetingName = "MyNewUI_Greeting"
+    -- player variable is now an upvalue (defined at the top)
+
+    local existingGreeting = CoreGui:FindFirstChild(greetingName)
+    if existingGreeting then existingGreeting:Destroy() end
+
+    local screenGui = CreateElement("ScreenGui", {Name = greetingName, Parent = CoreGui, DisplayOrder = 10001, ZIndexBehavior = Enum.ZIndexBehavior.Sibling})
+    local overlay = CreateElement("Frame", {Name = "Overlay", Parent = screenGui, Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 1})
+    local textLabel = CreateElement("TextLabel", {Name = "WelcomeText", Parent = overlay, Size = UDim2.new(1, -40, 0, 50), Position = UDim2.fromScale(0.5, 0.5), AnchorPoint = Vector2.new(0.5, 0.5), Text = "Добро пожаловать, " .. (player and player.DisplayName or "Игрок") .. "!", Font = Enum.Font.GothamBold, TextSize = 24, TextColor3 = Color3.fromRGB(230, 230, 230), TextWrapped = true, BackgroundTransparency = 1, TextTransparency = 1})
+    local loadBarBg = CreateElement("Frame", {Name = "LoadBarBg", Parent = overlay, Size = UDim2.new(0.5, 0, 0, 6), Position = UDim2.new(0.5, 0, 0.6, 0), AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = Color3.fromRGB(60, 60, 65), BackgroundTransparency = 1, BorderSizePixel = 0})
+    CreateElement("UICorner", {CornerRadius = UDim.new(1,0), Parent = loadBarBg})
+    local loadBarFill = CreateElement("Frame", {Name = "LoadBarFill", Parent = loadBarBg, Size = UDim2.fromScale(0, 1), BackgroundColor3 = Color3.fromRGB(150, 100, 255), BorderSizePixel = 0})
+    CreateElement("UICorner", {CornerRadius = UDim.new(1,0), Parent = loadBarFill})
+
+    local fadeInTime = 0.4
+    local waitTime = math.max(0, duration - (fadeInTime * 2)) -- Ensure waitTime is not negative
+    local loadTime = math.max(0.1, waitTime * 0.8) -- Ensure loadTime is slightly positive
+
+    TweenService:Create(overlay, TweenInfo.new(fadeInTime), {BackgroundTransparency = 0.6}):Play()
+    local textTween = TweenService:Create(textLabel, TweenInfo.new(fadeInTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, false, fadeInTime * 0.5), {TextTransparency = 0})
+    textTween:Play()
+    TweenService:Create(loadBarBg, TweenInfo.new(fadeInTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, false, fadeInTime * 0.6), {BackgroundTransparency = 0.5}):Play()
+    local loadTween = TweenService:Create(loadBarFill, TweenInfo.new(loadTime, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, 0, false, fadeInTime * 0.8), {Size = UDim2.fromScale(1, 1)})
+    loadTween:Play()
+
+    task.delay(duration - fadeInTime, function()
+        TweenService:Create(overlay, TweenInfo.new(fadeInTime), {BackgroundTransparency = 1}):Play()
+        TweenService:Create(textLabel, TweenInfo.new(fadeInTime), {TextTransparency = 1}):Play()
+        TweenService:Create(loadBarBg, TweenInfo.new(fadeInTime), {BackgroundTransparency = 1}):Play()
+        task.delay(fadeInTime, function()
+            if screenGui and screenGui.Parent then screenGui:Destroy() end -- Check if still exists
+            pcall(callback)
+        end)
+    end)
+    print("[MyNewUI] Greeting displayed.")
+end
+
+-- / Library Initialization Function (Main UI)
+function MyUILibrary:Init(options)
+    if not MyUILibrary._IsKeyAccepted then
+         warn("[MyNewUI] Init called, but key was not accepted. Use RequestKey first.")
+         return nil
+    end
+
+    options = options or {}
+    local title = options.Title or "My UI Library"
+    local toggleKey = options.ToggleKey or Enum.KeyCode.RightControl
+    local initialSize = options.Size or UDim2.new(0, 550, 0, 350)
+    local initialPosition = options.Position or UDim2.fromScale(0.5, 0.5)
+    local uiName = "MyNewUI_Screen"
+
+    print("[MyNewUI] Initializing Main UI...")
+
+    local existingGui = CoreGui:FindFirstChild(uiName)
+    if existingGui then warn("[MyNewUI] Main UI already exists. Destroying old one."); existingGui:Destroy() end
+
+    local screenGui = CreateElement("ScreenGui", {Name = uiName, Parent = CoreGui, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, DisplayOrder = 9990})
+    local mainFrame = CreateElement("Frame", {Name = "MainFrame", Parent = screenGui, Size = initialSize, Position = initialPosition, AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = Color3.fromRGB(40, 40, 45), BorderSizePixel = 1, BorderColor3 = Color3.fromRGB(80, 80, 90)})
+    CreateElement("UICorner", { CornerRadius = UDim.new(0, 5), Parent = mainFrame })
+    EnableDrag(mainFrame)
+
+    local header = CreateElement("Frame", {Name = "Header", Parent = mainFrame, Size = UDim2.new(1, 0, 0, 30), BackgroundColor3 = Color3.fromRGB(55, 55, 60), BorderSizePixel = 0})
+    local headerLabel = CreateElement("TextLabel", {Name = "Title", Parent = header, Size = UDim2.new(1, -10, 1, 0), Position = UDim2.fromOffset(5, 0), Text = title, Font = Enum.Font.GothamSemibold, TextSize = 16, TextColor3 = Color3.fromRGB(220, 220, 225), BackgroundTransparency = 1, TextXAlignment = Enum.TextXAlignment.Left})
+    local contentArea = CreateElement("Frame", {Name = "ContentArea", Parent = mainFrame, Size = UDim2.new(1, 0, 1, -30), Position = UDim2.fromOffset(0, 30), BackgroundTransparency = 1})
+    local tabButtonContainer = CreateElement("ScrollingFrame", {Name = "TabButtonContainer", Parent = contentArea, Size = UDim2.new(0, 130, 1, -10), Position = UDim2.fromOffset(5, 5), BackgroundColor3 = Color3.fromRGB(45, 45, 50), BorderSizePixel = 0, CanvasSize = UDim2.new(0,0,0,0), ScrollBarThickness = 4})
+    CreateElement("UICorner", { CornerRadius = UDim.new(0, 3), Parent = tabButtonContainer })
+    CreateElement("UIListLayout", {Parent = tabButtonContainer, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 4), HorizontalAlignment = Enum.HorizontalAlignment.Center})
+    CreateElement("UIPadding", { Parent = tabButtonContainer, Padding = UDim.new(0,5)})
+    local contentContainer = CreateElement("Frame", {Name = "ContentContainer", Parent = contentArea, Size = UDim2.new(1, -140, 1, -10), Position = UDim2.fromOffset(135, 5), BackgroundColor3 = Color3.fromRGB(45, 45, 50), BorderSizePixel = 0, ClipsDescendants = true})
+    CreateElement("UICorner", { CornerRadius = UDim.new(0, 3), Parent = contentContainer })
+
+    local windowInstance = {}
+    setmetatable(windowInstance, Window)
+    windowInstance.ScreenGui = screenGui
+    windowInstance.MainFrame = mainFrame
+    windowInstance._headerLabel = headerLabel
+    windowInstance._tabButtonContainer = tabButtonContainer
+    windowInstance._contentContainer = contentContainer
+    windowInstance._activeTabButton = nil
+    windowInstance._activePage = nil
+    windowInstance._toggleKey = toggleKey
+
+    windowInstance._toggleConnection = UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
+        if not gameProcessedEvent and input.KeyCode == windowInstance._toggleKey then
+            windowInstance:ToggleVisible()
         end
     end)
 
-    -- Initial Animation (Fade in prompt)
-    overlay.BackgroundTransparency = 1.0
-    promptBox.Position = UDim2.new(0.5, 0, 0.45, 0) -- Start slightly up
-    promptBox.BackgroundTransparency = 1.0
-    titleLabel.BackgroundTransparency = 1.0
-    titleLabel.TextTransparency = 1.0
-    infoLabel.TextTransparency = 1.0
-    keyInput.BackgroundTransparency = 1.0
-    keyInput.TextTransparency = 1.0
-    keyInput.PlaceholderColor3 = Color3.fromRGB(120, 120, 120) -- Ensure placeholder is visible
-    submitButton.BackgroundTransparency = 1.0
-    submitButton.TextTransparency = 1.0
-
-    CreateTween("prompt_fade_in", 0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-    CreateTween("prompt_elements_fade", 0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-
-    coroutine.wrap(function()
-        TweenService:Create(overlay, TweenTable["prompt_fade_in"], {BackgroundTransparency = 0.3}):Play()
-        TweenService:Create(promptBox, TweenTable["prompt_fade_in"], {Position = UDim2.new(0.5, 0, 0.5, 0), BackgroundTransparency = 0}):Play()
-        wait(0.2)
-        TweenService:Create(titleLabel, TweenTable["prompt_elements_fade"], {BackgroundTransparency = 0, TextTransparency = 0}):Play()
-        TweenService:Create(infoLabel, TweenTable["prompt_elements_fade"], {TextTransparency = 0}):Play()
-        TweenService:Create(keyInput, TweenTable["prompt_elements_fade"], {BackgroundTransparency = 0, TextTransparency = 0}):Play()
-        TweenService:Create(submitButton, TweenTable["prompt_elements_fade"], {BackgroundTransparency = 0, TextTransparency = 0}):Play()
-    end)()
-
+    print("[MyNewUI] Main UI Initialization complete.")
+    return windowInstance
 end
 
+MyUILibrary._IsKeyAccepted = false -- Сбрасываем флаг при загрузке библиотеки
 
--- / Main UI Initialization Function (library:Init)
-function library:Init(keybind)
-    print("SC Lib: Init function started.") --> DEBUG PRINT
-
-    -- IMPORTANT: Check if the key was accepted BEFORE initializing the main UI
-    if not library.KeyAccepted then
-        warn("SC Lib: Cannot initialize UI - Key not accepted.")
-        library:RequestKey() -- Re-prompt if called without key being accepted
-        return nil -- Stop initialization
-    end
-
-    -- Check if already initialized and just toggle visibility
-    -- Use the library's internal reference if it exists
-    if library._ExistingControl and CoreGuiService:FindFirstChild("SC_MainScreen") then
-         local existingScreen = CoreGuiService:FindFirstChild("SC_MainScreen")
-         if existingScreen then
-              existingScreen.Enabled = not existingScreen.Enabled
-              print("SC Lib: Toggled existing UI visibility.")
-              return library._ExistingControl -- Return the existing control table
-         end
-    end
-
-    -- Cleanup any old UI remnants just in case
-    for _,v in next, CoreGuiService:GetChildren() do
-        if v.Name == "SC_MainScreen" then
-             pcall(v.Destroy, v)
-        end
-    end
-
-    -- Local variables needed within the pcall scope
-    local screen = nil
-    local TabLibrary = {} -- Initialize TabLibrary here
-    local headerLabel = nil
-    local toggleKey = keybind or Enum.KeyCode.RightAlt
-    local success, err = pcall(function() -- Wrap the main logic
-
-        library.title = library.title or "SC UI" -- Use the set title or default
-        -- toggleKey assignment moved outside pcall, already done
-
-        -- Create Main ScreenGui
-        screen = Instance.new("ScreenGui")
-        screen.Name = "SC_MainScreen"
-        screen.Parent = CoreGuiService
-        screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-        screen.DisplayOrder = 990 -- Below notifications/watermark
-        screen.ResetOnSpawn = false -- Prevent UI reset on respawn
-
-        -- Main Window Frame (Edge/Border)
-        local edge = Instance.new("Frame")
-        edge.Name = "edge"
-        edge.Parent = screen
-        edge.AnchorPoint = Vector2.new(0.5, 0.5)
-        edge.BackgroundColor3 = Color3.fromRGB(50, 50, 50) -- Darker edge
-        edge.Position = UDim2.new(0.5, 0, 0.5, 0)
-        edge.Size = UDim2.new(0, 620, 0, 420) -- Slightly larger default size
-        edge.BorderSizePixel = 0 -- Use background as border instead
-
-        pcall(drag, edge, 0.04) -- Use the improved drag function safely
-
-        local CanChangeVisibility = true
-        local keybindConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
-            if not gameProcessed and CanChangeVisibility and input.KeyCode == toggleKey then
-                 if screen and screen.Parent then -- Check if screen still exists
-                      screen.Enabled = not screen.Enabled -- Toggle ScreenGui enabled state
-                 end
-            end
-        end)
-        -- Store connection for later cleanup if needed (e.g., in TabLibrary:Remove)
-        -- TabLibrary._internal.KeybindConnection = keybindConnection -- Need TabLibrary._internal defined first
-
-        local edgeCorner = Instance.new("UICorner")
-        edgeCorner.CornerRadius = UDim.new(0, 4) -- Slightly more rounded
-        edgeCorner.Parent = edge
-
-        -- Main Background Frame
-        local background = Instance.new("Frame")
-        background.Name = "background"
-        background.Parent = edge
-        background.AnchorPoint = Vector2.new(0.5, 0.5)
-        background.BackgroundColor3 = Color3.fromRGB(30, 30, 30) -- Dark main background
-        background.Position = UDim2.new(0.5, 0, 0.5, 0)
-        background.Size = UDim2.new(1, -2, 1, -2) -- Fill edge minus 1px border on each side
-        background.ClipsDescendants = true
-        background.BorderSizePixel = 0
-
-        local backgroundCorner = Instance.new("UICorner")
-        backgroundCorner.CornerRadius = UDim.new(0, 3) -- Inner frame slightly less rounded
-        backgroundCorner.Parent = background
-
-        local backgroundGradient = Instance.new("UIGradient")
-        backgroundGradient.Color = ColorSequence.new{
-            ColorSequenceKeypoint.new(0.00, Color3.fromRGB(42, 42, 42)), -- Slightly lighter top
-            ColorSequenceKeypoint.new(1.00, Color3.fromRGB(30, 30, 30)) -- Darker bottom
-        }
-        backgroundGradient.Rotation = 90
-        backgroundGradient.Parent = background
-
-        -- Header Area
-        local headerFrame = Instance.new("Frame")
-        headerFrame.Name = "HeaderFrame"
-        headerFrame.Parent = background
-        headerFrame.Size = UDim2.new(1, 0, 0, 38)
-        headerFrame.BackgroundTransparency = 1.0 -- Header part of main background
-
-        -- Header Title Label (assign to outer scope variable)
-        headerLabel = Instance.new("TextLabel")
-        headerLabel.Name = "headerLabel"
-        headerLabel.Parent = headerFrame
-        headerLabel.BackgroundTransparency = 1.000
-        headerLabel.Size = UDim2.new(1, -12, 1, -12) -- Padding via size
-        headerLabel.Position = UDim2.new(0, 6, 0, 6)
-        headerLabel.Font = Enum.Font.GothamSemibold -- Nicer font
-        headerLabel.Text = library.title
-        headerLabel.TextColor3 = Color3.fromRGB(210, 210, 210) -- Brighter title
-        headerLabel.TextSize = 18.000
-        headerLabel.TextXAlignment = Enum.TextXAlignment.Left
-        headerLabel.TextYAlignment = Enum.TextYAlignment.Center
-        headerLabel.RichText = true
-
-        -- Header Separator Bar
-        local bar = Instance.new("Frame")
-        bar.Name = "bar"
-        bar.Parent = headerFrame -- Place inside header
-        bar.AnchorPoint = Vector2.new(0.5, 1)
-        bar.Position = UDim2.new(0.5, 0, 1, 0) -- Position at the bottom of header
-        bar.Size = UDim2.new(1, 0, 0, 2) -- Thicker bar
-        bar.BackgroundColor3 = Color3.fromRGB(159, 115, 255) -- SC Purple
-        bar.BackgroundTransparency = 0.200
-        bar.BorderSizePixel = 0
-
-        local barCorner = Instance.new("UICorner")
-        barCorner.CornerRadius = UDim.new(0, 1) -- Slight rounding on bar
-        barCorner.Parent = bar
-
-        -- Main Content Area (Below Header)
-        local contentArea = Instance.new("Frame")
-        contentArea.Name = "ContentArea"
-        contentArea.Parent = background
-        contentArea.AnchorPoint = Vector2.new(0, 0) -- Top-left anchor
-        contentArea.Position = UDim2.new(0, 0, 0, 38) -- Position below header
-        contentArea.Size = UDim2.new(1, 0, 1, -38) -- Fill remaining space below header
-        contentArea.BackgroundTransparency = 1.0
-
-        -- Tab Buttons Area (Left Side)
-        local tabButtonsEdge = Instance.new("Frame")
-        tabButtonsEdge.Name = "tabButtonsEdge"
-        tabButtonsEdge.Parent = contentArea
-        tabButtonsEdge.BackgroundColor3 = Color3.fromRGB(45, 45, 45) -- Slightly lighter edge for contrast
-        tabButtonsEdge.Position = UDim2.new(0, 8, 0, 8) -- Padding from edge
-        tabButtonsEdge.Size = UDim2.new(0, 160, 1, -16) -- Width 160, fill height with padding
-        tabButtonsEdge.BorderSizePixel = 0
-
-        local tabButtonCorner = Instance.new("UICorner")
-        tabButtonCorner.CornerRadius = UDim.new(0, 3)
-        tabButtonCorner.Parent = tabButtonsEdge
-
-        local tabButtons = Instance.new("ScrollingFrame") -- Use ScrollingFrame for tabs
-        tabButtons.Name = "tabButtons"
-        tabButtons.Parent = tabButtonsEdge
-        tabButtons.AnchorPoint = Vector2.new(0.5, 0.5)
-        tabButtons.BackgroundColor3 = Color3.fromRGB(35, 35, 35) -- Match inner background
-        tabButtons.ClipsDescendants = true
-        tabButtons.Position = UDim2.new(0.5, 0, 0.5, 0)
-        tabButtons.Size = UDim2.new(1,-2, 1,-2) -- Fill edge minus border
-        tabButtons.BorderSizePixel = 0
-        tabButtons.CanvasSize = UDim2.new(0,0,0,0) -- Auto-sized by layout
-        tabButtons.ScrollBarThickness = 4
-        tabButtons.ScrollBarImageColor3 = Color3.fromRGB(159, 115, 255) -- SC Purple scrollbar
-
-        local tabButtonCorner_2 = Instance.new("UICorner")
-        tabButtonCorner_2.CornerRadius = UDim.new(0, 2)
-        tabButtonCorner_2.Parent = tabButtons
-
-        local tabButtonLayout = Instance.new("UIListLayout")
-        tabButtonLayout.Name = "tabButtonLayout"
-        tabButtonLayout.Parent = tabButtons
-        tabButtonLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-        tabButtonLayout.SortOrder = Enum.SortOrder.LayoutOrder
-        tabButtonLayout.Padding = UDim.new(0, 3) -- Space between tab buttons
-
-        local tabButtonPadding = Instance.new("UIPadding")
-        tabButtonPadding.Name = "tabButtonPadding"
-        tabButtonPadding.Parent = tabButtons
-        tabButtonPadding.PaddingTop = UDim.new(0, 5)
-        tabButtonPadding.PaddingBottom = UDim.new(0, 5)
-
-        -- Container Area (Right Side)
-        local containerEdge = Instance.new("Frame")
-        containerEdge.Name = "containerEdge"
-        containerEdge.Parent = contentArea
-        containerEdge.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-        containerEdge.Position = UDim2.new(0, 176, 0, 8) -- Position right of tabs + padding
-        containerEdge.Size = UDim2.new(1, -184, 1, -16) -- Fill remaining width/height with padding
-        containerEdge.BorderSizePixel = 0
-
-        local tabButtonCorner_3 = Instance.new("UICorner")
-        tabButtonCorner_3.CornerRadius = UDim.new(0, 3)
-        tabButtonCorner_3.Parent = containerEdge
-
-        local container = Instance.new("Frame") -- This holds the actual pages (ScrollingFrames)
-        container.Name = "container"
-        container.Parent = containerEdge
-        container.AnchorPoint = Vector2.new(0.5, 0.5)
-        container.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-        container.Position = UDim2.new(0.5, 0, 0.5, 0)
-        container.Size = UDim2.new(1, -2, 1, -2)
-        container.ClipsDescendants = true
-        container.BorderSizePixel = 0
-
-        local containerCorner = Instance.new("UICorner")
-        containerCorner.CornerRadius = UDim.new(0, 2)
-        containerCorner.Parent = container
-
-        -- Tab Management Logic (Define TabLibrary methods inside pcall)
-        TabLibrary._internal = { -- Store internal state safely
-            IsFirst = true,
-            CurrentTab = nil,
-            CurrentPage = nil,
-            PageUpdateDebounce = {},
-            ComponentCleanup = {},
-            KeybindConnection = keybindConnection -- Assign stored connection
-        }
-
-        CreateTween("tab_text_color", 0.20, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
-        CreateTween("tab_bg_color", 0.15)
-
-        function TabLibrary:NewTab(title)
-            title = title or "Tab"
-            local pageName = title .. "_Page"
-            local tabButtonName = title .. "_TabButton"
-            local internal = TabLibrary._internal
-
-            -- Tab Button Creation
-            local tabButton = Instance.new("TextButton")
-            tabButton.Name = tabButtonName
-            tabButton.Parent = tabButtons -- Add to the scrolling frame for tabs
-            tabButton.BackgroundColor3 = Color3.fromRGB(55, 55, 55) -- Default tab color
-            tabButton.BackgroundTransparency = 0.0 -- Start visible
-            tabButton.Size = UDim2.new(1, -10, 0, 28) -- Fill width (-padding), fixed height
-            tabButton.AutoButtonColor = false
-            tabButton.Font = Enum.Font.GothamSemibold
-            tabButton.Text = title
-            tabButton.TextColor3 = Color3.fromRGB(170, 170, 170) -- Default text color (inactive)
-            tabButton.TextSize = 15.000
-            tabButton.RichText = true
-            tabButton.ClipsDescendants = true
-
-            local tabBtnCorner = Instance.new("UICorner", tabButton)
-            tabBtnCorner.CornerRadius = UDim.new(0, 3)
-
-            -- Page Creation (ScrollingFrame per Tab)
-            local page = Instance.new("ScrollingFrame")
-            page.Name = pageName
-            page.Parent = container -- Add pages to the main container frame
-            page.Active = true
-            page.BackgroundColor3 = Color3.fromRGB(255, 255, 255) -- Fully transparent, inherits container bg
-            page.BackgroundTransparency = 1.000
-            page.BorderSizePixel = 0
-            page.Size = UDim2.new(1, 0, 1, 0) -- Fill the container
-            page.CanvasSize = UDim2.new(0, 0, 0, 0) -- Will be updated by layout
-            page.ScrollBarThickness = 6 -- Thicker scrollbar
-            page.ScrollBarImageColor3 = Color3.fromRGB(159, 115, 255) -- SC Purple
-            page.Visible = false -- Start hidden
-
-            local pageLayout = Instance.new("UIListLayout")
-            pageLayout.Name = "pageLayout"
-            pageLayout.Parent = page
-            pageLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-            pageLayout.SortOrder = Enum.SortOrder.LayoutOrder
-            pageLayout.Padding = UDim.new(0, 6) -- Padding between elements in the page
-
-            local pagePadding = Instance.new("UIPadding")
-            pagePadding.Name = "pagePadding"
-            pagePadding.Parent = page
-            pagePadding.PaddingLeft = UDim.new(0, 8)
-            pagePadding.PaddingRight = UDim.new(0, 8)
-            pagePadding.PaddingTop = UDim.new(0, 8)
-            pagePadding.PaddingBottom = UDim.new(0, 8)
-
-            -- Tab Button Click Logic
-            local clickConn = tabButton.MouseButton1Click:Connect(function()
-                if internal.CurrentTab == tabButton then return end -- Do nothing if already selected
-
-                -- Deactivate previous tab/page
-                if internal.CurrentTab and internal.CurrentTab.Parent then
-                     pcall(function() TweenService:Create(internal.CurrentTab, TweenTable["tab_text_color"], {TextColor3 = Color3.fromRGB(170, 170, 170)}):Play() end)
-                     pcall(function() TweenService:Create(internal.CurrentTab, TweenTable["tab_bg_color"], {BackgroundColor3 = Color3.fromRGB(55, 55, 55)}):Play() end)
-                end
-                if internal.CurrentPage and internal.CurrentPage.Parent then
-                    internal.CurrentPage.Visible = false
-                end
-
-                -- Activate new tab/page
-                 if tabButton and tabButton.Parent then
-                     pcall(function() TweenService:Create(tabButton, TweenTable["tab_text_color"], {TextColor3 = Color3.fromRGB(255, 255, 255)}):Play() end) -- White text for active
-                     pcall(function() TweenService:Create(tabButton, TweenTable["tab_bg_color"], {BackgroundColor3 = Color3.fromRGB(159, 115, 255)}):Play() end) -- SC Purple background for active
-                 end
-                 if page and page.Parent then
-                     page.Visible = true
-                 end
-
-                -- Update current references
-                internal.CurrentTab = tabButton
-                internal.CurrentPage = page
-            end)
-
-            -- Set first tab as active
-            if internal.IsFirst then
-                 internal.IsFirst = false
-                 if tabButton and tabButton.Parent then
-                     tabButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-                     tabButton.BackgroundColor3 = Color3.fromRGB(159, 115, 255)
-                 end
-                 if page and page.Parent then page.Visible = true end
-                 internal.CurrentTab = tabButton
-                 internal.CurrentPage = page
-            end
-
-            -- Page Size Update Logic (Debounced)
-            local function CreateDebouncer(func, delay)
-                 local lastUpdateTime = 0; local debounceTime = delay or 0.05; local waiting = false
-                 return function(...) local now = tick(); if now - lastUpdateTime >= debounceTime and not waiting then lastUpdateTime = now; waiting = true; task.spawn(function() local s,e = pcall(func, ...); if not s then warn("SC Lib Debounce Error:", e) end; waiting = false end) end end
-             end
-             local UpdatePageSizeFunc = function() if not page or not page.Parent or not pageLayout or not pageLayout.Parent then return end; task.wait(); local contentSizeY = pageLayout.AbsoluteContentSize.Y; page.CanvasSize = UDim2.new(0, 0, 0, contentSizeY + pagePadding.PaddingTop.Offset + pagePadding.PaddingBottom.Offset) end
-
-             internal.PageUpdateDebounce[page] = CreateDebouncer(UpdatePageSizeFunc)
-             local DebouncedUpdatePageSize = internal.PageUpdateDebounce[page]
-
-             local childAddedConn = page.ChildAdded:Connect(DebouncedUpdatePageSize)
-             local childRemovedConn = page.ChildRemoved:Connect(DebouncedUpdatePageSize)
-             local layoutSizeConn = pageLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(DebouncedUpdatePageSize)
-
-             -- Setup cleanup for this page
-             internal.ComponentCleanup[page] = {}
-             local componentCleanup = internal.ComponentCleanup[page]
-             table.insert(componentCleanup, function() clickConn:Disconnect() end) -- Disconnect click listener
-             table.insert(componentCleanup, function() childAddedConn:Disconnect() end)
-             table.insert(componentCleanup, function() childRemovedConn:Disconnect() end)
-             table.insert(componentCleanup, function() layoutSizeConn:Disconnect() end)
-             table.insert(componentCleanup, function() internal.PageUpdateDebounce[page] = nil end)
-
-            -- Components API (functions for adding elements to this tab's page)
-            local Components = {}
-            function Components:NewLabel(...) local el, fn = library:_CreateLabel(page, DebouncedUpdatePageSize, ...); if el then table.insert(componentCleanup, function() pcall(el.Destroy, el) end) end return fn end
-            function Components:NewButton(...) local el, fn = library:_CreateButton(page, DebouncedUpdatePageSize, ...); if el then table.insert(componentCleanup, function() pcall(el.Destroy, el) end) end return fn end
-            function Components:NewSection(...) local el, fn = library:_CreateSection(page, DebouncedUpdatePageSize, ...); if el then table.insert(componentCleanup, function() pcall(el.Destroy, el) end) end return fn end
-            function Components:NewSeparator(...) local el, fn = library:_CreateSeparator(page, DebouncedUpdatePageSize, ...); if el then table.insert(componentCleanup, function() pcall(el.Destroy, el) end) end return fn end
-            function Components:NewToggle(...) local el, fn = library:_CreateToggle(page, DebouncedUpdatePageSize, ...); if el then table.insert(componentCleanup, function() pcall(el.Destroy, el) end) end return fn end
-            function Components:NewKeybind(...) local el, fn = library:_CreateKeybind(page, DebouncedUpdatePageSize, ...); if el then table.insert(componentCleanup, function() pcall(el.Destroy, el) end) end return fn end
-            function Components:NewTextbox(...) local el, fn = library:_CreateTextbox(page, DebouncedUpdatePageSize, ...); if el then table.insert(componentCleanup, function() pcall(el.Destroy, el) end) end return fn end
-            function Components:NewSelector(...) local el, fn = library:_CreateSelector(page, DebouncedUpdatePageSize, ...); if el then table.insert(componentCleanup, function() pcall(el.Destroy, el) end) end return fn end
-            function Components:NewSlider(...) local el, fn = library:_CreateSlider(page, DebouncedUpdatePageSize, ...); if el then table.insert(componentCleanup, function() pcall(el.Destroy, el) end) end return fn end
-
-            -- Tab Control Functions
-            function Components:Open() if tabButton and tabButton.Parent then tabButton:MouseButton1Click() end return Components end
-            function Components:Remove()
-                local wasActive = (internal.CurrentTab == tabButton)
-                local cleanupFuncs = internal.ComponentCleanup[page]; if cleanupFuncs then for i = #cleanupFuncs, 1, -1 do pcall(cleanupFuncs[i]) end; internal.ComponentCleanup[page] = nil end
-                if tabButton and tabButton.Parent then pcall(tabButton.Destroy, tabButton) end
-                if page and page.Parent then pcall(page.Destroy, page) end
-                if wasActive then local nextBtn = tabButtons:FindFirstChildWhichIsA("TextButton"); if nextBtn then internal.CurrentTab=nil; internal.CurrentPage=nil; pcall(nextBtn.MouseButton1Click, nextBtn) else internal.CurrentTab=nil; internal.CurrentPage=nil; internal.IsFirst=true end end; return nil
-            end
-            function Components:Hide() if tabButton and tabButton.Parent then tabButton.Visible=false end; if internal.CurrentTab==tabButton and page and page.Parent then page.Visible=false end; return Components end
-            function Components:Show() if tabButton and tabButton.Parent then tabButton.Visible=true end; if internal.CurrentTab==tabButton and page and page.Parent then page.Visible=true end; return Components end
-            function Components:Text(newTitle) title = newTitle or "Tab"; if tabButton and tabButton.Parent then tabButton.Text=title end; if page and page.Parent then page.Name=title.."_Page" end; return Components end
-
-            return Components -- Return the API for this tab
-        end -- End of NewTab
-
-
-        -- Main Library Window Control Functions (Define methods on the outer TabLibrary table)
-        function TabLibrary:Remove()
-            library:SaveUsageTime(); library.trackingEnabled = false
-            if TabLibrary._internal.KeybindConnection then pcall(TabLibrary._internal.KeybindConnection.Disconnect, TabLibrary._internal.KeybindConnection); TabLibrary._internal.KeybindConnection = nil end
-            if screen and screen.Parent then pcall(screen.Destroy, screen) end
-            library.UI_Initialized = false; library._ExistingControl = nil; TabLibrary = nil; return nil
-        end
-        function TabLibrary:Text(newTitle) library.title = newTitle or "SC UI"; if headerLabel and headerLabel.Parent then headerLabel.Text = library.title end; return TabLibrary end
-        function TabLibrary:UpdateKeybind(newKey) if newKey and typeof(newKey)=="EnumItem" and newKey.EnumType==Enum.KeyCode then toggleKey=newKey else warn("SC Lib UpdateKeybind: Invalid KeyCode") end; return TabLibrary end
-
-        -- Initialize Notification System if not already done
-        if not library.Notify then library:InitNotifications() end
-        -- Create default watermark
-        library:Watermark()
-
-        -- Ensure flags are set *inside* the pcall if it succeeds
-        print("SC Lib: Init pcall finished setup. Setting flags...") --> DEBUG PRINT
-        library.UI_Initialized = true
-        if screen and screen.Parent then screen.Enabled = true end -- Check screen exists
-        library._ExistingControl = TabLibrary
-        print("SC Lib: Flags set inside pcall.") --> DEBUG PRINT
-
-    end) -- End of pcall
-
-    if not success then
-        warn("!!!!!!!! SC Lib: CRITICAL ERROR DURING Init execution !!!!!!!!", err)
-        library.UI_Initialized = false -- Ensure flag is false on error
-        library._ExistingControl = nil
-        -- Optionally show an error notification
-        if library.Notify then library.Notify("UI Init Failed: "..tostring(err), 10, "error") end
-        return nil -- Return nil on failure
-    else
-         print("SC Lib: Init function completed successfully. Returning TabLibrary.") --> DEBUG PRINT
-         return TabLibrary -- Return the created TabLibrary table on success
-    end
-end -- End of library:Init
-
-
--- / Entry Point: Start with the key request
-if library.KeyAccepted then
-     -- If script re-runs and key is already accepted (e.g., via _G flag if implemented), skip prompt
-     library:ShowGreeting()
-else
-     library:RequestKey()
-end
-
-
-return library -- Return the main library object
-
---- END OF REVISED FILE SC Lib Source.txt ---
+return MyUILibrary
