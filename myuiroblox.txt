@@ -1,7 +1,7 @@
 --[[
   UI lib made by (SupremeCreativity) sc.owner
-  
-  - Please do not use this without permission, I am working really hard on this UI to make it perfect and do not have a big 
+
+  - Please do not use this without permission, I am working really hard on this UI to make it perfect and do not have a big
     problem with other people using it, please just make sure you message me and ask me before using.
 ]]
 
@@ -42,11 +42,12 @@ local drag = function(obj, latency)
     obj = obj
     latency = latency or 0.06
 
-    toggled = nil
-    input = nil
-    start = nil
+    local toggled = nil
+    local input = nil
+    local start = nil
+    local startPos = nil
 
-    function updateInput(input)
+    local function updateInput(input)
         local Delta = input.Position - start
         local Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + Delta.X, startPos.Y.Scale, startPos.Y.Offset + Delta.Y)
         TweenService:Create(obj, TweenInfo.new(latency), {Position = Position}):Play()
@@ -87,7 +88,7 @@ local library = {
 
 coroutine.wrap(function()
     RunService.RenderStepped:Connect(function(v)
-        library.fps =  math.round(1/v)
+        library.fps = math.floor(1/v + 0.5) -- Using math.floor with rounding instead of math.round
     end)
 end)()
 
@@ -159,7 +160,7 @@ function library:GetTime(type)
     elseif type == "ISO" then -- ISO / UTC ( 1min = 1, 1hour = 100)
         return os.date("%z")
     elseif type == "zone" then -- time zone
-        return os.date("%Z") 
+        return os.date("%Z")
     end
 end
 
@@ -205,13 +206,13 @@ function library:Watermark(text)
         end
     end
 
-    tetx = text or "SC v2"
+    text = text or "SC v2"
 
     local watermark = Instance.new("ScreenGui")
     watermark.Name = "SCUI_Watermark" -- Prefix name
     watermark.Parent = Player.PlayerGui -- Change Parent
     watermark.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    
+
     local watermarkLayout = Instance.new("UIListLayout")
     watermarkLayout.Name = "watermarkLayout"
     watermarkLayout.Parent = watermark
@@ -219,7 +220,7 @@ function library:Watermark(text)
     watermarkLayout.SortOrder = Enum.SortOrder.LayoutOrder
     watermarkLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
     watermarkLayout.Padding = UDim.new(0, 4)
-    
+
     local watermarkPadding = Instance.new("UIPadding")
     watermarkPadding.Name = "watermarkPadding"
     watermarkPadding.Parent = watermark
@@ -299,7 +300,7 @@ function library:Watermark(text)
     waterText.Size = UDim2.new(0, NewSize.X + 8, 0, 24)
 
     local waterPadding = Instance.new("UIPadding")
-    waterPadding.Name = "notifPadding"
+    waterPadding.Name = "waterPadding"
     waterPadding.Parent = waterText
     waterPadding.PaddingBottom = UDim.new(0, 4)
     waterPadding.PaddingLeft = UDim.new(0, 4)
@@ -328,18 +329,18 @@ function library:Watermark(text)
         local waterText = Instance.new("TextLabel")
         local waterPadding = Instance.new("UIPadding")
         local backgroundLayout = Instance.new("UIListLayout")
-    
+
         edge.Name = "edge"
         edge.AnchorPoint = Vector2.new(0.5, 0.5)
         edge.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
         edge.Position = UDim2.new(0.5, 0, -0.03, 0)
         edge.Size = UDim2.new(0, 0, 0, 26)
         edge.BackgroundTransparency = 1
-    
+
         edgeCorner.CornerRadius = UDim.new(0, 2)
         edgeCorner.Name = "edgeCorner"
         edgeCorner.Parent = edge
-    
+
         background.Name = "background"
         background.Parent = edge
         background.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -348,33 +349,33 @@ function library:Watermark(text)
         background.ClipsDescendants = true
         background.Position = UDim2.new(0.5, 0, 0.5, 0)
         background.Size = UDim2.new(0, 0, 0, 24)
-    
+
         barFolder.Name = "barFolder"
         barFolder.Parent = background
-    
+
         bar.Name = "bar"
         bar.Parent = barFolder
         bar.BackgroundColor3 = Color3.fromRGB(159, 115, 255)
         bar.BackgroundTransparency = 0
         bar.Size = UDim2.new(0, 0, 0, 1)
-    
+
         barCorner.CornerRadius = UDim.new(0, 2)
         barCorner.Name = "barCorner"
         barCorner.Parent = bar
-    
+
         barLayout.Name = "barLayout"
         barLayout.Parent = barFolder
         barLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    
+
         backgroundGradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0.00, Color3.fromRGB(34, 34, 34)), ColorSequenceKeypoint.new(1.00, Color3.fromRGB(28, 28, 28))}
         backgroundGradient.Rotation = 90
         backgroundGradient.Name = "backgroundGradient"
         backgroundGradient.Parent = background
-    
+
         backgroundCorner.CornerRadius = UDim.new(0, 2)
         backgroundCorner.Name = "backgroundCorner"
         backgroundCorner.Parent = background
-    
+
         waterText.Name = "notifText"
         waterText.Parent = background
         waterText.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
@@ -387,17 +388,17 @@ function library:Watermark(text)
         waterText.TextTransparency = 1
         waterText.TextSize = 14.000
         waterText.RichText = true
-    
+
         local NewSize = TextService:GetTextSize(waterText.Text, waterText.TextSize, waterText.Font, Vector2.new(math.huge, math.huge))
         waterText.Size = UDim2.new(0, NewSize.X + 8, 0, 24)
-    
+
         waterPadding.Name = "notifPadding"
         waterPadding.Parent = waterText
         waterPadding.PaddingBottom = UDim.new(0, 4)
         waterPadding.PaddingLeft = UDim.new(0, 4)
         waterPadding.PaddingRight = UDim.new(0, 4)
         waterPadding.PaddingTop = UDim.new(0, 4)
-    
+
         backgroundLayout.Name = "backgroundLayout"
         backgroundLayout.Parent = background
         backgroundLayout.SortOrder = Enum.SortOrder.LayoutOrder
@@ -421,7 +422,7 @@ function library:Watermark(text)
 
     local WatermarkFunctions = {}
     function WatermarkFunctions:AddWatermark(text)
-        tetx = text or "SC v2"
+        text = text or "SC v2"
 
         local edge, edgeCorner, background, barFolder, bar, barCorner, barLayout, backgroundGradient, backgroundCorner, waterText, waterPadding, backgroundLayout, NewSize = createWatermarkElement(text)
         edge.Parent = watermark
@@ -452,19 +453,19 @@ function library:Watermark(text)
             new = new or text
             waterText.Text = new
 
-        local NewSize = TextService:GetTextSize(waterText.Text, waterText.TextSize, waterText.Font, Vector2.new(math.huge, math.huge))
-        coroutine.wrap(function()
-            TweenService:Create(edge, TweenTable["wm_2"], {Size = UDim2.new(0, NewSize.x + 10, 0, 26)}):Play()
-            TweenService:Create(background, TweenTable["wm_2"], {Size = UDim2.new(0, NewSize.x + 8, 0, 24)}):Play()
-            TweenService:Create(bar, TweenTable["wm_2"], {Size = UDim2.new(0, NewSize.x + 8, 0, 1)}):Play()
-            TweenService:Create(waterText, TweenTable["wm_2"], {Size = UDim2.new(0, NewSize.x + 8, 0, 1)}):Play()
-        end)()
+            local NewSize = TextService:GetTextSize(waterText.Text, waterText.TextSize, waterText.Font, Vector2.new(math.huge, math.huge))
+            coroutine.wrap(function()
+                TweenService:Create(edge, TweenTable["wm_2"], {Size = UDim2.new(0, NewSize.x + 10, 0, 26)}):Play()
+                TweenService:Create(background, TweenTable["wm_2"], {Size = UDim2.new(0, NewSize.x + 8, 0, 24)}):Play()
+                TweenService:Create(bar, TweenTable["wm_2"], {Size = UDim2.new(0, NewSize.x + 8, 0, 1)}):Play()
+                TweenService:Create(waterText, TweenTable["wm_2"], {Size = UDim2.new(0, NewSize.x + 8, 0, 1)}):Play()
+            end)()
 
-        return WatermarkFunctions
+            return NewWatermarkFunctions
     end
     --
     function WatermarkFunctions:Remove()
-        Watermark:Destroy()
+        watermark:Destroy()
         return WatermarkFunctions
     end
     return WatermarkFunctions
@@ -498,7 +499,7 @@ function library:InitNotifications(text, duration, callback)
 
     local Notification = {}
     function Notification:Notify(text, duration, type, callback)
-        
+
         CreateTween("notification_load", 0.2)
 
         text = text or "please wait."
@@ -518,17 +519,17 @@ function library:InitNotifications(text, duration, callback)
         local notifText = Instance.new("TextLabel")
         local notifPadding = Instance.new("UIPadding")
         local backgroundLayout = Instance.new("UIListLayout")
-    
+
         edge.Name = "edge"
         edge.Parent = Notifications
         edge.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
         edge.BackgroundTransparency = 1.000
         edge.Size = UDim2.new(0, 0, 0, 26)
-    
+
         edgeCorner.CornerRadius = UDim.new(0, 2)
         edgeCorner.Name = "edgeCorner"
         edgeCorner.Parent = edge
-    
+
         background.Name = "background"
         background.Parent = edge
         background.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -537,10 +538,10 @@ function library:InitNotifications(text, duration, callback)
         background.ClipsDescendants = true
         background.Position = UDim2.new(0.5, 0, 0.5, 0)
         background.Size = UDim2.new(0, 0, 0, 24)
-    
+
         barFolder.Name = "barFolder"
         barFolder.Parent = background
-    
+
         bar.Name = "bar"
         bar.Parent = barFolder
         bar.BackgroundColor3 = Color3.fromRGB(159, 115, 255)
@@ -557,24 +558,24 @@ function library:InitNotifications(text, duration, callback)
         elseif type == "information" then
             bar.BackgroundColor3 = Color3.fromRGB(126, 117, 255)
         end
-    
+
         barCorner.CornerRadius = UDim.new(0, 2)
         barCorner.Name = "barCorner"
         barCorner.Parent = bar
-    
+
         barLayout.Name = "barLayout"
         barLayout.Parent = barFolder
         barLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    
+
         backgroundGradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0.00, Color3.fromRGB(34, 34, 34)), ColorSequenceKeypoint.new(1.00, Color3.fromRGB(28, 28, 28))}
         backgroundGradient.Rotation = 90
         backgroundGradient.Name = "backgroundGradient"
         backgroundGradient.Parent = background
-    
+
         backgroundCorner.CornerRadius = UDim.new(0, 2)
         backgroundCorner.Name = "backgroundCorner"
         backgroundCorner.Parent = background
-    
+
         notifText.Name = "notifText"
         notifText.Parent = background
         notifText.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
@@ -587,19 +588,19 @@ function library:InitNotifications(text, duration, callback)
         notifText.TextTransparency = 1.000
         notifText.TextXAlignment = Enum.TextXAlignment.Left
         notifText.RichText = true
-    
+
         notifPadding.Name = "notifPadding"
         notifPadding.Parent = notifText
         notifPadding.PaddingBottom = UDim.new(0, 4)
         notifPadding.PaddingLeft = UDim.new(0, 4)
         notifPadding.PaddingRight = UDim.new(0, 4)
         notifPadding.PaddingTop = UDim.new(0, 4)
-    
+
         backgroundLayout.Name = "backgroundLayout"
         backgroundLayout.Parent = background
         backgroundLayout.SortOrder = Enum.SortOrder.LayoutOrder
         backgroundLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-    
+
         local NewSize = TextService:GetTextSize(notifText.Text, notifText.TextSize, notifText.Font, Vector2.new(math.huge, math.huge))
         CreateTween("notification_wait", duration, Enum.EasingStyle.Quad)
         local IsRunning = false
@@ -677,11 +678,11 @@ function library:Introduction()
     local SC = Instance.new("TextLabel")
     local text = Instance.new("TextLabel")
     local pageLayout = Instance.new("UIListLayout")
-    
+
     introduction.Name = "SCUI_Introduction" -- Prefix name
     introduction.Parent = Player.PlayerGui -- Change Parent
     introduction.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    
+
     edge.Name = "edge"
     edge.Parent = introduction
     edge.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -689,11 +690,11 @@ function library:Introduction()
     edge.BackgroundTransparency = 1
     edge.Position = UDim2.new(0.511773348, 0, 0.5, 0)
     edge.Size = UDim2.new(0, 300, 0, 308)
-    
+
     edgeCorner.CornerRadius = UDim.new(0, 2)
     edgeCorner.Name = "edgeCorner"
     edgeCorner.Parent = edge
-    
+
     background.Name = "background"
     background.Parent = edge
     background.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -702,34 +703,34 @@ function library:Introduction()
     background.ClipsDescendants = true
     background.Position = UDim2.new(0.5, 0, 0.5, 0)
     background.Size = UDim2.new(0, 298, 0, 306)
-    
+
     backgroundGradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0.00, Color3.fromRGB(34, 34, 34)), ColorSequenceKeypoint.new(1.00, Color3.fromRGB(28, 28, 28))}
     backgroundGradient.Rotation = 90
     backgroundGradient.Name = "backgroundGradient"
     backgroundGradient.Parent = background
-    
+
     backgroundCorner.CornerRadius = UDim.new(0, 2)
     backgroundCorner.Name = "backgroundCorner"
     backgroundCorner.Parent = background
-    
+
     barFolder.Name = "barFolder"
     barFolder.Parent = background
-    
+
     bar.Name = "bar"
     bar.Parent = barFolder
     bar.BackgroundColor3 = Color3.fromRGB(159, 115, 255)
     bar.BackgroundTransparency = 0.200
     bar.Size = UDim2.new(0, 0, 0, 1)
-    
+
     barCorner.CornerRadius = UDim.new(0, 2)
     barCorner.Name = "barCorner"
     barCorner.Parent = bar
-    
+
     barLayout.Name = "barLayout"
     barLayout.Parent = barFolder
     barLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
     barLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    
+
     SCLogo.Name = "SCLogo"
     SCLogo.Parent = background
     SCLogo.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -741,7 +742,7 @@ function library:Introduction()
     SCLogo.Image = "http://www.roblox.com/asset/?id=9365068051"
     SCLogo.ImageColor3 = Color3.fromRGB(159, 115, 255)
     SCLogo.ImageTransparency = 1
-    
+
     hashLogo.Name = "hashLogo"
     hashLogo.Parent = background
     hashLogo.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -753,7 +754,7 @@ function library:Introduction()
     hashLogo.Image = "http://www.roblox.com/asset/?id=9365069861"
     hashLogo.ImageColor3 = Color3.fromRGB(159, 115, 255)
     hashLogo.ImageTransparency = 1
-    
+
     SC.Name = "SC"
     SC.Parent = background
     SC.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
@@ -764,7 +765,7 @@ function library:Introduction()
     SC.TextColor3 = Color3.fromRGB(124, 124, 124)
     SC.TextSize = 10.000
     SC.TextTransparency = 1
-    
+
     text.Name = "text"
     text.Parent = background
     text.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
@@ -777,20 +778,20 @@ function library:Introduction()
     text.TextSize = 10.000
     text.TextTransparency = 1
     text.RichText = true
-    
+
     pageLayout.Name = "pageLayout"
     pageLayout.Parent = introduction
     pageLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
     pageLayout.SortOrder = Enum.SortOrder.LayoutOrder
     pageLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 
-    CreateTween("SCRotation", 0.1, Enum.EasingStyle.Linear) 
+    CreateTween("SCRotation", 0.1, Enum.EasingStyle.Linear)
     CreateTween("intro_fade_in", 0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out) -- Slightly faster fade
     CreateTween("intro_scale", 0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out) -- Slightly faster scale
 
     local MinusAmount = -16
     SCLogo.Size = UDim2.fromScale(0.1, 0.1) -- Start slightly visible for scale effect
-    SCLogo.ImageTransparency = 1 
+    SCLogo.ImageTransparency = 1
     SCLogo.Rotation = 0
     hashLogo.Size = UDim2.fromScale(0.1, 0.1) -- Start slightly visible for scale effect
     hashLogo.ImageTransparency = 1
@@ -805,21 +806,21 @@ function library:Introduction()
     TweenService:Create(edge, TweenTable["introduction"], {BackgroundTransparency = 0}):Play()
     TweenService:Create(background, TweenTable["introduction"], {BackgroundTransparency = 0}):Play()
     wait(0.1)
-    TweenService:Create(bar, TweenTable["introduction"], {Size = UDim2.new(1, 0, 0, 1)}):Play() 
+    TweenService:Create(bar, TweenTable["introduction"], {Size = UDim2.new(1, 0, 0, 1)}):Play()
     wait(0.1)
-    TweenService:Create(SCLogo, TweenTable["intro_scale"], {Size = UDim2.new(0, 150, 0, 150)}):Play() 
+    TweenService:Create(SCLogo, TweenTable["intro_scale"], {Size = UDim2.new(0, 150, 0, 150)}):Play()
     TweenService:Create(SCLogo, TweenTable["intro_fade_in"], {ImageTransparency = 0}):Play()
     wait(0.2) -- Stagger text fade-in
-    TweenService:Create(SC, TweenTable["intro_fade_in"], {TextTransparency = 0}):Play() 
+    TweenService:Create(SC, TweenTable["intro_fade_in"], {TextTransparency = 0}):Play()
     wait(1.5) -- Hold first logo/text
-    TweenService:Create(SCLogo, TweenTable["intro_fade_in"], {ImageTransparency = 1}):Play() 
+    TweenService:Create(SCLogo, TweenTable["intro_fade_in"], {ImageTransparency = 1}):Play()
     wait(0.2)
-    TweenService:Create(hashLogo, TweenTable["intro_scale"], {Size = UDim2.new(0, 150, 0, 150)}):Play() 
+    TweenService:Create(hashLogo, TweenTable["intro_scale"], {Size = UDim2.new(0, 150, 0, 150)}):Play()
     TweenService:Create(hashLogo, TweenTable["intro_fade_in"], {ImageTransparency = 0}):Play()
     wait(0.2) -- Stagger text fade-in
-    TweenService:Create(text, TweenTable["intro_fade_in"], {TextTransparency = 0}):Play() 
+    TweenService:Create(text, TweenTable["intro_fade_in"], {TextTransparency = 0}):Play()
     wait(1.5) -- Hold second logo/text
-    TweenService:Create(hashLogo, TweenTable["intro_fade_in"], {ImageTransparency = 1}):Play() 
+    TweenService:Create(hashLogo, TweenTable["intro_fade_in"], {ImageTransparency = 1}):Play()
     wait(0.1)
     TweenService:Create(text, TweenTable["intro_fade_in"], {TextTransparency = 1}):Play()
     wait(0.1)
@@ -939,9 +940,9 @@ function library:PromptForKey()
     SubmitButton.Name = "SubmitButton"
     SubmitButton.Parent = BackgroundFrame
     SubmitButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50) -- Edge color
-    SubmitButton.Size = UDim2.new(1, -20, 0, 25) 
+    SubmitButton.Size = UDim2.new(1, -20, 0, 25)
     SubmitButton.AutoButtonColor = false
-    SubmitButton.Font = Enum.Font.SourceSans 
+    SubmitButton.Font = Enum.Font.SourceSans
     SubmitButton.Text = "" -- Clear text, will be on label
     SubmitButton.TextColor3 = Color3.fromRGB(0, 0, 0)
     SubmitButton.TextSize = 14.000
@@ -957,29 +958,29 @@ function library:PromptForKey()
     SubmitButtonBackground.Name = "SubmitButtonBackground"
     SubmitButtonBackground.Parent = SubmitButton
     SubmitButtonBackground.AnchorPoint = Vector2.new(0.5, 0.5)
-    SubmitButtonBackground.BackgroundColor3 = Color3.fromRGB(255, 255, 255) 
+    SubmitButtonBackground.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     SubmitButtonBackground.Position = UDim2.new(0.5, 0, 0.5, 0)
     SubmitButtonBackground.Size = UDim2.new(1, -2, 1, -2) -- Fit inside edge frame
 
     SubmitButtonGradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0.00, Color3.fromRGB(34, 34, 34)), ColorSequenceKeypoint.new(1.00, Color3.fromRGB(28, 28, 28))}
     SubmitButtonGradient.Rotation = 90
-    SubmitButtonGradient.Parent = SubmitButtonBackground 
+    SubmitButtonGradient.Parent = SubmitButtonBackground
 
-    SubmitButtonBackCorner.CornerRadius = UDim.new(0, 2) 
+    SubmitButtonBackCorner.CornerRadius = UDim.new(0, 2)
     SubmitButtonBackCorner.Parent = SubmitButtonBackground
 
     SubmitButtonLabel.Name = "SubmitButtonLabel"
-    SubmitButtonLabel.Parent = SubmitButtonBackground 
+    SubmitButtonLabel.Parent = SubmitButtonBackground
     SubmitButtonLabel.AnchorPoint = Vector2.new(0.5, 0.5)
     SubmitButtonLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     SubmitButtonLabel.BackgroundTransparency = 1.000
     SubmitButtonLabel.Position = UDim2.new(0.5, 0, 0.5, 0)
-    SubmitButtonLabel.Size = UDim2.new(1, 0, 1, 0) 
+    SubmitButtonLabel.Size = UDim2.new(1, 0, 1, 0)
     SubmitButtonLabel.Font = Enum.Font.Code
     SubmitButtonLabel.Text = "Submit"
     SubmitButtonLabel.TextColor3 = Color3.fromRGB(190, 190, 190)
     SubmitButtonLabel.TextSize = 14.000
-    SubmitButtonLabel.RichText = true 
+    SubmitButtonLabel.RichText = true
 
     StatusLabel.Name = "StatusLabel"
     StatusLabel.Parent = BackgroundFrame
@@ -1018,7 +1019,7 @@ function library:PromptForKey()
             StatusLabel.TextColor3 = Color3.fromRGB(255, 74, 77) -- Red for errors
             StatusLabel.Text = "Incorrect Key"
             -- Optional: Clear input on wrong key
-            -- KeyInputBox.Text = "" 
+            -- KeyInputBox.Text = ""
         end
     end
 
@@ -1255,7 +1256,7 @@ function library:_InternalInit(key) -- Renamed from Init
         page.TopImage = "http://www.roblox.com/asset/?id=3062506202"
         page.ScrollBarImageColor3 = Color3.fromRGB(159, 115, 255)
         page.Visible = false
-        
+
         pageLayout.Name = "pageLayout"
         pageLayout.Parent = page
         pageLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
@@ -1274,10 +1275,10 @@ function library:_InternalInit(key) -- Renamed from Init
             tabButton.TextColor3 = Color3.fromRGB(159, 115, 255)
             TabLibrary.CurrentTab = title
         end
-        
+
         tabButton.MouseButton1Click:Connect(function()
             TabLibrary.CurrentTab = title
-            for i,v in pairs(container:GetChildren()) do 
+            for i,v in pairs(container:GetChildren()) do
                 if v:IsA("ScrollingFrame") then
                     v.Visible = false
                 end
@@ -1326,8 +1327,8 @@ function library:_InternalInit(key) -- Renamed from Init
             label.TextXAlignment = Enum.TextXAlignment.Left
             label.RichText = true
 
-            labelPadding.Name = "pagePadding"
-            labelPadding.Parent = page
+            labelPadding.Name = "labelPadding"
+            labelPadding.Parent = label
             labelPadding.PaddingBottom = UDim.new(0, 6)
             labelPadding.PaddingLeft = UDim.new(0, 12)
             labelPadding.PaddingRight = UDim.new(0, 6)
@@ -1503,14 +1504,14 @@ function library:_InternalInit(key) -- Renamed from Init
                 if Amnt < 4 then
                     text = text or "button"
                     callback_2 = callback_2 or function() end
-    
+
                     local button = Instance.new("TextButton")
                     local buttonCorner = Instance.new("UICorner")
                     local buttonBackground = Instance.new("Frame")
                     local buttonGradient = Instance.new("UIGradient")
                     local buttonBackCorner = Instance.new("UICorner")
                     local buttonLabel = Instance.new("TextLabel")
-        
+
                     button.Name = "button"
                     button.Parent = buttonFrame
                     button.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
@@ -1520,27 +1521,27 @@ function library:_InternalInit(key) -- Renamed from Init
                     button.Text = ""
                     button.TextColor3 = Color3.fromRGB(0, 0, 0)
                     button.TextSize = 14.000
-        
+
                     buttonCorner.CornerRadius = UDim.new(0, 2)
                     buttonCorner.Name = "buttonCorner"
                     buttonCorner.Parent = button
-        
+
                     buttonBackground.Name = "buttonBackground"
                     buttonBackground.Parent = button
                     buttonBackground.AnchorPoint = Vector2.new(0.5, 0.5)
                     buttonBackground.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
                     buttonBackground.Position = UDim2.new(0.5, 0, 0.5, 0)
                     buttonBackground.Size = UDim2.new(0, (NewSizeX - 2) - Amnt, 0, 22)
-        
+
                     buttonGradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0.00, Color3.fromRGB(34, 34, 34)), ColorSequenceKeypoint.new(1.00, Color3.fromRGB(28, 28, 28))}
                     buttonGradient.Rotation = 90
                     buttonGradient.Name = "buttonGradient"
                     buttonGradient.Parent = buttonBackground
-        
+
                     buttonBackCorner.CornerRadius = UDim.new(0, 2)
                     buttonBackCorner.Name = "buttonBackCorner"
                     buttonBackCorner.Parent = buttonBackground
-        
+
                     buttonLabel.Name = "buttonLabel"
                     buttonLabel.Parent = buttonBackground
                     buttonLabel.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -1556,21 +1557,21 @@ function library:_InternalInit(key) -- Renamed from Init
                     buttonLabel.RichText = true
 
                     UpdatePageSize()
-        
+
                     button.MouseEnter:Connect(function()
                         TweenService:Create(button, TweenTable["hover"], {BackgroundColor3 = Color3.fromRGB(60, 60, 60)}):Play()
                     end)
                     button.MouseLeave:Connect(function()
                         TweenService:Create(button, TweenTable["hover"], {BackgroundColor3 = Color3.fromRGB(50, 50, 50)}):Play()
                     end)
-        
+
                     button.MouseButton1Down:Connect(function()
                         TweenService:Create(buttonLabel, TweenTable["hover"], {TextColor3 = Color3.fromRGB(159, 115, 255)}):Play()
                     end)
                     button.MouseButton1Up:Connect(function()
                         TweenService:Create(buttonLabel, TweenTable["hover"], {TextColor3 = Color3.fromRGB(190, 190, 190)}):Play()
                     end)
-        
+
                     button.MouseButton1Click:Connect(function()
                         callback_2()
                     end)
@@ -1613,7 +1614,7 @@ function library:_InternalInit(key) -- Renamed from Init
 
                         return ButtonFunctions2
                     end
-                    return ButtonFunctions2 and ButtonFunctions
+                    return ButtonFunctions2
                 elseif Amnt > 4 then
                     print("more than 4 buttons are not supported.")
                 end
@@ -1897,8 +1898,8 @@ function library:_InternalInit(key) -- Renamed from Init
             function ToggleFunctions:Show()
                 toggleButton.Visible = true
                 return ToggleFunctions
-            end   
-            --         
+            end
+            --
             function ToggleFunctions:Change()
                 On = not On
                 local SizeOn = On and UDim2.new(0, 12, 0, 12) or UDim2.new(0, 0, 0, 0)
@@ -1911,7 +1912,7 @@ function library:_InternalInit(key) -- Renamed from Init
             --
             function ToggleFunctions:Remove()
                 toggleButton:Destroy()
-                return ToggleFunction
+                return ToggleFunctions
             end
             --
             function ToggleFunctions:Set(state)
@@ -1936,7 +1937,7 @@ function library:_InternalInit(key) -- Renamed from Init
             function ToggleFunctions:AddKeybind(default_t)
                 callback_t = callback
                 default_t = default_t or Enum.KeyCode.P
-                
+
                 local keybind = Instance.new("TextButton")
                 local keybindCorner = Instance.new("UICorner")
                 local keybindBackground = Instance.new("Frame")
@@ -1958,27 +1959,27 @@ function library:_InternalInit(key) -- Renamed from Init
                 keybind.TextColor3 = Color3.fromRGB(0, 0, 0)
                 keybind.TextSize = 14.000
                 keybind.Active = false
-    
+
                 keybindCorner.CornerRadius = UDim.new(0, 2)
                 keybindCorner.Name = "keybindCorner"
                 keybindCorner.Parent = keybind
-    
+
                 keybindBackground.Name = "keybindBackground"
                 keybindBackground.Parent = keybind
                 keybindBackground.AnchorPoint = Vector2.new(0.5, 0.5)
                 keybindBackground.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
                 keybindBackground.Position = UDim2.new(0.5, 0, 0.5, 0)
                 keybindBackground.Size = UDim2.new(0, 85, 0, 20)
-    
+
                 keybindGradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0.00, Color3.fromRGB(34, 34, 34)), ColorSequenceKeypoint.new(1.00, Color3.fromRGB(28, 28, 28))}
                 keybindGradient.Rotation = 90
                 keybindGradient.Name = "keybindGradient"
                 keybindGradient.Parent = keybindBackground
-    
+
                 keybindBackCorner.CornerRadius = UDim.new(0, 2)
                 keybindBackCorner.Name = "keybindBackCorner"
                 keybindBackCorner.Parent = keybindBackground
-    
+
                 keybindButtonLabel.Name = "keybindButtonLabel"
                 keybindButtonLabel.Parent = keybindBackground
                 keybindButtonLabel.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -1992,31 +1993,31 @@ function library:_InternalInit(key) -- Renamed from Init
                 keybindButtonLabel.TextColor3 = Color3.fromRGB(190, 190, 190)
                 keybindButtonLabel.TextSize = 14.000
                 keybindButtonLabel.RichText = true
-    
+
                 keybindLabelStraint.Name = "keybindLabelStraint"
                 keybindLabelStraint.Parent = keybindButtonLabel
                 keybindLabelStraint.MinSize = Vector2.new(28, 20)
-    
+
                 keybindBackgroundStraint.Name = "keybindBackgroundStraint"
                 keybindBackgroundStraint.Parent = keybindBackground
                 keybindBackgroundStraint.MinSize = Vector2.new(28, 20)
-    
+
                 keybindStraint.Name = "keybindStraint"
                 keybindStraint.Parent = keybind
                 keybindStraint.MinSize = Vector2.new(30, 22)
-    
+
                 local Shortcuts = {
                     Return = "enter"
-            }
-    
-            keybindButtonLabel.Text = Shortcuts[default_t.Name] or default_t.Name
-            CreateTween("keybind", 0.1, Enum.EasingStyle.Quad) -- Slightly adjusted keybind tween
-            
-            local NewKeybindSize = TextService:GetTextSize(keybindButtonLabel.Text, keybindButtonLabel.TextSize, keybindButtonLabel.Font, Vector2.new(math.huge,math.huge))
+                }
+
+                keybindButtonLabel.Text = Shortcuts[default_t.Name] or default_t.Name
+                CreateTween("keybind", 0.1, Enum.EasingStyle.Quad) -- Slightly adjusted keybind tween
+
+                local NewKeybindSize = TextService:GetTextSize(keybindButtonLabel.Text, keybindButtonLabel.TextSize, keybindButtonLabel.Font, Vector2.new(math.huge,math.huge))
                 keybindButtonLabel.Size = UDim2.new(0, NewKeybindSize.X + 6, 0, 20)
                 keybindBackground.Size = UDim2.new(0, NewKeybindSize.X + 6, 0, 20)
                 keybind.Size = UDim2.new(0, NewKeybindSize.X + 8, 0, 22)
-                
+
                 function ResizeKeybind()
                     NewKeybindSize = TextService:GetTextSize(keybindButtonLabel.Text, keybindButtonLabel.TextSize, keybindButtonLabel.Font, Vector2.new(math.huge,math.huge))
                     TweenService:Create(keybindButtonLabel, TweenTable["keybind"], {Size = UDim2.new(0, NewKeybindSize.X + 6, 0, 20)}):Play()
@@ -2026,9 +2027,9 @@ function library:_InternalInit(key) -- Renamed from Init
                 keybindButtonLabel:GetPropertyChangedSignal("Text"):Connect(ResizeKeybind)
                 ResizeKeybind()
                 UpdatePageSize()
-    
+
                 local ChosenKey = default_t.Name
-    
+
                 keybind.MouseButton1Click:Connect(function()
                     keybindButtonLabel.Text = ". . ."
                     local InputWait = UserInputService.InputBegan:wait()
@@ -2038,7 +2039,7 @@ function library:_InternalInit(key) -- Renamed from Init
                         ChosenKey = InputWait.KeyCode.Name
                     end
                 end)
-    
+
                 -- Refined Keybind Check
                 UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
                     if gameProcessedEvent then return end -- Ignore if game engine handled input (e.g., typing in chat)
@@ -2056,13 +2057,13 @@ function library:_InternalInit(key) -- Renamed from Init
                         end
                     end)
                 end
-    
+
                 local ExtraKeybindFunctions = {}
                 local currentKeybindConnection -- Store connection specific to this keybind instance
 
                 local function setupKeybindListener()
                     if currentKeybindConnection then
-                        currentKeybindConnection:Disconnect() 
+                        currentKeybindConnection:Disconnect()
                     end
                     currentKeybindConnection = UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
                         if gameProcessedEvent then return end -- Ignore if game engine handled input (e.g., typing in chat)
@@ -2078,13 +2079,13 @@ function library:_InternalInit(key) -- Renamed from Init
                         end
                     end)
                 end
-                
+
                 setupKeybindListener() -- Initial setup
 
                 function ExtraKeybindFunctions:SetKey(new)
-                    new = new or Enum.KeyCode[ChosenKey] 
-                    ChosenKey = new.Name 
-                    keybindButtonLabel.Text = Shortcuts[new.Name] or new.Name 
+                    new = new or Enum.KeyCode[ChosenKey]
+                    ChosenKey = new.Name
+                    keybindButtonLabel.Text = Shortcuts[new.Name] or new.Name
                     setupKeybindListener() -- Re-setup listener with the new key
                     return ExtraKeybindFunctions
                 end
@@ -2097,7 +2098,7 @@ function library:_InternalInit(key) -- Renamed from Init
                 function ExtraKeybindFunctions:SetFunction(new)
                     new = new or function() end
                     callback_t = new
-                    return ExtraKeybindFunctions 
+                    return ExtraKeybindFunctions
                 end
                 --
                 function ExtraKeybindFunctions:Hide()
@@ -2262,12 +2263,12 @@ function library:_InternalInit(key) -- Renamed from Init
 
             keybindButtonLabel.Text = Shortcuts[default.Name] or default.Name
             CreateTween("keybind", 0.1, Enum.EasingStyle.Quad) -- Slightly adjusted keybind tween (consistent with toggle's)
-            
+
             local NewKeybindSize = TextService:GetTextSize(keybindButtonLabel.Text, keybindButtonLabel.TextSize, keybindButtonLabel.Font, Vector2.new(math.huge,math.huge))
             keybindButtonLabel.Size = UDim2.new(0, NewKeybindSize.X + 6, 0, 20)
             keybindBackground.Size = UDim2.new(0, NewKeybindSize.X + 6, 0, 20)
             keybind.Size = UDim2.new(0, NewKeybindSize.X + 8, 0, 22)
-            
+
             function ResizeKeybind()
                 NewKeybindSize = TextService:GetTextSize(keybindButtonLabel.Text, keybindButtonLabel.TextSize, keybindButtonLabel.Font, Vector2.new(math.huge,math.huge))
                 TweenService:Create(keybindButtonLabel, TweenTable["keybind"], {Size = UDim2.new(0, NewKeybindSize.X + 6, 0, 20)}):Play()
@@ -2277,7 +2278,7 @@ function library:_InternalInit(key) -- Renamed from Init
             keybindButtonLabel:GetPropertyChangedSignal("Text"):Connect(ResizeKeybind)
             ResizeKeybind()
 
-            local ChosenKey = default.Name 
+            local ChosenKey = default.Name
             local keybindConnection -- Variable to hold the connection
 
             keybindButton.MouseButton1Click:Connect(function()
@@ -2303,13 +2304,13 @@ function library:_InternalInit(key) -- Renamed from Init
             -- Refined Keybind Check Logic using InputBegan
             local function setupKeybindListener()
                  if keybindConnection then
-                    keybindConnection:Disconnect() 
+                    keybindConnection:Disconnect()
                 end
                 keybindConnection = UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
-                    if gameProcessedEvent then return end 
-                    if UserInputService:GetFocusedTextBox() then return end 
+                    if gameProcessedEvent then return end
+                    if UserInputService:GetFocusedTextBox() then return end
                     if input.KeyCode.Name == ChosenKey then
-                        callback(input.KeyCode) 
+                        callback(input.KeyCode)
                     end
                 end)
             end
@@ -2322,11 +2323,11 @@ function library:_InternalInit(key) -- Renamed from Init
 
             local function setupKeybindListener()
                 if keybindConnection then
-                    keybindConnection:Disconnect() 
+                    keybindConnection:Disconnect()
                 end
                 keybindConnection = UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
-                    if gameProcessedEvent then return end 
-                    if UserInputService:GetFocusedTextBox() then return end 
+                    if gameProcessedEvent then return end
+                    if UserInputService:GetFocusedTextBox() then return end
                     if input.KeyCode.Name == ChosenKey then
                         callback(input.KeyCode) -- Pass the actual KeyCode EnumItem
                     end
@@ -2343,13 +2344,13 @@ function library:_InternalInit(key) -- Renamed from Init
             function KeybindFunctions:SetFunction(new)
                 new = new or function() end
                 callback = new
-                return KeybindFunctions 
+                return KeybindFunctions
             end
             --
             function KeybindFunctions:SetKey(new)
-                new = new or Enum.KeyCode[ChosenKey] 
-                ChosenKey = new.Name 
-                keybindButtonLabel.Text = Shortcuts[new.Name] or new.Name 
+                new = new or Enum.KeyCode[ChosenKey]
+                ChosenKey = new.Name
+                keybindButtonLabel.Text = Shortcuts[new.Name] or new.Name
                 ResizeKeybind() -- Resize after text change
                 setupKeybindListener() -- Re-setup listener with the new key
                 return KeybindFunctions
@@ -2401,17 +2402,17 @@ function library:_InternalInit(key) -- Renamed from Init
                 local textboxLabel = Instance.new("TextLabel")
                 local textboxPadding = Instance.new("UIPadding")
                 local textBoxValuesPadding = Instance.new("UIPadding")
-    
+
                 textboxFrame.Name = "textboxFrame"
                 textboxFrame.Parent = page
                 textboxFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
                 textboxFrame.BackgroundTransparency = 1.000
                 textboxFrame.ClipsDescendants = true
                 textboxFrame.Size = UDim2.new(0, 396, 0, 24)
-    
+
                 textboxFolder.Name = "textboxFolder"
                 textboxFolder.Parent = textboxFrame
-    
+
                 textboxFolderLayout.Name = "textboxFolderLayout"
                 textboxFolderLayout.Parent = textboxFolder
                 textboxFolderLayout.FillDirection = Enum.FillDirection.Horizontal
@@ -2419,44 +2420,44 @@ function library:_InternalInit(key) -- Renamed from Init
                 textboxFolderLayout.SortOrder = Enum.SortOrder.LayoutOrder
                 textboxFolderLayout.VerticalAlignment = Enum.VerticalAlignment.Center
                 textboxFolderLayout.Padding = UDim.new(0, 4)
-    
+
                 textbox.Name = "textbox"
                 textbox.Parent = textboxFolder
                 textbox.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
                 textbox.Size = UDim2.new(0, 133, 0, 22)
-    
+
                 textboxLayout.Name = "textboxLayout"
                 textboxLayout.Parent = textbox
                 textboxLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
                 textboxLayout.SortOrder = Enum.SortOrder.LayoutOrder
                 textboxLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-    
+
                 textboxStraint.Name = "textboxStraint"
                 textboxStraint.Parent = textbox
                 textboxStraint.MinSize = Vector2.new(50, 22)
-    
+
                 textboxCorner.CornerRadius = UDim.new(0, 2)
                 textboxCorner.Name = "textboxCorner"
                 textboxCorner.Parent = textbox
-    
+
                 textboxTwo.Name = "textboxTwo"
                 textboxTwo.Parent = textbox
                 textboxTwo.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
                 textboxTwo.Size = UDim2.new(0, 131, 0, 20)
-    
+
                 textboxTwoStraint.Name = "textboxTwoStraint"
                 textboxTwoStraint.Parent = textboxTwo
                 textboxTwoStraint.MinSize = Vector2.new(48, 20)
-    
+
                 textboxTwoGradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0.00, Color3.fromRGB(34, 34, 34)), ColorSequenceKeypoint.new(1.00, Color3.fromRGB(28, 28, 28))}
                 textboxTwoGradient.Rotation = 90
                 textboxTwoGradient.Name = "textboxTwoGradient"
                 textboxTwoGradient.Parent = textboxTwo
-    
+
                 textboxTwoCorner.CornerRadius = UDim.new(0, 2)
                 textboxTwoCorner.Name = "textboxTwoCorner"
                 textboxTwoCorner.Parent = textboxTwo
-    
+
                 textBoxValues.Name = "textBoxValues"
                 textBoxValues.Parent = textboxTwo
                 textBoxValues.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
@@ -2479,17 +2480,17 @@ function library:_InternalInit(key) -- Renamed from Init
                 textBoxValuesPadding.PaddingLeft = UDim.new(0, 6)
                 textBoxValuesPadding.PaddingRight = UDim.new(0, 4)
                 textBoxValuesPadding.PaddingTop = UDim.new(0, 6)
-    
+
                 textBoxValuesStraint.Name = "textBoxValuesStraint"
                 textBoxValuesStraint.Parent = textBoxValues
                 textBoxValuesStraint.MinSize = Vector2.new(48, 20)
-    
+
                 textboxTwoLayout.Name = "textboxTwoLayout"
                 textboxTwoLayout.Parent = textboxTwo
                 textboxTwoLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
                 textboxTwoLayout.SortOrder = Enum.SortOrder.LayoutOrder
                 textboxTwoLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-    
+
                 textboxLabel.Name = "textboxLabel"
                 textboxLabel.Parent = textboxFrame
                 textboxLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
@@ -2502,14 +2503,14 @@ function library:_InternalInit(key) -- Renamed from Init
                 textboxLabel.TextWrapped = true
                 textboxLabel.TextXAlignment = Enum.TextXAlignment.Left
                 textboxLabel.RichText = true
-    
+
                 textboxPadding.Name = "textboxPadding"
                 textboxPadding.Parent = textboxLabel
                 textboxPadding.PaddingBottom = UDim.new(0, 6)
                 textboxPadding.PaddingLeft = UDim.new(0, 2)
                 textboxPadding.PaddingRight = UDim.new(0, 6)
                 textboxPadding.PaddingTop = UDim.new(0, 6)
-    
+
                 local ForcedMinSize = TextService:GetTextSize(textBoxValues.PlaceholderText, textBoxValues.TextSize, textBoxValues.Font, Vector2.new(math.huge,math.huge))
                 local ForcedMaxSize = TextService:GetTextSize(textboxLabel.Text, textboxLabel.TextSize, textboxLabel.Font, Vector2.new(math.huge,math.huge))
                 local NewTextboxSize = TextService:GetTextSize(textBoxValues.Text, textBoxValues.TextSize, textBoxValues.Font, Vector2.new(math.huge,math.huge))
@@ -2522,7 +2523,7 @@ function library:_InternalInit(key) -- Renamed from Init
                 textboxStraint.MaxSize = Vector2.new(386 - ForcedMaxSize.X, 22)
                 textboxTwoStraint.MaxSize = Vector2.new(388 - ForcedMaxSize.X, 20)
                 textBoxValuesStraint.MaxSize = Vector2.new(388 - ForcedMaxSize.X, 20)
-                
+
                 function ResizeTextStraints()
                     ForcedMinSize = TextService:GetTextSize(textBoxValues.PlaceholderText, textBoxValues.TextSize, textBoxValues.Font, Vector2.new(math.huge,math.huge))
                     if place ~= "" then
@@ -3151,7 +3152,7 @@ function library:_InternalInit(key) -- Renamed from Init
             local selectorPadding_2 = Instance.new("UIPadding")
             local selectorContainer = Instance.new("Frame")
             local selectorTwoLayout_2 = Instance.new("UIListLayout")
-            
+
             selectorFrame.Name = "selectorFrame"
             selectorFrame.Parent = page
             selectorFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
@@ -3160,7 +3161,7 @@ function library:_InternalInit(key) -- Renamed from Init
             selectorFrame.Position = UDim2.new(0.00499999989, 0, 0.0895953774, 0)
             selectorFrame.Size = UDim2.new(0, 396, 0, 46)
 
-            
+
             selectorLabel.Name = "selectorLabel"
             selectorLabel.Parent = selectorFrame
             selectorLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
@@ -3173,19 +3174,19 @@ function library:_InternalInit(key) -- Renamed from Init
             selectorLabel.TextWrapped = true
             selectorLabel.TextXAlignment = Enum.TextXAlignment.Left
             selectorLabel.RichText = true
-            
+
             selectorLabelPadding.Name = "selectorLabelPadding"
             selectorLabelPadding.Parent = selectorLabel
             selectorLabelPadding.PaddingBottom = UDim.new(0, 6)
             selectorLabelPadding.PaddingLeft = UDim.new(0, 2)
             selectorLabelPadding.PaddingRight = UDim.new(0, 6)
             selectorLabelPadding.PaddingTop = UDim.new(0, 6)
-            
+
             selectorFrameLayout.Name = "selectorFrameLayout"
             selectorFrameLayout.Parent = selectorFrame
             selectorFrameLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
             selectorFrameLayout.SortOrder = Enum.SortOrder.LayoutOrder
-            
+
             selector.Name = "selector"
             selector.Parent = selectorFrame
             selector.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
@@ -3197,27 +3198,27 @@ function library:_InternalInit(key) -- Renamed from Init
             selector.Text = ""
             selector.TextColor3 = Color3.fromRGB(0, 0, 0)
             selector.TextSize = 14.000
-            
+
             selectorCorner.CornerRadius = UDim.new(0, 2)
             selectorCorner.Name = "selectorCorner"
             selectorCorner.Parent = selector
-            
+
             selectorLayout.Name = "selectorLayout"
             selectorLayout.Parent = selector
             selectorLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
             selectorLayout.SortOrder = Enum.SortOrder.LayoutOrder
-            
+
             selectorPadding.Name = "selectorPadding"
             selectorPadding.Parent = selector
             selectorPadding.PaddingTop = UDim.new(0, 1)
-            
+
             selectorTwo.Name = "selectorTwo"
             selectorTwo.Parent = selector
             selectorTwo.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
             selectorTwo.ClipsDescendants = true
             selectorTwo.Position = UDim2.new(0.00252525252, 0, 0, 0)
             selectorTwo.Size = UDim2.new(0, 394, 0, 20)
-            
+
             selectorText.Name = "selectorText"
             selectorText.Parent = selectorTwo
             selectorText.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
@@ -3229,44 +3230,44 @@ function library:_InternalInit(key) -- Renamed from Init
             selectorText.TextSize = 14.000
             selectorText.TextXAlignment = Enum.TextXAlignment.Left
             selectorText.Text = default
-            
+
             textBoxValuesPadding.Name = "textBoxValuesPadding"
             textBoxValuesPadding.Parent = selectorText
             textBoxValuesPadding.PaddingBottom = UDim.new(0, 6)
             textBoxValuesPadding.PaddingLeft = UDim.new(0, 6)
             textBoxValuesPadding.PaddingRight = UDim.new(0, 6)
             textBoxValuesPadding.PaddingTop = UDim.new(0, 6)
-            
+
             Frame.Parent = selectorText
             Frame.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
             Frame.BorderSizePixel = 0
             Frame.Position = UDim2.new(-0.008, 0, 1.78, 0)
             Frame.Size = UDim2.new(0, 388, 0, 1)
-            
+
             selectorTwoLayout.Name = "selectorTwoLayout"
             selectorTwoLayout.Parent = selectorTwo
             selectorTwoLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
             selectorTwoLayout.SortOrder = Enum.SortOrder.LayoutOrder
-            
+
             selectorTwoGradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0.00, Color3.fromRGB(34, 34, 34)), ColorSequenceKeypoint.new(1.00, Color3.fromRGB(28, 28, 28))}
             selectorTwoGradient.Rotation = 90
             selectorTwoGradient.Name = "selectorTwoGradient"
             selectorTwoGradient.Parent = selectorTwo
-            
+
             selectorTwoCorner.CornerRadius = UDim.new(0, 2)
             selectorTwoCorner.Name = "selectorTwoCorner"
             selectorTwoCorner.Parent = selectorTwo
-            
+
             selectorPadding_2.Name = "selectorPadding"
             selectorPadding_2.Parent = selectorTwo
             selectorPadding_2.PaddingTop = UDim.new(0, 1)
-            
+
             selectorContainer.Name = "selectorContainer"
             selectorContainer.Parent = selectorTwo
             selectorContainer.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
             selectorContainer.BackgroundTransparency = 1.000
             selectorContainer.Size = UDim2.new(0, 394, 0, 20)
-        
+
             selectorTwoLayout_2.Name = "selectorTwoLayout"
             selectorTwoLayout_2.Parent = selectorContainer
             selectorTwoLayout_2.HorizontalAlignment = Enum.HorizontalAlignment.Center
@@ -3613,7 +3614,7 @@ function library:_InternalInit(key) -- Renamed from Init
 
                 moveconnection = Mouse.Move:Connect(function()
                     ValueNum = math.floor((((tonumber(values.max) - tonumber(values.min)) / sliderBackground.AbsoluteSize.X) * sliderIndicator.AbsoluteSize.X) + tonumber(values.min))
-                    
+
                     slideText = compare and ValueNum .. compareSign .. tostring(values.max - 1) .. suffix or ValueNum .. suffix
                     sliderValue.Text = slideText
 
@@ -3630,7 +3631,7 @@ function library:_InternalInit(key) -- Renamed from Init
                 releaseconnection = UserInputService.InputEnded:Connect(function(Mouse_2)
                     if Mouse_2.UserInputType == Enum.UserInputType.MouseButton1 then
                         ValueNum = math.floor((((tonumber(values.max) - tonumber(values.min)) / sliderBackground.AbsoluteSize.X) * sliderIndicator.AbsoluteSize.X) + tonumber(values.min))
-                        
+
                         slideText = compare and ValueNum .. compareSign .. tostring(values.max - 1) .. suffix or ValueNum .. suffix
                         sliderValue.Text = slideText
 
@@ -3756,7 +3757,7 @@ function library:_InternalInit(key) -- Renamed from Init
         --
         function Components:Open()
             TabLibrary.CurrentTab = title
-            for i,v in pairs(container:GetChildren()) do 
+            for i,v in pairs(container:GetChildren()) do
                 if v:IsA("ScrollingFrame") then
                     v.Visible = false
                 end
@@ -3837,8 +3838,8 @@ function library:Init(key)
         KeyEnteredCorrectly.Event:Wait()
 
         -- Proceed with the original UI initialization
-        library:_InternalInit(key) 
-        -- Note: We can't directly return from the coroutine, 
+        library:_InternalInit(key)
+        -- Note: We can't directly return from the coroutine,
         -- but the original library table is returned at the end anyway.
         -- The caller should handle potential async loading if needed.
     end)()
@@ -3905,7 +3906,7 @@ ACT MODE
             function KeybindFunctions:SetFunction(new)
                 new = new or function() end
                 callback = new
-                return KeybindFunctions 
+                return KeybindFunctions
             end
             --
             function KeybindFunctions:SetKey(new)
@@ -3961,17 +3962,17 @@ ACT MODE
                 local textboxLabel = Instance.new("TextLabel")
                 local textboxPadding = Instance.new("UIPadding")
                 local textBoxValuesPadding = Instance.new("UIPadding")
-    
+
                 textboxFrame.Name = "textboxFrame"
                 textboxFrame.Parent = page
                 textboxFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
                 textboxFrame.BackgroundTransparency = 1.000
                 textboxFrame.ClipsDescendants = true
                 textboxFrame.Size = UDim2.new(0, 396, 0, 24)
-    
+
                 textboxFolder.Name = "textboxFolder"
                 textboxFolder.Parent = textboxFrame
-    
+
                 textboxFolderLayout.Name = "textboxFolderLayout"
                 textboxFolderLayout.Parent = textboxFolder
                 textboxFolderLayout.FillDirection = Enum.FillDirection.Horizontal
@@ -3979,44 +3980,44 @@ ACT MODE
                 textboxFolderLayout.SortOrder = Enum.SortOrder.LayoutOrder
                 textboxFolderLayout.VerticalAlignment = Enum.VerticalAlignment.Center
                 textboxFolderLayout.Padding = UDim.new(0, 4)
-    
+
                 textbox.Name = "textbox"
                 textbox.Parent = textboxFolder
                 textbox.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
                 textbox.Size = UDim2.new(0, 133, 0, 22)
-    
+
                 textboxLayout.Name = "textboxLayout"
                 textboxLayout.Parent = textbox
                 textboxLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
                 textboxLayout.SortOrder = Enum.SortOrder.LayoutOrder
                 textboxLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-    
+
                 textboxStraint.Name = "textboxStraint"
                 textboxStraint.Parent = textbox
                 textboxStraint.MinSize = Vector2.new(50, 22)
-    
+
                 textboxCorner.CornerRadius = UDim.new(0, 2)
                 textboxCorner.Name = "textboxCorner"
                 textboxCorner.Parent = textbox
-    
+
                 textboxTwo.Name = "textboxTwo"
                 textboxTwo.Parent = textbox
                 textboxTwo.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
                 textboxTwo.Size = UDim2.new(0, 131, 0, 20)
-    
+
                 textboxTwoStraint.Name = "textboxTwoStraint"
                 textboxTwoStraint.Parent = textboxTwo
                 textboxTwoStraint.MinSize = Vector2.new(48, 20)
-    
+
                 textboxTwoGradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0.00, Color3.fromRGB(34, 34, 34)), ColorSequenceKeypoint.new(1.00, Color3.fromRGB(28, 28, 28))}
                 textboxTwoGradient.Rotation = 90
                 textboxTwoGradient.Name = "textboxTwoGradient"
                 textboxTwoGradient.Parent = textboxTwo
-    
+
                 textboxTwoCorner.CornerRadius = UDim.new(0, 2)
                 textboxTwoCorner.Name = "textboxTwoCorner"
                 textboxTwoCorner.Parent = textboxTwo
-    
+
                 textBoxValues.Name = "textBoxValues"
                 textBoxValues.Parent = textboxTwo
                 textBoxValues.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
@@ -4039,17 +4040,17 @@ ACT MODE
                 textBoxValuesPadding.PaddingLeft = UDim.new(0, 6)
                 textBoxValuesPadding.PaddingRight = UDim.new(0, 4)
                 textBoxValuesPadding.PaddingTop = UDim.new(0, 6)
-    
+
                 textBoxValuesStraint.Name = "textBoxValuesStraint"
                 textBoxValuesStraint.Parent = textBoxValues
                 textBoxValuesStraint.MinSize = Vector2.new(48, 20)
-    
+
                 textboxTwoLayout.Name = "textboxTwoLayout"
                 textboxTwoLayout.Parent = textboxTwo
                 textboxTwoLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
                 textboxTwoLayout.SortOrder = Enum.SortOrder.LayoutOrder
                 textboxTwoLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-    
+
                 textboxLabel.Name = "textboxLabel"
                 textboxLabel.Parent = textboxFrame
                 textboxLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
@@ -4062,14 +4063,14 @@ ACT MODE
                 textboxLabel.TextWrapped = true
                 textboxLabel.TextXAlignment = Enum.TextXAlignment.Left
                 textboxLabel.RichText = true
-    
+
                 textboxPadding.Name = "textboxPadding"
                 textboxPadding.Parent = textboxLabel
                 textboxPadding.PaddingBottom = UDim.new(0, 6)
                 textboxPadding.PaddingLeft = UDim.new(0, 2)
                 textboxPadding.PaddingRight = UDim.new(0, 6)
                 textboxPadding.PaddingTop = UDim.new(0, 6)
-    
+
                 local ForcedMinSize = TextService:GetTextSize(textBoxValues.PlaceholderText, textBoxValues.TextSize, textBoxValues.Font, Vector2.new(math.huge,math.huge))
                 local ForcedMaxSize = TextService:GetTextSize(textboxLabel.Text, textboxLabel.TextSize, textboxLabel.Font, Vector2.new(math.huge,math.huge))
                 local NewTextboxSize = TextService:GetTextSize(textBoxValues.Text, textBoxValues.TextSize, textBoxValues.Font, Vector2.new(math.huge,math.huge))
@@ -4082,7 +4083,7 @@ ACT MODE
                 textboxStraint.MaxSize = Vector2.new(386 - ForcedMaxSize.X, 22)
                 textboxTwoStraint.MaxSize = Vector2.new(388 - ForcedMaxSize.X, 20)
                 textBoxValuesStraint.MaxSize = Vector2.new(388 - ForcedMaxSize.X, 20)
-                
+
                 function ResizeTextStraints()
                     ForcedMinSize = TextService:GetTextSize(textBoxValues.PlaceholderText, textBoxValues.TextSize, textBoxValues.Font, Vector2.new(math.huge,math.huge))
                     if place ~= "" then
@@ -4711,7 +4712,7 @@ ACT MODE
             local selectorPadding_2 = Instance.new("UIPadding")
             local selectorContainer = Instance.new("Frame")
             local selectorTwoLayout_2 = Instance.new("UIListLayout")
-            
+
             selectorFrame.Name = "selectorFrame"
             selectorFrame.Parent = page
             selectorFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
@@ -4720,7 +4721,7 @@ ACT MODE
             selectorFrame.Position = UDim2.new(0.00499999989, 0, 0.0895953774, 0)
             selectorFrame.Size = UDim2.new(0, 396, 0, 46)
 
-            
+
             selectorLabel.Name = "selectorLabel"
             selectorLabel.Parent = selectorFrame
             selectorLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
@@ -4733,19 +4734,19 @@ ACT MODE
             selectorLabel.TextWrapped = true
             selectorLabel.TextXAlignment = Enum.TextXAlignment.Left
             selectorLabel.RichText = true
-            
+
             selectorLabelPadding.Name = "selectorLabelPadding"
             selectorLabelPadding.Parent = selectorLabel
             selectorLabelPadding.PaddingBottom = UDim.new(0, 6)
             selectorLabelPadding.PaddingLeft = UDim.new(0, 2)
             selectorLabelPadding.PaddingRight = UDim.new(0, 6)
             selectorLabelPadding.PaddingTop = UDim.new(0, 6)
-            
+
             selectorFrameLayout.Name = "selectorFrameLayout"
             selectorFrameLayout.Parent = selectorFrame
             selectorFrameLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
             selectorFrameLayout.SortOrder = Enum.SortOrder.LayoutOrder
-            
+
             selector.Name = "selector"
             selector.Parent = selectorFrame
             selector.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
@@ -4757,27 +4758,27 @@ ACT MODE
             selector.Text = ""
             selector.TextColor3 = Color3.fromRGB(0, 0, 0)
             selector.TextSize = 14.000
-            
+
             selectorCorner.CornerRadius = UDim.new(0, 2)
             selectorCorner.Name = "selectorCorner"
             selectorCorner.Parent = selector
-            
+
             selectorLayout.Name = "selectorLayout"
             selectorLayout.Parent = selector
             selectorLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
             selectorLayout.SortOrder = Enum.SortOrder.LayoutOrder
-            
+
             selectorPadding.Name = "selectorPadding"
             selectorPadding.Parent = selector
             selectorPadding.PaddingTop = UDim.new(0, 1)
-            
+
             selectorTwo.Name = "selectorTwo"
             selectorTwo.Parent = selector
             selectorTwo.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
             selectorTwo.ClipsDescendants = true
             selectorTwo.Position = UDim2.new(0.00252525252, 0, 0, 0)
             selectorTwo.Size = UDim2.new(0, 394, 0, 20)
-            
+
             selectorText.Name = "selectorText"
             selectorText.Parent = selectorTwo
             selectorText.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
@@ -4789,44 +4790,44 @@ ACT MODE
             selectorText.TextSize = 14.000
             selectorText.TextXAlignment = Enum.TextXAlignment.Left
             selectorText.Text = default
-            
+
             textBoxValuesPadding.Name = "textBoxValuesPadding"
             textBoxValuesPadding.Parent = selectorText
             textBoxValuesPadding.PaddingBottom = UDim.new(0, 6)
             textBoxValuesPadding.PaddingLeft = UDim.new(0, 6)
             textBoxValuesPadding.PaddingRight = UDim.new(0, 6)
             textBoxValuesPadding.PaddingTop = UDim.new(0, 6)
-            
+
             Frame.Parent = selectorText
             Frame.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
             Frame.BorderSizePixel = 0
             Frame.Position = UDim2.new(-0.008, 0, 1.78, 0)
             Frame.Size = UDim2.new(0, 388, 0, 1)
-            
+
             selectorTwoLayout.Name = "selectorTwoLayout"
             selectorTwoLayout.Parent = selectorTwo
             selectorTwoLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
             selectorTwoLayout.SortOrder = Enum.SortOrder.LayoutOrder
-            
+
             selectorTwoGradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0.00, Color3.fromRGB(34, 34, 34)), ColorSequenceKeypoint.new(1.00, Color3.fromRGB(28, 28, 28))}
             selectorTwoGradient.Rotation = 90
             selectorTwoGradient.Name = "selectorTwoGradient"
             selectorTwoGradient.Parent = selectorTwo
-            
+
             selectorTwoCorner.CornerRadius = UDim.new(0, 2)
             selectorTwoCorner.Name = "selectorTwoCorner"
             selectorTwoCorner.Parent = selectorTwo
-            
+
             selectorPadding_2.Name = "selectorPadding"
             selectorPadding_2.Parent = selectorTwo
             selectorPadding_2.PaddingTop = UDim.new(0, 1)
-            
+
             selectorContainer.Name = "selectorContainer"
             selectorContainer.Parent = selectorTwo
             selectorContainer.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
             selectorContainer.BackgroundTransparency = 1.000
             selectorContainer.Size = UDim2.new(0, 394, 0, 20)
-        
+
             selectorTwoLayout_2.Name = "selectorTwoLayout"
             selectorTwoLayout_2.Parent = selectorContainer
             selectorTwoLayout_2.HorizontalAlignment = Enum.HorizontalAlignment.Center
@@ -5169,9 +5170,9 @@ ACT MODE
 
                 sliderValue.Text = slideText
 
-                moveconnection = Mouse.Move:Connect(function()
+                local moveconnection = Mouse.Move:Connect(function()
                     ValueNum = math.floor((((tonumber(values.max) - tonumber(values.min)) / sliderBackground.AbsoluteSize.X) * sliderIndicator.AbsoluteSize.X) + tonumber(values.min))
-                    
+
                     slideText = compare and ValueNum .. compareSign .. tostring(values.max - 1) .. suffix or ValueNum .. suffix
                     sliderValue.Text = slideText
 
@@ -5185,10 +5186,10 @@ ACT MODE
                     end
                 end)
 
-                releaseconnection = UserInputService.InputEnded:Connect(function(Mouse_2)
+                local releaseconnection = UserInputService.InputEnded:Connect(function(Mouse_2)
                     if Mouse_2.UserInputType == Enum.UserInputType.MouseButton1 then
                         ValueNum = math.floor((((tonumber(values.max) - tonumber(values.min)) / sliderBackground.AbsoluteSize.X) * sliderIndicator.AbsoluteSize.X) + tonumber(values.min))
-                        
+
                         slideText = compare and ValueNum .. compareSign .. tostring(values.max - 1) .. suffix or ValueNum .. suffix
                         sliderValue.Text = slideText
 
@@ -5314,7 +5315,7 @@ ACT MODE
         --
         function Components:Open()
             TabLibrary.CurrentTab = title
-            for i,v in pairs(container:GetChildren()) do 
+            for i,v in pairs(container:GetChildren()) do
                 if v:IsA("ScrollingFrame") then
                     v.Visible = false
                 end
