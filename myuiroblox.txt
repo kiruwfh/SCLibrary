@@ -197,7 +197,7 @@ end
 
 function library:Watermark(text)
     for i,v in pairs(CoreGuiService:GetChildren()) do
-        if v.Name == "watermark" then
+        if v.Name == "SCUI_Watermark" then -- Prefix check
             v:Destroy()
         end
     end
@@ -220,7 +220,7 @@ function library:Watermark(text)
     local waterPadding = Instance.new("UIPadding")
     local backgroundLayout = Instance.new("UIListLayout")
 
-    watermark.Name = "watermark"
+    watermark.Name = "SCUI_Watermark" -- Prefix name
     watermark.Parent = CoreGuiService
     watermark.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     
@@ -495,7 +495,7 @@ end
 
 function library:InitNotifications(text, duration, callback)
     for i,v in next, CoreGuiService:GetChildren() do
-        if v.name == "Notifications" then
+        if v.Name == "SCUI_Notifications" then -- Prefix check and fix lowercase 'name'
             v:Destroy()
         end
     end
@@ -504,7 +504,7 @@ function library:InitNotifications(text, duration, callback)
     local notificationsLayout = Instance.new("UIListLayout")
     local notificationsPadding = Instance.new("UIPadding")
 
-    Notifications.Name = "Notifications"
+    Notifications.Name = "SCUI_Notifications" -- Prefix name
     Notifications.Parent = CoreGuiService
     Notifications.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
@@ -676,7 +676,8 @@ end
 
 function library:Introduction()
     for _,v in next, CoreGuiService:GetChildren() do
-        if v.Name == "screen" then
+         -- Destroy any potential leftover UI from this library
+        if v.Name == "SCUI_Introduction" or v.Name == "SCUI_MainScreen" or v.Name == "SCUI_KeyPromptScreen" then
             v:Destroy()
         end
     end
@@ -698,7 +699,7 @@ function library:Introduction()
     local text = Instance.new("TextLabel")
     local pageLayout = Instance.new("UIListLayout")
     
-    introduction.Name = "introduction"
+    introduction.Name = "SCUI_Introduction" -- Prefix name
     introduction.Parent = CoreGuiService
     introduction.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     
@@ -804,7 +805,7 @@ function library:Introduction()
     pageLayout.SortOrder = Enum.SortOrder.LayoutOrder
     pageLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 
-    CreateTween("SCRotation", 0)
+    CreateTween("SCRotation", 0.1, Enum.EasingStyle.Linear) -- Give rotation a duration
     local MinusAmount = -16
     coroutine.wrap(function()
         while wait() do
@@ -846,7 +847,7 @@ local KeyEnteredCorrectly = Instance.new("BindableEvent")
 
 function library:PromptForKey()
     for _,v in next, CoreGuiService:GetChildren() do
-        if v.Name == "KeyPromptScreen" then
+        if v.Name == "SCUI_KeyPromptScreen" then -- Prefix check
             v:Destroy()
         end
     end
@@ -868,7 +869,7 @@ function library:PromptForKey()
     local VerticalLayout = Instance.new("UIListLayout")
     local Padding = Instance.new("UIPadding")
 
-    KeyPromptScreen.Name = "KeyPromptScreen"
+    KeyPromptScreen.Name = "SCUI_KeyPromptScreen" -- Prefix name
     KeyPromptScreen.Parent = CoreGuiService
     KeyPromptScreen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     KeyPromptScreen.ResetOnSpawn = false -- Prevent UI reset on respawn
@@ -1015,7 +1016,7 @@ end
 
 function library:_InternalInit(key) -- Renamed from Init
     for _,v in next, CoreGuiService:GetChildren() do
-        if v.Name == "screen" then
+        if v.Name == "SCUI_MainScreen" then -- Prefix check
             v:Destroy()
         end
     end
@@ -1048,7 +1049,7 @@ function library:_InternalInit(key) -- Renamed from Init
     local containerCorner = Instance.new("UICorner")
     local containerGradient = Instance.new("UIGradient")
 
-    screen.Name = "screen"
+    screen.Name = "SCUI_MainScreen" -- Prefix name
     screen.Parent = CoreGuiService
     screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
@@ -1280,7 +1281,7 @@ function library:_InternalInit(key) -- Renamed from Init
 
         TabLibrary.IsFirst = false
 
-        CreateTween("hover", 0.16)
+        CreateTween("hover", 0.12, Enum.EasingStyle.Quad) -- Faster hover
         local Components = {}
         function Components:NewLabel(text, alignment)
             text = text or "label"
@@ -1842,7 +1843,7 @@ function library:_InternalInit(key) -- Renamed from Init
                 TweenService:Create(toggleLabel, TweenTable["hover"], {TextColor3 = Color3.fromRGB(190, 190, 190)}):Play()
             end)
 
-            CreateTween("toggle_form", 0.13)
+            CreateTween("toggle_form", 0.15, Enum.EasingStyle.Quad) -- Slightly faster toggle
             local On = default
             if default then
                 On = true
@@ -1983,12 +1984,12 @@ function library:_InternalInit(key) -- Renamed from Init
     
                 local Shortcuts = {
                     Return = "enter"
-                }
+            }
     
-                keybindButtonLabel.Text = Shortcuts[default_t.Name] or default_t.Name
-                CreateTween("keybind", 0.08)
-                
-                local NewKeybindSize = TextService:GetTextSize(keybindButtonLabel.Text, keybindButtonLabel.TextSize, keybindButtonLabel.Font, Vector2.new(math.huge,math.huge))
+            keybindButtonLabel.Text = Shortcuts[default_t.Name] or default_t.Name
+            CreateTween("keybind", 0.1, Enum.EasingStyle.Quad) -- Slightly adjusted keybind tween
+            
+            local NewKeybindSize = TextService:GetTextSize(keybindButtonLabel.Text, keybindButtonLabel.TextSize, keybindButtonLabel.Font, Vector2.new(math.huge,math.huge))
                 keybindButtonLabel.Size = UDim2.new(0, NewKeybindSize.X + 6, 0, 20)
                 keybindBackground.Size = UDim2.new(0, NewKeybindSize.X + 6, 0, 20)
                 keybind.Size = UDim2.new(0, NewKeybindSize.X + 8, 0, 22)
@@ -2212,7 +2213,7 @@ function library:_InternalInit(key) -- Renamed from Init
             }
 
             keybindButtonLabel.Text = Shortcuts[default.Name] or default.Name
-            CreateTween("keybind", 0.08)
+            CreateTween("keybind", 0.1, Enum.EasingStyle.Quad) -- Slightly adjusted keybind tween (consistent with toggle's)
             
             local NewKeybindSize = TextService:GetTextSize(keybindButtonLabel.Text, keybindButtonLabel.TextSize, keybindButtonLabel.Font, Vector2.new(math.huge,math.huge))
             keybindButtonLabel.Size = UDim2.new(0, NewKeybindSize.X + 6, 0, 20)
@@ -2441,7 +2442,7 @@ function library:_InternalInit(key) -- Renamed from Init
                 local ForcedMaxSize = TextService:GetTextSize(textboxLabel.Text, textboxLabel.TextSize, textboxLabel.Font, Vector2.new(math.huge,math.huge))
                 local NewTextboxSize = TextService:GetTextSize(textBoxValues.Text, textBoxValues.TextSize, textBoxValues.Font, Vector2.new(math.huge,math.huge))
 
-                CreateTween("TextBox", 0.07)
+                CreateTween("TextBox", 0.1, Enum.EasingStyle.Quad) -- Slightly adjusted textbox tween
 
                 textboxStraint.MinSize = Vector2.new(ForcedMinSize.X + 4, 22)
                 textboxTwoStraint.MinSize = Vector2.new(ForcedMinSize.X + 2, 20)
@@ -3199,7 +3200,7 @@ function library:_InternalInit(key) -- Renamed from Init
             selectorTwoLayout_2.HorizontalAlignment = Enum.HorizontalAlignment.Center
             selectorTwoLayout_2.SortOrder = Enum.SortOrder.LayoutOrder
 
-            CreateTween("selector", 0.08)
+            CreateTween("selector", 0.1, Enum.EasingStyle.Quad) -- Slightly adjusted selector tween
 
             selectorContainer.ChildAdded:Connect(UpdatePageSize)
             selectorContainer.ChildAdded:Connect(UpdatePageSize)
@@ -3516,7 +3517,7 @@ function library:_InternalInit(key) -- Renamed from Init
             sliderIndicator.Size = UDim2.new(0, Calculation, 0, 12)
             sliderValue.Text = values.default
 
-            CreateTween("slider_drag", 0.008)
+            CreateTween("slider_drag", 0.05, Enum.EasingStyle.Quad) -- Smoother slider drag
 
             local ValueNum = values.default
             local slideText = compare and ValueNum .. compareSign .. tostring(values.max - 1) .. suffix or ValueNum .. suffix
