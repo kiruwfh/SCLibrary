@@ -1,7 +1,18 @@
 --[[
-    MyNewUI Library v1.2.0
-    - Добавлены компоненты: Slider, Textbox, Selector, Separator.
-    - Улучшена обработка CanvasSize.
+  Stable UI Library (v1.0)
+  Inspired by previous concepts, rebuilt for stability and compatibility.
+
+  Features:
+  - Window management (dragging, keybind toggle)
+  - Tabbed interface
+  - Component system (Label, Button, Toggle, Keybind, Textbox, Section, Separator, Slider, Selector)
+  - Notification system
+  - Watermark (FPS, Time)
+  - Simple Key System
+  - In-memory Usage Time Tracking
+  - Robust error handling (pcall)
+  - Modern Luau practices (task.wait, task.spawn)
+  - No external dependencies (like Synapse)
 ]]
 
 -- / Services
@@ -9,491 +20,1845 @@ local UserInputService = game:GetService("UserInputService")
 local TextService = game:GetService("TextService")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
-local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
+local Players = game:GetService("Players")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService") -- Only for potential future use if allowed
 
--- / Locals
-local player = Players.LocalPlayer -- << Глобальная для библиотеки
+-- / Local Player
+local LocalPlayer = Players.LocalPlayer
+if not LocalPlayer then
+	Players.PlayerAdded:Wait() -- Wait if player hasn't loaded yet
+	LocalPlayer = Players.LocalPlayer
+	if not LocalPlayer then
+		error("StableUI Error: Could not get LocalPlayer.")
+		return nil
+	end
+end
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
--- / Core Library Table
-local MyUILibrary = {}
-MyUILibrary.Version = "1.2.0"
-MyUILibrary._IsKeyAccepted = false
+-- / Library Core Table
+local library = {
+	_Version = "1.0",
+	_Title = "Stable UI",
+	_ToggleKey = Enum.KeyCode.RightAlt,
+	_CorrectKey = "YourSecureKey123", -- <<< CHANGE THIS KEY!
+	_WatermarkText = "Stable UI",
+	_ShowGreeting = true,
+	_UseKeySystem = true,
 
--- / Private Helper Functions
-local function CreateElement(elementType, properties)
-    local element = Instance.new(elementType)
-    for prop, value in pairs(properties or {}) do
-        pcall(function() element[prop] = value end)
-    end
-    return element
+	-- Internal State
+	_UI_INITIALIZED = false,
+	_KEY_ACCEPTED = false,
+	_FPS = 0,
+	_StartTime = 0,
+	_TotalElapsedTime = 0,
+	_TrackingEnabled = false,
+	_ActiveScreen = nil, -- Reference to the main ScreenGui
+	_ActiveTab = nil,
+	_ActivePage = nil,
+	_PageUpdateDebouncers = {}, -- { [pageInstance] = debouncerFunc }
+	_ComponentCleanup = {}, -- { [pageInstance] = { [componentFrame] = {connection1, instance2, ...} } }
+	_NotificationQueue = {},
+	_NotificationScreen = nil,
+	_WatermarkScreen = nil,
+	_MainKeybindConnection = nil,
+	_NotificationFunc = nil, -- Assigned after InitNotifications
+	_WatermarkControl = nil, -- Assigned after Watermark is created
+}
+
+-- / Configuration Methods
+function library:SetTitle(title)
+	library._Title = tostring(title or "Stable UI")
+	-- Update title label if UI exists
+	if library._ActiveScreen then
+		local headerLabel = library._ActiveScreen:FindFirstChild("Edge", true):FindFirstChild("Background", true):FindFirstChild("HeaderFrame", true):FindFirstChild("headerLabel", true)
+		if headerLabel then
+			pcall(function() headerLabel.Text = library._Title end)
+		end
+	end
+	return library
 end
 
-local function EnableDrag(guiObject)
-    local dragging = false
-    local dragInput = nil
-    local dragStart = nil
-    local startPos = nil
-    local originalZIndex = guiObject.Parent and guiObject.Parent.DisplayOrder or 1
-
-    local connectionBegan, connectionEnded, connectionChanged
-    connectionBegan = guiObject.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragStart = input.Position
-            startPos = guiObject.Position
-            dragInput = input
-            if guiObject.Parent and guiObject.Parent:IsA("ScreenGui") then
-                 originalZIndex = guiObject.Parent.DisplayOrder
-                 guiObject.Parent.DisplayOrder = 9999
-            end
-        end
-    end)
-
-    connectionEnded = guiObject.InputEnded:Connect(function(input)
-        if input == dragInput then
-            dragging = false
-            dragInput = nil
-            if guiObject.Parent and guiObject.Parent:IsA("ScreenGui") then
-                 guiObject.Parent.DisplayOrder = originalZIndex
-            end
-        end
-    end)
-
-    connectionChanged = UserInputService.InputChanged:Connect(function(input)
-        if input == dragInput and dragging then
-            local delta = input.Position - dragStart
-            guiObject.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-        end
-    end)
-
-    -- Возвращаем соединения, чтобы их можно было отключить при удалении окна
-    return {connectionBegan, connectionEnded, connectionChanged}
+function library:SetToggleKey(keyCode)
+	if typeof(keyCode) == "EnumItem" and keyCode.EnumType == Enum.KeyCode then
+		library._ToggleKey = keyCode
+		-- Rebind key if UI exists
+		if library._MainKeybindConnection then
+			library._MainKeybindConnection:Disconnect()
+			library._MainKeybindConnection = UserInputService.InputBegan:Connect(library._HandleToggleKey)
+		end
+	else
+		warn("StableUI SetToggleKey: Invalid KeyCode provided.")
+	end
+	return library
 end
 
--- / Window Object
-local Window = {}
-Window.__index = Window
-
-function Window:NewTab(title)
-    title = title or "Вкладка"
-
-    local tabButton = CreateElement("TextButton", {
-        Name = title .. "_TabButton", Parent = self._tabButtonContainer, Size = UDim2.new(1, -10, 0, 28),
-        BackgroundColor3 = Color3.fromRGB(55, 55, 55), TextColor3 = Color3.fromRGB(170, 170, 170),
-        Font = Enum.Font.GothamSemibold, TextSize = 15, Text = title, AutoButtonColor = false,
-        LayoutOrder = #self._tabButtonContainer:GetChildren() + 1
-    })
-    CreateElement("UICorner", { CornerRadius = UDim.new(0, 3), Parent = tabButton })
-
-    local page = CreateElement("ScrollingFrame", {
-        Name = title .. "_Page", Parent = self._contentContainer, Size = UDim2.new(1, 0, 1, 0),
-        BackgroundTransparency = 1.0, BorderSizePixel = 0, Visible = false, ScrollBarThickness = 5,
-        ScrollBarImageColor3 = Color3.fromRGB(100, 100, 100), CanvasSize = UDim2.new(0, 0, 0, 0),
-        AutomaticCanvasSize = Enum.AutomaticSize.Y -- Используем автоматический размер по Y
-    })
-    local pageLayout = CreateElement("UIListLayout", { Name = "PageLayout", Parent = page, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 6), HorizontalAlignment = Enum.HorizontalAlignment.Center })
-    local pagePadding = CreateElement("UIPadding", { Parent = page, PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8), PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8) })
-
-    -- Убираем ручное обновление CanvasSize, полагаемся на AutomaticCanvasSize = Y
-    -- local function UpdateCanvasSize()...
-    -- self.Page.ChildAdded:Connect... и т.д. больше не нужны
-
-    tabButton.MouseButton1Click:Connect(function()
-        if self._activeTabButton == tabButton then return end
-        if self._activeTabButton then
-            TweenService:Create(self._activeTabButton, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(55, 55, 55)}):Play()
-            TweenService:Create(self._activeTabButton, TweenInfo.new(0.15), {TextColor3 = Color3.fromRGB(170, 170, 170)}):Play()
-        end
-        if self._activePage then self._activePage.Visible = false end
-        TweenService:Create(tabButton, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(85, 85, 85)}):Play()
-        TweenService:Create(tabButton, TweenInfo.new(0.15), {TextColor3 = Color3.fromRGB(230, 230, 230)}):Play()
-        page.Visible = true
-        self._activeTabButton = tabButton
-        self._activePage = page
-    end)
-
-    if not self._activeTabButton then
-         task.wait(0.1)
-         pcall(function() tabButton:MouseButton1Click() end)
-    end
-
-    local Tab = {}
-    Tab.Page = page
-    Tab._pageLayout = pageLayout
-    Tab._pagePadding = pagePadding
-    -- Tab._UpdateCanvasSize = function() end -- Больше не нужна
-
-    -- Компоненты
-    function Tab:NewLabel(text, alignment)
-        local label = CreateElement("TextLabel", { Name = "Label", Parent = self.Page, Text = text or "Label", Font = Enum.Font.Code, TextSize = 14, TextColor3 = Color3.fromRGB(210, 210, 210), BackgroundTransparency = 1, AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.new(1, 0, 0, 18), TextWrapped = true, TextXAlignment = alignment or Enum.TextXAlignment.Left })
-        -- self:_UpdateCanvasSize() -- Не нужно
-        return label
-    end
-
-    function Tab:NewButton(text, callback)
-        callback = callback or function() print("Button '"..tostring(text).."' clicked") end
-        local button = CreateElement("TextButton", { Name = "Button", Parent = self.Page, Text = text or "Button", Font = Enum.Font.GothamSemibold, TextSize = 14, TextColor3 = Color3.fromRGB(220, 220, 220), BackgroundColor3 = Color3.fromRGB(80, 80, 80), Size = UDim2.new(1, 0, 0, 28), AutoButtonColor = false })
-        CreateElement("UICorner", { CornerRadius = UDim.new(0, 3), Parent = button })
-        button.MouseEnter:Connect(function() TweenService:Create(button, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(100, 100, 100)}):Play() end)
-        button.MouseLeave:Connect(function() TweenService:Create(button, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(80, 80, 80)}):Play() end)
-        button.MouseButton1Click:Connect(function() pcall(callback) end)
-        -- self:_UpdateCanvasSize() -- Не нужно
-        return button
-    end
-
-     function Tab:NewToggle(text, defaultState, callback)
-        defaultState = defaultState or false
-        callback = callback or function(state) print("Toggle '"..tostring(text).."' state:", state) end
-        local currentState = defaultState
-        local frame = CreateElement("Frame", {Name = "ToggleFrame", Parent = self.Page, Size = UDim2.new(1, 0, 0, 24), BackgroundTransparency = 1})
-        local layout = CreateElement("UIListLayout", {Parent = frame, FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8)})
-        local checkbox = CreateElement("TextButton", {Name = "Checkbox", Parent = frame, Size = UDim2.new(0, 18, 0, 18), BackgroundColor3 = Color3.fromRGB(60, 60, 60), BorderSizePixel = 0, Text = "", AutoButtonColor = false})
-        CreateElement("UICorner", {CornerRadius = UDim.new(0, 3), Parent = checkbox})
-        local checkmark = CreateElement("Frame", {Name = "Checkmark", Parent = checkbox, Size = UDim2.new(0.7, 0, 0.7, 0), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), BackgroundColor3 = Color3.fromRGB(150, 100, 255), BorderSizePixel = 0, Visible = currentState})
-        CreateElement("UICorner", {CornerRadius = UDim.new(0, 2), Parent = checkmark})
-        local label = CreateElement("TextLabel", {Name = "ToggleLabel", Parent = frame, Text = text or "Toggle", Font = Enum.Font.Code, TextSize = 14, TextColor3 = Color3.fromRGB(210, 210, 210), BackgroundTransparency = 1, Size = UDim2.new(1, -30, 1, 0), TextXAlignment = Enum.TextXAlignment.Left})
-        local function UpdateState(newState) currentState = newState; checkmark.Visible = currentState; pcall(callback, currentState) end
-        checkbox.MouseButton1Click:Connect(function() UpdateState(not currentState) end)
-        -- self:_UpdateCanvasSize() -- Не нужно
-        local control = {}; function control:Set(state) UpdateState(state) end; function control:Get() return currentState end; function control:Remove() frame:Destroy() end; return control
-    end
-
-    function Tab:NewSeparator()
-        local sep = CreateElement("Frame", { Name = "Separator", Parent = self.Page, Size = UDim2.new(1, -10, 0, 1), BackgroundColor3 = Color3.fromRGB(70, 70, 75), BorderSizePixel = 0 })
-        -- self:_UpdateCanvasSize() -- Не нужно
-        return sep
-    end
-
-    function Tab:NewTextbox(text, options, callback)
-        options = options or {}
-        callback = callback or function(value) print("Textbox '"..tostring(text).."' value:", value) end
-        local placeholder = options.Placeholder or "Введите текст..."
-        local defaultText = options.Default or ""
-
-        local frame = CreateElement("Frame", { Name = "TextboxFrame", Parent = self.Page, Size = UDim2.new(1, 0, 0, 50), BackgroundTransparency = 1 }) -- Высота контейнера
-        local layout = CreateElement("UIListLayout", {Parent = frame, Padding = UDim.new(0, 4)})
-        local label = CreateElement("TextLabel", { Name = "TextboxLabel", Parent = frame, Text = text or "Textbox", Font = Enum.Font.Code, TextSize = 14, TextColor3 = Color3.fromRGB(210, 210, 210), BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 18), TextXAlignment = Enum.TextXAlignment.Left })
-        local textbox = CreateElement("TextBox", { Name = "TextboxInput", Parent = frame, Text = defaultText, PlaceholderText = placeholder, Font = Enum.Font.Code, TextSize = 14, TextColor3 = Color3.fromRGB(230, 230, 230), BackgroundColor3 = Color3.fromRGB(55, 55, 60), BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 26), ClearTextOnFocus = false, TextXAlignment = Enum.TextXAlignment.Left })
-        CreateElement("UICorner", { CornerRadius = UDim.new(0, 3), Parent = textbox })
-        CreateElement("UIPadding", { Parent = textbox, PaddingLeft = UDim.new(0, 5), PaddingRight = UDim.new(0, 5) })
-
-        textbox.FocusLost:Connect(function(enterPressed)
-            pcall(callback, textbox.Text) -- Вызываем callback при потере фокуса
-        end)
-        -- self:_UpdateCanvasSize() -- Не нужно
-        local control = {}
-        function control:Set(value) textbox.Text = tostring(value) end
-        function control:Get() return textbox.Text end
-        function control:Remove() frame:Destroy() end
-        return control
-    end
-
-     function Tab:NewSlider(text, options, callback)
-        options = options or {}
-        callback = callback or function(value) print("Slider '"..tostring(text).."' value:", value) end
-        local minVal = options.Min or 0
-        local maxVal = options.Max or 100
-        local defaultVal = options.Default or minVal
-        local increment = options.Increment or 1
-        local suffix = options.Suffix or ""
-
-        local currentValue = defaultVal
-        local isDragging = false
-
-        local frame = CreateElement("Frame", { Name = "SliderFrame", Parent = self.Page, Size = UDim2.new(1, 0, 0, 42), BackgroundTransparency = 1 })
-        local layout = CreateElement("UIListLayout", {Parent = frame, Padding = UDim.new(0, 4)})
-        local topRow = CreateElement("Frame", { Name = "TopRow", Parent = frame, Size = UDim2.new(1, 0, 0, 18), BackgroundTransparency = 1 })
-        local topLayout = CreateElement("UIListLayout", {Parent = topRow, FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center})
-        local label = CreateElement("TextLabel", { Name = "SliderLabel", Parent = topRow, Text = text or "Slider", Font = Enum.Font.Code, TextSize = 14, TextColor3 = Color3.fromRGB(210, 210, 210), BackgroundTransparency = 1, Size = UDim2.new(0.7, 0, 1, 0), TextXAlignment = Enum.TextXAlignment.Left })
-        local valueLabel = CreateElement("TextLabel", { Name = "ValueLabel", Parent = topRow, Text = tostring(currentValue)..suffix, Font = Enum.Font.Code, TextSize = 14, TextColor3 = Color3.fromRGB(180, 180, 180), BackgroundTransparency = 1, Size = UDim2.new(0.3, -5, 1, 0), TextXAlignment = Enum.TextXAlignment.Right })
-        local track = CreateElement("Frame", { Name = "Track", Parent = frame, Size = UDim2.new(1, 0, 0, 18), BackgroundColor3 = Color3.fromRGB(55, 55, 60), BorderSizePixel = 0 })
-        CreateElement("UICorner", {CornerRadius = UDim.new(1,0), Parent = track})
-        local fill = CreateElement("Frame", { Name = "Fill", Parent = track, Size = UDim2.fromScale(0, 1), BackgroundColor3 = Color3.fromRGB(150, 100, 255), BorderSizePixel = 0 })
-        CreateElement("UICorner", {CornerRadius = UDim.new(1,0), Parent = fill})
-        local thumb = CreateElement("Frame", { Name = "Thumb", Parent = track, Size = UDim2.new(0, 10, 0, 10), BackgroundColor3 = Color3.fromRGB(200, 200, 200), BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0, 0.5) })
-        CreateElement("UICorner", {CornerRadius = UDim.new(1,0), Parent = thumb})
-
-        local function UpdateVisuals(value)
-            local percentage = math.clamp(((value or currentValue) - minVal) / (maxVal - minVal), 0, 1)
-            if maxVal == minVal then percentage = 0 end -- Avoid NaN
-            fill.Size = UDim2.new(percentage, 0, 1, 0)
-            thumb.Position = UDim2.new(percentage, 0, 0.5, 0)
-            valueLabel.Text = tostring(math.floor(((value or currentValue)*10^2)+0.5)/(10^2)) .. suffix -- Round to 2 decimal places for display
-        end
-
-        local function SetValue(newValue, runCallback)
-            local snappedValue = math.clamp(math.floor((newValue - minVal) / increment + 0.5) * increment + minVal, minVal, maxVal)
-            if snappedValue == currentValue then return end
-            currentValue = snappedValue
-            UpdateVisuals()
-            if runCallback then pcall(callback, currentValue) end
-        end
-
-        track.InputBegan:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                isDragging = true
-                local mouseX = input.Position.X
-                local trackStartX = track.AbsolutePosition.X
-                local trackWidth = track.AbsoluteSize.X
-                local percentage = math.clamp((mouseX - trackStartX) / trackWidth, 0, 1)
-                SetValue(minVal + percentage * (maxVal - minVal), true)
-            end
-        end)
-        track.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then isDragging = false end end)
-        UserInputService.InputChanged:Connect(function(input)
-            if isDragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-                local mouseX = input.Position.X
-                local trackStartX = track.AbsolutePosition.X
-                local trackWidth = track.AbsoluteSize.X
-                local percentage = math.clamp((mouseX - trackStartX) / trackWidth, 0, 1)
-                SetValue(minVal + percentage * (maxVal - minVal), true)
-            end
-        end)
-
-        UpdateVisuals(defaultVal) -- Set initial visuals
-        -- self:_UpdateCanvasSize() -- Не нужно
-        local control = {}
-        function control:Set(value, silent) SetValue(value, not silent) end
-        function control:Get() return currentValue end
-        function control:Remove() frame:Destroy() end
-        return control
-    end
-
-    function Tab:NewSelector(text, optionsList, defaultOption, callback)
-        optionsList = optionsList or {"Option1", "Option2"}
-        defaultOption = defaultOption or optionsList[1]
-        callback = callback or function(selected) print("Selector '"..tostring(text).."' selected:", selected) end
-        local currentSelection = defaultOption
-        local isOpen = false
-
-        local frame = CreateElement("Frame", { Name = "SelectorFrame", Parent = self.Page, Size = UDim2.new(1, 0, 0, 52), BackgroundTransparency = 1, ClipsDescendants = false, ZIndex = 2 }) -- Higher ZIndex base
-        local layout = CreateElement("UIListLayout", {Parent = frame, Padding = UDim.new(0, 4)})
-        local label = CreateElement("TextLabel", { Name = "SelectorLabel", Parent = frame, Text = text or "Selector", Font = Enum.Font.Code, TextSize = 14, TextColor3 = Color3.fromRGB(210, 210, 210), BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 18), TextXAlignment = Enum.TextXAlignment.Left })
-
-        local dropdownButton = CreateElement("TextButton", { Name = "DropdownButton", Parent = frame, Text = tostring(currentSelection), Font = Enum.Font.Code, TextSize = 14, TextColor3 = Color3.fromRGB(220, 220, 220), BackgroundColor3 = Color3.fromRGB(55, 55, 60), Size = UDim2.new(1, 0, 0, 28), AutoButtonColor = false, TextXAlignment = Enum.TextXAlignment.Left })
-        CreateElement("UICorner", { CornerRadius = UDim.new(0, 3), Parent = dropdownButton })
-        CreateElement("UIPadding", { Parent = dropdownButton, PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 20) }) -- Space for arrow
-        local arrow = CreateElement("ImageLabel", { Name = "Arrow", Parent = dropdownButton, Size = UDim2.new(0, 12, 0, 12), Position = UDim2.new(1, -15, 0.5, 0), AnchorPoint = Vector2.new(1, 0.5), Image = "rbxassetid://3926305904", ImageColor3 = Color3.fromRGB(180, 180, 180), BackgroundTransparency = 1, Rotation = 0 })
-
-        local optionsFrame = CreateElement("ScrollingFrame", { Name = "OptionsFrame", Parent = frame, Size = UDim2.new(1, 0, 0, 0), Position = UDim2.new(0, 0, 1, 0), BackgroundColor3 = Color3.fromRGB(55, 55, 60), BorderSizePixel = 1, BorderColor3 = Color3.fromRGB(80, 80, 90), Visible = false, ClipsDescendants = true, CanvasSize = UDim2.new(0,0,0,0), ScrollBarThickness = 4, ZIndex = 10 }) -- High ZIndex when open
-        CreateElement("UICorner", { CornerRadius = UDim.new(0, 3), Parent = optionsFrame })
-        local optionsLayout = CreateElement("UIListLayout", {Parent = optionsFrame, Padding = UDim.new(0, 1)})
-
-        local function ToggleDropdown()
-            isOpen = not isOpen
-            optionsFrame.Visible = isOpen
-            if isOpen then
-                frame.ZIndex = 10 -- Bring whole control to front
-                -- Populate options
-                for _, child in ipairs(optionsFrame:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
-                local canvasHeight = 0
-                for _, optionText in ipairs(optionsList) do
-                    local optButton = CreateElement("TextButton", {
-                        Name = "OptionButton", Parent = optionsFrame, Text = tostring(optionText), Font = Enum.Font.Code, TextSize = 14,
-                        TextColor3 = (tostring(optionText) == tostring(currentSelection)) and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(180, 180, 180),
-                        BackgroundColor3 = (tostring(optionText) == tostring(currentSelection)) and Color3.fromRGB(75, 75, 80) or Color3.fromRGB(55, 55, 60),
-                        Size = UDim2.new(1, 0, 0, 24), AutoButtonColor = false, TextXAlignment = Enum.TextXAlignment.Left
-                    })
-                    CreateElement("UIPadding", { Parent = optButton, PaddingLeft = UDim.new(0, 8) })
-                    optButton.MouseEnter:Connect(function() if tostring(optButton.Text) ~= tostring(currentSelection) then optButton.BackgroundColor3 = Color3.fromRGB(70, 70, 75) end end)
-                    optButton.MouseLeave:Connect(function() if tostring(optButton.Text) ~= tostring(currentSelection) then optButton.BackgroundColor3 = Color3.fromRGB(55, 55, 60) end end)
-                    optButton.MouseButton1Click:Connect(function()
-                        currentSelection = optionText
-                        dropdownButton.Text = tostring(currentSelection)
-                        pcall(callback, currentSelection)
-                        ToggleDropdown() -- Close after selection
-                    end)
-                    canvasHeight = canvasHeight + 24 + optionsLayout.Padding.Offset
-                end
-                optionsFrame.CanvasSize = UDim2.new(0, 0, 0, canvasHeight - optionsLayout.Padding.Offset)
-                local targetHeight = math.min(150, optionsFrame.CanvasSize.Y.Offset + 4) -- Max height 150 + border
-                TweenService:Create(optionsFrame, TweenInfo.new(0.2), {Size = UDim2.new(1, 0, 0, targetHeight)}):Play()
-                TweenService:Create(arrow, TweenInfo.new(0.2), {Rotation = 180}):Play()
-            else
-                TweenService:Create(optionsFrame, TweenInfo.new(0.2), {Size = UDim2.new(1, 0, 0, 0)}):Play()
-                TweenService:Create(arrow, TweenInfo.new(0.2), {Rotation = 0}):Play()
-                task.wait(0.2)
-                optionsFrame.Visible = false
-                frame.ZIndex = 2 -- Reset ZIndex
-            end
-        end
-        dropdownButton.MouseButton1Click:Connect(ToggleDropdown)
-        -- self:_UpdateCanvasSize() -- Не нужно
-        local control = {}
-        function control:Set(value, silent)
-             local found = false; for _,opt in ipairs(optionsList) do if tostring(opt) == tostring(value) then currentSelection = opt; dropdownButton.Text = tostring(currentSelection); found = true; break end end
-             if found and not silent then pcall(callback, currentSelection) end
-        end
-        function control:Get() return currentSelection end
-        function control:Remove() frame:Destroy() end
-        -- TODO: Add AddOption, RemoveOption, ClearOptions, SetOptions
-        return control
-    end
-
-    -- TODO: Add NewKeybind
-
-    return Tab
+function library:SetAccessKey(key)
+	library._CorrectKey = tostring(key or "")
+	return library
 end
 
-function Window:ToggleVisible()
-    if self.ScreenGui then self.ScreenGui.Enabled = not self.ScreenGui.Enabled; print("[MyNewUI] Visibility toggled to:", self.ScreenGui.Enabled) end
+function library:SetWatermarkText(text)
+	library._WatermarkText = tostring(text or "Stable UI")
+	if library._WatermarkControl then
+		pcall(library._WatermarkControl.Text, library._WatermarkText)
+	end
+	return library
 end
 
-function Window:SetTitle(title)
-    if self._headerLabel then self._headerLabel.Text = title or "My UI Library" end
+function library:EnableGreeting(enable)
+	library._ShowGreeting = (enable == true)
+	return library
 end
 
-function Window:Remove()
-    if self._toggleConnection then self._toggleConnection:Disconnect(); self._toggleConnection = nil end
-    -- Отключаем соединения Drag
-    if self._dragConnections then
-        for _, conn in ipairs(self._dragConnections) do conn:Disconnect() end
-        self._dragConnections = nil
-    end
-    if self.ScreenGui then print("[MyNewUI] Removing UI."); self.ScreenGui:Destroy(); for k, v in pairs(self) do self[k] = nil end end
+function library:EnableKeySystem(enable)
+	library._UseKeySystem = (enable == true)
+	return library
 end
 
--- / Key System
-function MyUILibrary:RequestKey(options)
-    options = options or {}
-    local correctKey = options.CorrectKey or "DEFAULT_KEY"
-    local onSuccess = options.OnSuccess or function() print("[MyNewUI] Key Correct!") end
-    local keyPromptName = "MyNewUI_KeyPrompt"
-    local existingPrompt = CoreGui:FindFirstChild(keyPromptName)
-    if existingPrompt then existingPrompt:Destroy() end
+-- / Utility Functions
 
-    local screenGui = CreateElement("ScreenGui", {Name = keyPromptName, Parent = CoreGui, DisplayOrder = 10000, ZIndexBehavior = Enum.ZIndexBehavior.Sibling})
-    local overlay = CreateElement("Frame", {Name = "Overlay", Parent = screenGui, Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.6, Active = true})
-    local promptBox = CreateElement("Frame", {Name = "PromptBox", Parent = overlay, Size = UDim2.new(0, 300, 0, 160), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), BackgroundColor3 = Color3.fromRGB(40, 40, 45), BorderSizePixel = 0})
-    CreateElement("UICorner", { CornerRadius = UDim.new(0, 4), Parent = promptBox })
-    local title = CreateElement("TextLabel", {Name = "Title", Parent = promptBox, Size = UDim2.new(1, 0, 0, 35), BackgroundColor3 = Color3.fromRGB(55, 55, 60), Text = "Требуется Ключ", Font = Enum.Font.GothamSemibold, TextSize = 16, TextColor3 = Color3.fromRGB(220, 220, 225)})
-    local infoLabel = CreateElement("TextLabel", {Name = "Info", Parent = promptBox, Size = UDim2.new(0.9, 0, 0, 20), Position = UDim2.new(0.5, 0, 0, 45), AnchorPoint = Vector2.new(0.5, 0), Text = "Введите ключ доступа:", Font = Enum.Font.Code, TextSize = 14, TextColor3 = Color3.fromRGB(180, 180, 180), BackgroundTransparency = 1})
-    local keyInput = CreateElement("TextBox", {Name = "Input", Parent = promptBox, Size = UDim2.new(0.8, 0, 0, 30), Position = UDim2.new(0.5, 0, 0, 75), AnchorPoint = Vector2.new(0.5, 0), BackgroundColor3 = Color3.fromRGB(30, 30, 35), BorderSizePixel = 0, Font = Enum.Font.Code, TextSize = 14, TextColor3 = Color3.fromRGB(210, 210, 210), PlaceholderText = "Ключ...", PlaceholderColor3 = Color3.fromRGB(100, 100, 100), ClearTextOnFocus = false})
-    CreateElement("UICorner", { CornerRadius = UDim.new(0, 3), Parent = keyInput })
-    local submitButton = CreateElement("TextButton", {Name = "Submit", Parent = promptBox, Size = UDim2.new(0.5, 0, 0, 30), Position = UDim2.new(0.5, 0, 0, 115), AnchorPoint = Vector2.new(0.5, 0), BackgroundColor3 = Color3.fromRGB(80, 80, 90), Font = Enum.Font.GothamSemibold, Text = "Ввод", TextSize = 14, TextColor3 = Color3.fromRGB(220, 220, 220), AutoButtonColor = false})
-    CreateElement("UICorner", { CornerRadius = UDim.new(0, 3), Parent = submitButton })
-
-    submitButton.MouseEnter:Connect(function() submitButton.BackgroundColor3 = Color3.fromRGB(100, 100, 110) end)
-    submitButton.MouseLeave:Connect(function() submitButton.BackgroundColor3 = Color3.fromRGB(80, 80, 90) end)
-
-    local function checkKey()
-        if keyInput.Text == correctKey then
-            MyUILibrary._IsKeyAccepted = true
-            screenGui:Destroy()
-            pcall(onSuccess)
-        else
-            infoLabel.Text = "Неверный ключ!"
-            infoLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
-            keyInput.Text = ""
-            local originalPos = promptBox.Position
-            local tween = TweenService:Create(promptBox, TweenInfo.new(0.08, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, 4, true), {Position = originalPos + UDim2.new(0, 5, 0, 0)})
-            tween:Play()
-            tween.Completed:Connect(function() if promptBox and promptBox.Parent then promptBox.Position = originalPos end end) -- Check existence
-        end
-    end
-
-    submitButton.MouseButton1Click:Connect(checkKey)
-    keyInput.FocusLost:Connect(function(enterPressed) if enterPressed then checkKey() end end)
-    print("[MyNewUI] Key prompt displayed.")
+-- Tweening Helper
+local TweenInfos = {
+	Default = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+	Fast = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+	Slow = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+	Elastic = TweenInfo.new(0.6, Enum.EasingStyle.Elastic, Enum.EasingDirection.Out),
+	Bounce = TweenInfo.new(0.6, Enum.EasingStyle.Bounce, Enum.EasingDirection.Out),
+	Linear = TweenInfo.new(0.2, Enum.EasingStyle.Linear),
+	Instant = TweenInfo.new(0),
+}
+local function CreateTween(instance, tweenInfoName, properties)
+	local success, tween = pcall(function()
+		return TweenService:Create(instance, TweenInfos[tweenInfoName] or TweenInfos.Default, properties)
+	end)
+	if success then
+		return tween
+	else
+		warn("StableUI CreateTween Error:", tween) -- Show error message
+		return nil
+	end
+end
+local function PlayTween(instance, tweenInfoName, properties)
+	local tween = CreateTween(instance, tweenInfoName, properties)
+	if tween then
+		pcall(tween.Play, tween)
+	end
+	return tween -- Return the tween object or nil
 end
 
--- / Greeting Screen
-function MyUILibrary:ShowGreeting(options, callback)
-    options = options or {}
-    callback = callback or function() print("[MyNewUI] Greeting finished.") end
-    local duration = options.Duration or 2.5
-    local greetingName = "MyNewUI_Greeting"
-    local existingGreeting = CoreGui:FindFirstChild(greetingName)
-    if existingGreeting then existingGreeting:Destroy() end
-
-    local screenGui = CreateElement("ScreenGui", {Name = greetingName, Parent = CoreGui, DisplayOrder = 10001, ZIndexBehavior = Enum.ZIndexBehavior.Sibling})
-    local overlay = CreateElement("Frame", {Name = "Overlay", Parent = screenGui, Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 1})
-    local textLabel = CreateElement("TextLabel", {Name = "WelcomeText", Parent = overlay, Size = UDim2.new(1, -40, 0, 50), Position = UDim2.fromScale(0.5, 0.5), AnchorPoint = Vector2.new(0.5, 0.5), Text = "Добро пожаловать, " .. (player and player.DisplayName or "Игрок") .. "!", Font = Enum.Font.GothamBold, TextSize = 24, TextColor3 = Color3.fromRGB(230, 230, 230), TextWrapped = true, BackgroundTransparency = 1, TextTransparency = 1})
-    local loadBarBg = CreateElement("Frame", {Name = "LoadBarBg", Parent = overlay, Size = UDim2.new(0.5, 0, 0, 6), Position = UDim2.new(0.5, 0, 0.6, 0), AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = Color3.fromRGB(60, 60, 65), BackgroundTransparency = 1, BorderSizePixel = 0})
-    CreateElement("UICorner", {CornerRadius = UDim.new(1,0), Parent = loadBarBg})
-    local loadBarFill = CreateElement("Frame", {Name = "LoadBarFill", Parent = loadBarBg, Size = UDim2.fromScale(0, 1), BackgroundColor3 = Color3.fromRGB(150, 100, 255), BorderSizePixel = 0})
-    CreateElement("UICorner", {CornerRadius = UDim.new(1,0), Parent = loadBarFill})
-
-    local fadeInTime = 0.4
-    local waitTime = math.max(0, duration - (fadeInTime * 2))
-    local loadTime = math.max(0.1, waitTime * 0.8)
-
-    TweenService:Create(overlay, TweenInfo.new(fadeInTime), {BackgroundTransparency = 0.6}):Play()
-    local textTween = TweenService:Create(textLabel, TweenInfo.new(fadeInTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, false, fadeInTime * 0.5), {TextTransparency = 0})
-    textTween:Play()
-    TweenService:Create(loadBarBg, TweenInfo.new(fadeInTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, false, fadeInTime * 0.6), {BackgroundTransparency = 0.5}):Play()
-    local loadTween = TweenService:Create(loadBarFill, TweenInfo.new(loadTime, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, 0, false, fadeInTime * 0.8), {Size = UDim2.fromScale(1, 1)})
-    loadTween:Play()
-
-    task.delay(duration - fadeInTime, function()
-        TweenService:Create(overlay, TweenInfo.new(fadeInTime), {BackgroundTransparency = 1}):Play()
-        TweenService:Create(textLabel, TweenInfo.new(fadeInTime), {TextTransparency = 1}):Play()
-        TweenService:Create(loadBarBg, TweenInfo.new(fadeInTime), {BackgroundTransparency = 1}):Play()
-        task.delay(fadeInTime, function()
-            if screenGui and screenGui.Parent then screenGui:Destroy() end
-            pcall(callback)
-        end)
-    end)
-    print("[MyNewUI] Greeting displayed.")
+-- Safe Instance Creation
+local function SafeCreate(instanceType, properties)
+	local success, instance = pcall(Instance.new, instanceType)
+	if not success then
+		warn("StableUI SafeCreate Error: Failed to create", instanceType, "-", instance)
+		return nil
+	end
+	if properties then
+		for prop, value in pairs(properties) do
+			pcall(function() instance[prop] = value end)
+		end
+	end
+	return instance
 end
 
--- / Library Initialization Function (Main UI)
-function MyUILibrary:Init(options)
-    if not MyUILibrary._IsKeyAccepted then
-         warn("[MyNewUI] Init called, but key was not accepted. Use RequestKey first.")
-         return nil
-    end
-
-    options = options or {}
-    local title = options.Title or "My UI Library"
-    local toggleKey = options.ToggleKey or Enum.KeyCode.RightControl
-    local initialSize = options.Size or UDim2.new(0, 550, 0, 350)
-    local initialPosition = options.Position or UDim2.fromScale(0.5, 0.5)
-    local uiName = "MyNewUI_Screen"
-
-    print("[MyNewUI] Initializing Main UI...")
-
-    local existingGui = CoreGui:FindFirstChild(uiName)
-    if existingGui then warn("[MyNewUI] Main UI already exists. Destroying old one."); existingGui:Destroy() end
-
-    local screenGui = CreateElement("ScreenGui", {Name = uiName, Parent = CoreGui, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, DisplayOrder = 9990})
-    local mainFrame = CreateElement("Frame", {Name = "MainFrame", Parent = screenGui, Size = initialSize, Position = initialPosition, AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = Color3.fromRGB(40, 40, 45), BorderSizePixel = 1, BorderColor3 = Color3.fromRGB(80, 80, 90)})
-    CreateElement("UICorner", { CornerRadius = UDim.new(0, 5), Parent = mainFrame })
-    local dragConnections = EnableDrag(mainFrame) -- Сохраняем соединения
-
-    local header = CreateElement("Frame", {Name = "Header", Parent = mainFrame, Size = UDim2.new(1, 0, 0, 30), BackgroundColor3 = Color3.fromRGB(55, 55, 60), BorderSizePixel = 0})
-    local headerLabel = CreateElement("TextLabel", {Name = "Title", Parent = header, Size = UDim2.new(1, -10, 1, 0), Position = UDim2.fromOffset(5, 0), Text = title, Font = Enum.Font.GothamSemibold, TextSize = 16, TextColor3 = Color3.fromRGB(220, 220, 225), BackgroundTransparency = 1, TextXAlignment = Enum.TextXAlignment.Left})
-    local contentArea = CreateElement("Frame", {Name = "ContentArea", Parent = mainFrame, Size = UDim2.new(1, 0, 1, -30), Position = UDim2.fromOffset(0, 30), BackgroundTransparency = 1})
-    local tabButtonContainer = CreateElement("ScrollingFrame", {Name = "TabButtonContainer", Parent = contentArea, Size = UDim2.new(0, 130, 1, -10), Position = UDim2.fromOffset(5, 5), BackgroundColor3 = Color3.fromRGB(45, 45, 50), BorderSizePixel = 0, CanvasSize = UDim2.new(0,0,0,0), ScrollBarThickness = 4})
-    CreateElement("UICorner", { CornerRadius = UDim.new(0, 3), Parent = tabButtonContainer })
-    CreateElement("UIListLayout", {Parent = tabButtonContainer, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 4), HorizontalAlignment = Enum.HorizontalAlignment.Center})
-    CreateElement("UIPadding", { Parent = tabButtonContainer, Padding = UDim.new(0,5)})
-    local contentContainer = CreateElement("Frame", {Name = "ContentContainer", Parent = contentArea, Size = UDim2.new(1, -140, 1, -10), Position = UDim2.fromOffset(135, 5), BackgroundColor3 = Color3.fromRGB(45, 45, 50), BorderSizePixel = 0, ClipsDescendants = true})
-    CreateElement("UICorner", { CornerRadius = UDim.new(0, 3), Parent = contentContainer })
-
-    local windowInstance = {}
-    setmetatable(windowInstance, Window)
-    windowInstance.ScreenGui = screenGui
-    windowInstance.MainFrame = mainFrame
-    windowInstance._headerLabel = headerLabel
-    windowInstance._tabButtonContainer = tabButtonContainer
-    windowInstance._contentContainer = contentContainer
-    windowInstance._activeTabButton = nil
-    windowInstance._activePage = nil
-    windowInstance._toggleKey = toggleKey
-    windowInstance._dragConnections = dragConnections -- Сохраняем для отключения
-
-    windowInstance._toggleConnection = UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
-        if not gameProcessedEvent and input.KeyCode == windowInstance._toggleKey then
-            windowInstance:ToggleVisible()
-        end
-    end)
-
-    print("[MyNewUI] Main UI Initialization complete.")
-    return windowInstance
+-- Safe Destroy
+local function SafeDestroy(instance)
+	if instance and instance.Parent then
+		pcall(instance.Destroy, instance)
+	end
 end
 
-MyUILibrary._IsKeyAccepted = false
+-- Debouncer
+local function CreateDebouncer(func, delay)
+	local lastCallTime = 0
+	local debounceDelay = delay or 0.05
+	local waiting = false
+	local queuedArgs = nil
 
-return MyUILibrary
+	return function(...)
+		queuedArgs = {...} -- Store latest args
+		if not waiting then
+			local now = tick()
+			if now - lastCallTime >= debounceDelay then
+				lastCallTime = now
+				waiting = true
+				task.spawn(function()
+					local argsToRun = queuedArgs
+					queuedArgs = nil -- Clear queue before running
+					local success, err = pcall(func, unpack(argsToRun))
+					if not success then warn("StableUI Debounce Error:", err) end
+					waiting = false
+					-- If new args were queued while running, check if debounce time passed
+					if queuedArgs then
+						task.wait(debounceDelay - (tick() - lastCallTime)) -- Wait remaining time if needed
+						lastCallTime = tick() -- Update time before next potential call
+						local currentQueuedArgs = queuedArgs -- Capture args before potentially clearing
+						queuedArgs = nil -- Clear again
+						local requeueSuccess, requeueErr = pcall(func, unpack(currentQueuedArgs))
+						if not requeueSuccess then warn("StableUI Debounce Requeue Error:", requeueErr) end
+					end
+				end)
+			else
+				-- If called too soon, schedule it for later
+				waiting = true
+				task.delay(debounceDelay - (now - lastCallTime), function()
+					if waiting and queuedArgs then -- Check if still waiting and args exist
+						lastCallTime = tick()
+						local argsToRun = queuedArgs
+						queuedArgs = nil
+						local success, err = pcall(func, unpack(argsToRun))
+						if not success then warn("StableUI Debounce Delay Error:", err) end
+					end
+					waiting = false -- Ensure waiting is false after delay completes
+				end)
+			end
+		end
+	end
+end
+
+
+-- Dragging Function (Improved)
+local function EnableDrag(guiObject, dragHandle)
+	dragHandle = dragHandle or guiObject -- Use the object itself as handle if none provided
+	local isDragging = false
+	local dragInput = nil
+	local dragStart = nil
+	local frameStart = nil
+	local dragLatency = 0.03 -- Lower latency for smoother feel
+	local dragTween = nil
+	local connections = {}
+
+	local function UpdateDrag(input)
+		if not isDragging or not dragStart or not frameStart then return end
+		local delta = input.Position - dragStart
+		local newPosition = UDim2.new(frameStart.X.Scale, frameStart.X.Offset + delta.X, frameStart.Y.Scale, frameStart.Y.Offset + delta.Y)
+
+		-- Prevent dragging off-screen (basic clamp)
+		local screenSiz = CoreGui.AbsoluteSize
+		local frameSiz = guiObject.AbsoluteSize
+		newPosition = UDim2.new(
+			newPosition.X.Scale, math.clamp(newPosition.X.Offset, 0, screenSiz.X - frameSiz.X),
+			newPosition.Y.Scale, math.clamp(newPosition.Y.Offset, 0, screenSiz.Y - frameSiz.Y)
+		)
+
+
+		if dragTween and dragTween.PlaybackState == Enum.PlaybackState.Playing then
+			dragTween:Cancel()
+		end
+		dragTween = CreateTween(guiObject, "Fast", {Position = newPosition})
+		if dragTween then pcall(dragTween.Play, dragTween) end
+	end
+
+	local inputBeganConn = dragHandle.InputBegan:Connect(function(input)
+		if not isDragging and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+			-- Check if the click is on the handle itself or a non-interactive descendant
+			local mouseLocation = UserInputService:GetMouseLocation()
+			local objectsAtMouse = PlayerGui:GetGuiObjectsAtPosition(mouseLocation.X, mouseLocation.Y)
+			local canDrag = false
+			if #objectsAtMouse > 0 then
+				local topObject = objectsAtMouse[1]
+				-- Allow drag if clicking directly on handle or a non-button/textbox descendant OF the handle
+				if topObject == dragHandle or (topObject:IsDescendantOf(dragHandle) and not topObject:IsA("TextButton") and not topObject:IsA("TextBox") and not topObject:IsA("ImageButton")) then
+					canDrag = true
+				end
+			end
+
+			if not canDrag then return end
+
+			isDragging = true
+			dragInput = input
+			dragStart = input.Position
+			frameStart = guiObject.Position
+
+			-- Disconnect previous Changed connection if it exists
+			if connections["InputChanged"] then
+				connections["InputChanged"]:Disconnect()
+				connections["InputChanged"] = nil
+			end
+
+			-- Monitor the specific input object for ending
+			connections["InputChanged"] = input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					isDragging = false
+					dragInput = nil
+					if connections["InputChanged"] then connections["InputChanged"]:Disconnect(); connections["InputChanged"] = nil end
+				end
+			end)
+		end
+	end)
+	table.insert(connections, inputBeganConn) -- Store main began connection
+
+	local inputChangedServiceConn = UserInputService.InputChanged:Connect(function(input)
+		if isDragging and dragInput and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+			UpdateDrag(input)
+		end
+	end)
+	table.insert(connections, inputChangedServiceConn)
+
+	local inputEndedConn = dragHandle.InputEnded:Connect(function(input)
+		if input == dragInput then -- Check if the input ending is the one that started the drag
+			isDragging = false
+			dragInput = nil
+			if connections["InputChanged"] then connections["InputChanged"]:Disconnect(); connections["InputChanged"] = nil end
+		end
+	end)
+	table.insert(connections, inputEndedConn)
+
+	-- Return a cleanup function
+	return function()
+		for _, conn in pairs(connections) do
+			pcall(conn.Disconnect, conn)
+		end
+		table.clear(connections)
+	end
+end
+
+-- Format Time (Seconds to HH:MM:SS)
+function library:FormatTime(totalSeconds)
+	if not totalSeconds or totalSeconds < 0 then return "00:00:00" end
+	totalSeconds = math.floor(totalSeconds)
+	local hours = math.floor(totalSeconds / 3600)
+	local minutes = math.floor((totalSeconds % 3600) / 60)
+	local seconds = math.floor(totalSeconds % 60)
+	return string.format("%02d:%02d:%02d", hours, minutes, seconds)
+end
+
+-- Start Usage Tracking
+function library:_StartTracking()
+	if library._TrackingEnabled then return end
+	library._StartTime = os.time()
+	library._TotalElapsedTime = 0 -- Reset elapsed time on start (in-memory only)
+	library._TrackingEnabled = true
+	print("StableUI: Usage time tracking started (in-memory).")
+end
+
+-- Get Current Usage Time String
+function library:_GetCurrentUsageTime()
+	if not library._TrackingEnabled then return "00:00:00" end
+	local currentTime = os.time()
+	local sessionTime = math.max(0, currentTime - library._StartTime)
+	return library:FormatTime(library._TotalElapsedTime + sessionTime)
+end
+
+-- FPS Counter Loop
+local function StartFpsCounter()
+	task.spawn(function()
+		local lastUpdate = 0
+		while library._UI_INITIALIZED do -- Only run while UI is generally active
+			local dt = RunService.RenderStepped:Wait()
+			local now = tick()
+			if now - lastUpdate >= 0.25 then -- Update 4 times per second
+				library._FPS = math.round(1 / dt)
+				lastUpdate = now
+			end
+		end
+	end)
+end
+
+-- / UI Creation Functions
+
+-- Cleanup Function for UI Elements
+local function AddCleanup(pageInstance, componentFrame, item)
+	if not library._ComponentCleanup[pageInstance] then
+		library._ComponentCleanup[pageInstance] = {}
+	end
+	if not library._ComponentCleanup[pageInstance][componentFrame] then
+		library._ComponentCleanup[pageInstance][componentFrame] = {}
+	end
+	table.insert(library._ComponentCleanup[pageInstance][componentFrame], item)
+end
+
+local function RunCleanup(pageInstance, componentFrame)
+	if library._ComponentCleanup[pageInstance] and library._ComponentCleanup[pageInstance][componentFrame] then
+		local items = library._ComponentCleanup[pageInstance][componentFrame]
+		for i = #items, 1, -1 do
+			local item = items[i]
+			if typeof(item) == "RBXScriptConnection" then
+				pcall(item.Disconnect, item)
+			elseif typeof(item) == "Instance" then
+				SafeDestroy(item)
+			elseif typeof(item) == "function" then
+				pcall(item) -- Allow cleanup functions
+			end
+		end
+		library._ComponentCleanup[pageInstance][componentFrame] = nil
+	end
+end
+
+local function RunPageCleanup(pageInstance)
+	if library._ComponentCleanup[pageInstance] then
+		for componentFrame, _ in pairs(library._ComponentCleanup[pageInstance]) do
+			RunCleanup(pageInstance, componentFrame)
+		end
+		library._ComponentCleanup[pageInstance] = nil
+	end
+	-- Disconnect page-specific listeners (like ChildAdded/Removed for CanvasSize)
+	if library._PageUpdateDebouncers[pageInstance] and library._PageUpdateDebouncers[pageInstance]._connections then
+		for _, conn in ipairs(library._PageUpdateDebouncers[pageInstance]._connections) do
+			pcall(conn.Disconnect, conn)
+		end
+		library._PageUpdateDebouncers[pageInstance] = nil
+	end
+end
+
+-- Update Page Canvas Size
+local function UpdatePageCanvasSize(pageInstance)
+	if not pageInstance or not pageInstance:IsA("ScrollingFrame") or not pageInstance.Parent then return end
+	local pageLayout = pageInstance:FindFirstChildOfClass("UIListLayout")
+	local pagePadding = pageInstance:FindFirstChildOfClass("UIPadding")
+	if not pageLayout then return end
+
+	task.wait() -- Wait a frame for layout calculations to potentially update
+
+	local contentHeight = pageLayout.AbsoluteContentSize.Y
+	local topPadding = pagePadding and pagePadding.PaddingTop.Offset or 0
+	local bottomPadding = pagePadding and pagePadding.PaddingBottom.Offset or 0
+	local totalHeight = contentHeight + topPadding + bottomPadding
+
+	-- Only update if the size actually changed significantly (prevents potential loops)
+	if math.abs(pageInstance.CanvasSize.Y.Offset - totalHeight) > 1 then
+		pageInstance.CanvasSize = UDim2.fromOffset(0, totalHeight)
+	end
+end
+
+-- Key System Prompt
+function library:_RequestKey()
+	-- Cleanup existing prompt
+	SafeDestroy(CoreGui:FindFirstChild("StableUI_KeyPrompt"))
+
+	local keyPromptScreen = SafeCreate("ScreenGui", {
+		Name = "StableUI_KeyPrompt",
+		Parent = CoreGui,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		DisplayOrder = 1002, -- Highest priority
+		ResetOnSpawn = false,
+	})
+	if not keyPromptScreen then return end -- Failed to create
+
+	local overlay = SafeCreate("Frame", {
+		Name = "Overlay", Parent = keyPromptScreen,
+		BackgroundColor3 = Color3.fromRGB(0, 0, 0), BackgroundTransparency = 1, -- Start transparent
+		Size = UDim2.new(1, 0, 1, 0), Active = true, BorderSizePixel = 0,
+	})
+
+	local promptBox = SafeCreate("Frame", {
+		Name = "PromptBox", Parent = overlay,
+		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.45, 0), -- Start slightly up
+		Size = UDim2.new(0, 350, 0, 180), BackgroundColor3 = Color3.fromRGB(40, 40, 40),
+		BorderSizePixel = 1, BorderColor3 = Color3.fromRGB(80, 80, 80), BackgroundTransparency = 1, -- Start transparent
+	})
+	SafeCreate("UICorner", {CornerRadius = UDim.new(0, 4), Parent = promptBox})
+
+	local titleLabel = SafeCreate("TextLabel", {
+		Name = "TitleLabel", Parent = promptBox, Size = UDim2.new(1, 0, 0, 40),
+		BackgroundColor3 = Color3.fromRGB(55, 55, 55), Font = Enum.Font.GothamSemibold,
+		Text = "Authentication Required", TextColor3 = Color3.fromRGB(200, 200, 200), TextSize = 18,
+		BackgroundTransparency = 1, TextTransparency = 1, -- Start transparent
+	})
+	SafeCreate("UICorner", {CornerRadius = UDim.new(0, 4), Parent = titleLabel})
+	SafeCreate("UIPadding", {PaddingLeft = UDim.new(0, 10), Parent = titleLabel})
+
+	local infoLabel = SafeCreate("TextLabel", {
+		Name = "InfoLabel", Parent = promptBox, AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 50), Size = UDim2.new(0.9, 0, 0, 20),
+		Font = Enum.Font.Code, Text = "Please enter the access key:",
+		TextColor3 = Color3.fromRGB(180, 180, 180), TextSize = 14, BackgroundTransparency = 1.0,
+		TextTransparency = 1, -- Start transparent
+	})
+
+	local keyInput = SafeCreate("TextBox", {
+		Name = "KeyInput", Parent = promptBox, AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 80), Size = UDim2.new(0.8, 0, 0, 35),
+		Font = Enum.Font.Code, Text = "", PlaceholderText = "Enter Key...",
+		PlaceholderColor3 = Color3.fromRGB(120, 120, 120), TextColor3 = Color3.fromRGB(210, 210, 210),
+		BackgroundColor3 = Color3.fromRGB(30, 30, 30), BorderSizePixel = 1, BorderColor3 = Color3.fromRGB(60, 60, 60),
+		ClearTextOnFocus = false, TextXAlignment = Enum.TextXAlignment.Center, TextEditable = true,
+		BackgroundTransparency = 1, TextTransparency = 1, -- Start transparent
+	})
+	SafeCreate("UICorner", {CornerRadius = UDim.new(0, 3), Parent = keyInput})
+
+	local submitButton = SafeCreate("TextButton", {
+		Name = "SubmitButton", Parent = promptBox, AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 125), Size = UDim2.new(0.5, 0, 0, 35),
+		Font = Enum.Font.GothamSemibold, Text = "Submit", TextColor3 = Color3.fromRGB(220, 220, 220), TextSize = 16,
+		BackgroundColor3 = Color3.fromRGB(159, 115, 255), AutoButtonColor = false,
+		BackgroundTransparency = 1, TextTransparency = 1, -- Start transparent
+	})
+	SafeCreate("UICorner", {CornerRadius = UDim.new(0, 3), Parent = submitButton})
+
+	-- Button Hover/Click Effects
+	local btnConns = {}
+	table.insert(btnConns, submitButton.MouseEnter:Connect(function() PlayTween(submitButton, "Fast", {BackgroundColor3 = Color3.fromRGB(179, 135, 255)}) end))
+	table.insert(btnConns, submitButton.MouseLeave:Connect(function() PlayTween(submitButton, "Fast", {BackgroundColor3 = Color3.fromRGB(159, 115, 255)}) end))
+	table.insert(btnConns, submitButton.MouseButton1Down:Connect(function() PlayTween(submitButton, "Instant", {BackgroundColor3 = Color3.fromRGB(139, 95, 235)}) end))
+	table.insert(btnConns, submitButton.MouseButton1Up:Connect(function() PlayTween(submitButton, "Fast", {BackgroundColor3 = Color3.fromRGB(179, 135, 255)}) end))
+
+	-- Submit Logic
+	local function checkKey()
+		if not keyInput or not keyInput.Parent then return end
+		if keyInput.Text == library._CorrectKey then
+			library._KEY_ACCEPTED = true
+			infoLabel.TextColor3 = Color3.fromRGB(70, 255, 100)
+			infoLabel.Text = "Access Granted. Initializing..."
+			submitButton.Active = false
+			keyInput.TextEditable = false
+			library:_StartTracking() -- Start usage tracking on success
+
+			-- Cleanup connections and destroy prompt after delay
+			task.delay(0.5, function()
+				for _, conn in ipairs(btnConns) do pcall(conn.Disconnect, conn) end
+				SafeDestroy(keyPromptScreen)
+				-- Proceed to greeting or main UI
+				if library._ShowGreeting then
+					library:_ShowGreeting()
+				else
+					library:Initialize()
+				end
+			end)
+		else
+			library._KEY_ACCEPTED = false
+			infoLabel.TextColor3 = Color3.fromRGB(255, 70, 70)
+			infoLabel.Text = "Incorrect Key. Please try again."
+			keyInput.Text = ""
+
+			-- Shake Animation
+			local startPos = promptBox.Position
+			local tween = CreateTween(promptBox, "Fast", {Position = startPos + UDim2.fromOffset(10, 0)})
+			if tween then
+				tween:Play()
+				tween.Completed:Connect(function()
+					PlayTween(promptBox, "Fast", {Position = startPos})
+				end)
+			end
+		end
+	end
+
+	table.insert(btnConns, submitButton.MouseButton1Click:Connect(checkKey))
+	table.insert(btnConns, keyInput.FocusLost:Connect(function(enterPressed) if enterPressed then checkKey() end end))
+
+	-- Initial Animation (Fade in)
+	PlayTween(overlay, "Default", {BackgroundTransparency = 0.5})
+	PlayTween(promptBox, "Default", {Position = UDim2.new(0.5, 0, 0.5, 0), BackgroundTransparency = 0})
+	task.wait(0.1)
+	PlayTween(titleLabel, "Default", {BackgroundTransparency = 0, TextTransparency = 0})
+	PlayTween(infoLabel, "Default", {TextTransparency = 0})
+	PlayTween(keyInput, "Default", {BackgroundTransparency = 0, TextTransparency = 0})
+	PlayTween(submitButton, "Default", {BackgroundTransparency = 0, TextTransparency = 0})
+end
+
+-- Greeting Animation
+function library:_ShowGreeting()
+	-- Cleanup existing greeting
+	SafeDestroy(CoreGui:FindFirstChild("StableUI_Greeting"))
+
+	local greetingScreen = SafeCreate("ScreenGui", {
+		Name = "StableUI_Greeting", Parent = CoreGui,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling, DisplayOrder = 1001, ResetOnSpawn = false,
+	})
+	if not greetingScreen then return end
+
+	local overlay = SafeCreate("Frame", {
+		Name = "Overlay", Parent = greetingScreen, BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+		BackgroundTransparency = 1.0, Size = UDim2.new(1, 0, 1, 0), BorderSizePixel = 0,
+	})
+
+	local contentFrame = SafeCreate("Frame", {
+		Name = "ContentFrame", Parent = overlay, AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0.5, 0), Size = UDim2.new(0, 400, 0, 200),
+		BackgroundColor3 = Color3.fromRGB(30, 30, 30), BackgroundTransparency = 1.0,
+		BorderSizePixel = 1, BorderColor3 = Color3.fromRGB(159, 115, 255), ClipsDescendants = true,
+	})
+	SafeCreate("UICorner", {CornerRadius = UDim.new(0, 5), Parent = contentFrame})
+	SafeCreate("UIGradient", {
+		Color = ColorSequence.new{ColorSequenceKeypoint.new(0, Color3.fromRGB(45, 45, 45)), ColorSequenceKeypoint.new(1, Color3.fromRGB(25, 25, 25))},
+		Rotation = 45, Parent = contentFrame,
+	})
+
+	local welcomeText = SafeCreate("TextLabel", {
+		Name = "WelcomeText", Parent = contentFrame, AnchorPoint = Vector2.new(0.5, 0.5),
+		Size = UDim2.new(0.9, 0, 0, 30), Position = UDim2.new(0.5, 0, 0.4, 0),
+		Font = Enum.Font.GothamBold, Text = "Welcome, " .. (LocalPlayer.DisplayName or LocalPlayer.Name),
+		TextColor3 = Color3.fromRGB(220, 220, 220), TextSize = 20, BackgroundTransparency = 1.0, TextTransparency = 1.0,
+	})
+
+	local statusText = SafeCreate("TextLabel", {
+		Name = "StatusText", Parent = contentFrame, AnchorPoint = Vector2.new(0.5, 0.5),
+		Size = UDim2.new(0.9, 0, 0, 20), Position = UDim2.new(0.5, 0, 0.65, 0),
+		Font = Enum.Font.Code, Text = "Initializing UI...",
+		TextColor3 = Color3.fromRGB(180, 180, 180), TextSize = 14, BackgroundTransparency = 1.0, TextTransparency = 1.0,
+	})
+
+	local loadingBarBg = SafeCreate("Frame", {
+		Name = "LoadingBarBg", Parent = contentFrame, AnchorPoint = Vector2.new(0.5, 1),
+		Size = UDim2.new(0.8, 0, 0, 6), Position = UDim2.new(0.5, 0, 0.9, 0),
+		BackgroundColor3 = Color3.fromRGB(60, 60, 60), BackgroundTransparency = 1.0, BorderSizePixel = 0,
+	})
+	SafeCreate("UICorner", {CornerRadius = UDim.new(0, 3), Parent = loadingBarBg})
+
+	local loadingBarFill = SafeCreate("Frame", {
+		Name = "LoadingBarFill", Parent = loadingBarBg, Size = UDim2.new(0, 0, 1, 0),
+		BackgroundColor3 = Color3.fromRGB(159, 115, 255), BorderSizePixel = 0,
+	})
+	SafeCreate("UICorner", {CornerRadius = UDim.new(0, 3), Parent = loadingBarFill})
+
+	-- Animation Sequence
+	task.spawn(function()
+		local success, err = pcall(function()
+			PlayTween(overlay, "Default", {BackgroundTransparency = 0.5})
+			PlayTween(contentFrame, "Default", {BackgroundTransparency = 0})
+			task.wait(0.2)
+			PlayTween(welcomeText, "Default", {TextTransparency = 0})
+			PlayTween(statusText, "Default", {TextTransparency = 0})
+			task.wait(0.3)
+			PlayTween(loadingBarBg, "Fast", {BackgroundTransparency = 0.5})
+			task.wait(0.1)
+			PlayTween(loadingBarFill, "Slow", {Size = UDim2.new(1, 0, 1, 0)})
+			task.wait(0.7) -- Simulate loading time
+
+			if not greetingScreen or not greetingScreen.Parent then return end -- Check if destroyed
+
+			-- Fade Out
+			PlayTween(overlay, "Default", {BackgroundTransparency = 1.0})
+			PlayTween(contentFrame, "Default", {BackgroundTransparency = 1.0})
+			PlayTween(welcomeText, "Default", {TextTransparency = 1.0})
+			PlayTween(statusText, "Default", {TextTransparency = 1.0})
+			PlayTween(loadingBarBg, "Default", {BackgroundTransparency = 1.0})
+			task.wait(0.3)
+
+			SafeDestroy(greetingScreen)
+			library:Initialize() -- Initialize the main UI
+		end)
+		if not success then
+			warn("StableUI Greeting Error:", err)
+			SafeDestroy(greetingScreen)
+			library:Initialize() -- Initialize main UI on error
+		end
+	end)
+end
+
+-- Notification System
+function library:InitNotifications()
+	if library._NotificationScreen then return library._NotificationFunc end -- Already initialized
+
+	library._NotificationScreen = SafeCreate("ScreenGui", {
+		Name = "StableUI_Notifications", Parent = CoreGui,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling, DisplayOrder = 998, ResetOnSpawn = false,
+	})
+	if not library._NotificationScreen then return nil end
+
+	local layout = SafeCreate("UIListLayout", {
+		Name = "NotificationLayout", Parent = library._NotificationScreen,
+		SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 6),
+		HorizontalAlignment = Enum.HorizontalAlignment.Right, -- Top-Right corner
+		VerticalAlignment = Enum.VerticalAlignment.Top,
+	})
+	local padding = SafeCreate("UIPadding", {
+		Name = "NotificationPadding", Parent = library._NotificationScreen,
+		PaddingRight = UDim.new(0, 10), PaddingTop = UDim.new(0, 10),
+	})
+
+	-- Notification Creation Function
+	library._NotificationFunc = function(text, duration, type)
+		text = tostring(text or "Notification")
+		duration = tonumber(duration or 5)
+		type = tostring(type or "info"):lower()
+
+		local notifFrame = SafeCreate("Frame", {
+			Name = "Notification", Parent = library._NotificationScreen,
+			BackgroundColor3 = Color3.fromRGB(60, 60, 60), BackgroundTransparency = 1,
+			Size = UDim2.fromOffset(0, 30), BorderSizePixel = 0, ClipsDescendants = true,
+		})
+		SafeCreate("UICorner", {CornerRadius = UDim.new(0, 3), Parent = notifFrame})
+
+		local background = SafeCreate("Frame", {
+			Name = "Background", Parent = notifFrame, AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = Color3.fromRGB(35, 35, 35), BackgroundTransparency = 1,
+			Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(1, -2, 1, -2),
+			BorderSizePixel = 0, ClipsDescendants = true,
+		})
+		SafeCreate("UICorner", {CornerRadius = UDim.new(0, 2), Parent = background})
+		SafeCreate("UIGradient", {
+			Color = ColorSequence.new{ColorSequenceKeypoint.new(0, Color3.fromRGB(45, 45, 45)), ColorSequenceKeypoint.new(1, Color3.fromRGB(35, 35, 35))},
+			Rotation = 90, Parent = background,
+		})
+
+		local bgLayout = SafeCreate("UIListLayout", {Parent = background, Padding = UDim.new(0,0), FillDirection = Enum.FillDirection.Vertical})
+
+		local notifText = SafeCreate("TextLabel", {
+			Name = "Text", Parent = background, BackgroundTransparency = 1,
+			Size = UDim2.new(1, 0, 1, -3), Font = Enum.Font.Code, Text = text,
+			TextColor3 = Color3.fromRGB(210, 210, 210), TextSize = 14, TextTransparency = 1,
+			TextWrapped = true, RichText = true, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Center,
+		})
+		SafeCreate("UIPadding", {PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6), Parent = notifText})
+
+		local bar = SafeCreate("Frame", {
+			Name = "Bar", Parent = background, BackgroundColor3 = Color3.fromRGB(159, 115, 255),
+			BackgroundTransparency = 0.3, Size = UDim2.new(0, 0, 0, 3), BorderSizePixel = 0,
+		})
+		SafeCreate("UICorner", {CornerRadius = UDim.new(0, 2), Parent = bar})
+
+		-- Set bar color based on type
+		if type == "error" then bar.BackgroundColor3 = Color3.fromRGB(255, 70, 70)
+		elseif type == "warning" or type == "alert" then bar.BackgroundColor3 = Color3.fromRGB(255, 200, 50)
+		elseif type == "success" then bar.BackgroundColor3 = Color3.fromRGB(70, 255, 100)
+		elseif type == "info" then bar.BackgroundColor3 = Color3.fromRGB(70, 150, 255) end
+
+		-- Calculate size
+		local targetWidth = 150
+		local targetHeight = 30
+		local successSize, textSize = pcall(TextService.GetTextSize, TextService, notifText.Text, notifText.TextSize, notifText.Font, Vector2.new(280, math.huge))
+		if successSize and textSize then
+			targetWidth = math.max(150, textSize.X + 14)
+			targetHeight = math.max(30, textSize.Y + 12 + 3)
+		else
+			warn("StableUI Notify: Failed to get text size for:", text)
+		end
+
+		-- Animation Coroutine
+		local barTween = nil
+		local fadeOutTween = nil
+		local isRunning = true
+
+		task.spawn(function()
+			local animSuccess, animError = pcall(function()
+				-- Animate In
+				PlayTween(notifFrame, "Default", {Size = UDim2.fromOffset(targetWidth, targetHeight), BackgroundTransparency = 0})
+				PlayTween(background, "Default", {BackgroundTransparency = 0.1})
+				local textTween = PlayTween(notifText, "Default", {TextTransparency = 0})
+				if textTween then task.wait(0.2) end -- Wait for text fade in
+
+				if not isRunning or not notifFrame or not notifFrame.Parent then return end
+
+				-- Animate Bar Fill
+				if duration > 0 then
+					TweenInfos.NotifBarFill = TweenInfo.new(duration, Enum.EasingStyle.Linear) -- Update duration
+					barTween = PlayTween(bar, "NotifBarFill", {Size = UDim2.new(1, 0, 0, 3)})
+					if barTween then task.wait(duration) end -- Wait for bar fill
+				else
+					if bar and bar.Parent then bar.Size = UDim2.new(1, 0, 0, 3) end
+					-- Don't auto-fade if duration <= 0
+					return
+				end
+
+				if not isRunning or not notifFrame or not notifFrame.Parent then return end
+
+				-- Animate Out
+				fadeOutTween = PlayTween(notifFrame, "Default", {BackgroundTransparency = 1})
+				PlayTween(background, "Default", {BackgroundTransparency = 1})
+				PlayTween(notifText, "Default", {TextTransparency = 1})
+				PlayTween(bar, "Default", {BackgroundTransparency = 1})
+				if fadeOutTween then task.wait(0.3) end -- Wait for fade out
+
+				isRunning = false
+				SafeDestroy(notifFrame)
+			end)
+			if not animSuccess then
+				warn("StableUI Notify Error:", animError)
+				SafeDestroy(notifFrame) -- Cleanup on error
+			end
+		end)
+
+		-- Return a basic control object (optional)
+		local control = {}
+		function control:Remove()
+			if isRunning then
+				isRunning = false
+				if barTween and barTween.PlaybackState == Enum.PlaybackState.Playing then pcall(barTween.Cancel, barTween) end
+				if fadeOutTween and fadeOutTween.PlaybackState == Enum.PlaybackState.Playing then pcall(fadeOutTween.Cancel, fadeOutTween) end
+				PlayTween(notifFrame, "Fast", {BackgroundTransparency = 1})
+				task.delay(0.15, function() SafeDestroy(notifFrame) end)
+			elseif notifFrame and notifFrame.Parent then
+				SafeDestroy(notifFrame)
+			end
+		end
+		return control
+	end
+
+	return library._NotificationFunc
+end
+
+-- Watermark Function
+function library:Watermark()
+	if library._WatermarkScreen then return library._WatermarkControl end -- Already exists
+
+	library._WatermarkScreen = SafeCreate("ScreenGui", {
+		Name = "StableUI_Watermark", Parent = CoreGui,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling, DisplayOrder = 999, ResetOnSpawn = false,
+	})
+	if not library._WatermarkScreen then return nil end
+
+	local layout = SafeCreate("UIListLayout", {
+		Parent = library._WatermarkScreen, FillDirection = Enum.FillDirection.Horizontal,
+		SortOrder = Enum.SortOrder.LayoutOrder, VerticalAlignment = Enum.VerticalAlignment.Bottom,
+		HorizontalAlignment = Enum.HorizontalAlignment.Left, Padding = UDim.new(0, 5),
+	})
+	local padding = SafeCreate("UIPadding", {
+		Parent = library._WatermarkScreen, PaddingBottom = UDim.new(0, 8), PaddingLeft = UDim.new(0, 8),
+	})
+
+	-- Element Creator Function
+	local function CreateWatermarkElement(initialText, updateFunc)
+		local edge = SafeCreate("Frame", {
+			Name = "ElementEdge", Parent = library._WatermarkScreen, BackgroundColor3 = Color3.fromRGB(55, 55, 55),
+			BorderSizePixel = 0, Size = UDim2.fromOffset(0, 26), BackgroundTransparency = 1,
+		})
+		SafeCreate("UICorner", {CornerRadius = UDim.new(0, 3), Parent = edge})
+
+		local background = SafeCreate("Frame", {
+			Name = "Background", Parent = edge, AnchorPoint = Vector2.fromScale(0.5, 0.5),
+			BackgroundColor3 = Color3.fromRGB(28, 28, 28), BackgroundTransparency = 1,
+			ClipsDescendants = true, Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(1, -2, 1, -2), BorderSizePixel = 0,
+		})
+		SafeCreate("UICorner", {CornerRadius = UDim.new(0, 2), Parent = background})
+		SafeCreate("UIGradient", {
+			Color = ColorSequence.new{ColorSequenceKeypoint.new(0, Color3.fromRGB(40, 40, 40)), ColorSequenceKeypoint.new(1, Color3.fromRGB(30, 30, 30))},
+			Rotation = 90, Parent = background,
+		})
+
+		local bar = SafeCreate("Frame", {
+			Name = "Bar", Parent = background, BackgroundColor3 = Color3.fromRGB(159, 115, 255),
+			BackgroundTransparency = 1, Size = UDim2.new(0, 0, 0, 2), Position = UDim2.fromOffset(0,0), ZIndex = 2, BorderSizePixel = 0,
+		})
+		SafeCreate("UICorner", {CornerRadius = UDim.new(0, 2), Parent = bar})
+
+		local waterText = SafeCreate("TextLabel", {
+			Name = "WatermarkText", Parent = background, BackgroundTransparency = 1,
+			Size = UDim2.new(1, -8, 1, -8), Position = UDim2.fromOffset(4, 4), Font = Enum.Font.Code,
+			Text = tostring(initialText), TextColor3 = Color3.fromRGB(200, 200, 200), TextTransparency = 1,
+			TextSize = 14, TextXAlignment = Enum.TextXAlignment.Center, TextYAlignment = Enum.TextYAlignment.Center,
+			RichText = true, ZIndex = 3,
+		})
+
+		-- Calculate size and animate in
+		local targetWidth = 100
+		local successSize, sizeResult = pcall(TextService.GetTextSize, TextService, waterText.Text, waterText.TextSize, waterText.Font, Vector2.new(math.huge, math.huge))
+		if successSize and sizeResult then targetWidth = sizeResult.X + 16 else warn("StableUI Watermark: Failed text size calc") end
+
+		task.spawn(function()
+			PlayTween(edge, "Default", {Size = UDim2.fromOffset(targetWidth, 26), BackgroundTransparency = 0})
+			PlayTween(background, "Default", {BackgroundTransparency = 0.1})
+			task.wait(0.1)
+			PlayTween(bar, "Default", {Size = UDim2.new(1, 0, 0, 2), BackgroundTransparency = 0.1})
+			task.wait(0.1)
+			PlayTween(waterText, "Default", {TextTransparency = 0})
+		end)
+
+		-- Updater function
+		local function UpdateText(newText)
+			if not edge or not edge.Parent or not waterText or not waterText.Parent then return end
+			newText = tostring(newText)
+			if waterText.Text == newText then return end
+
+			local newTargetWidth = 100
+			local successSizeNew, sizeResultNew = pcall(TextService.GetTextSize, TextService, newText, waterText.TextSize, waterText.Font, Vector2.new(math.huge, math.huge))
+			if successSizeNew and sizeResultNew then newTargetWidth = sizeResultNew.X + 16 else warn("StableUI Watermark: Failed text size calc (update)") end
+
+			if math.abs(newTargetWidth - edge.AbsoluteSize.X) > 2 then
+				PlayTween(edge, "Fast", {Size = UDim2.fromOffset(newTargetWidth, 26)})
+				PlayTween(background, "Fast", {}) -- Background size is relative
+			end
+			waterText.Text = newText
+		end
+
+		-- Start update loop if function provided
+		if updateFunc then
+			task.spawn(function()
+				while edge and edge.Parent do
+					local success, value = pcall(updateFunc)
+					if success then pcall(UpdateText, value) else pcall(UpdateText, "Error") end
+					task.wait(0.5) -- Update interval
+				end
+			end)
+		end
+
+		return edge, UpdateText -- Return frame and manual update function
+	end
+
+	-- Create Elements
+	local mainElement, mainUpdater = CreateWatermarkElement(library._WatermarkText)
+	local timeElement, timeUpdater = CreateWatermarkElement("00:00:00", library._GetCurrentUsageTime)
+	local fpsElement, fpsUpdater = CreateWatermarkElement("FPS: 0", function() return "FPS: " .. library._FPS end)
+
+	-- Watermark Control Table
+	library._WatermarkControl = {}
+	function library._WatermarkControl:Text(newText) pcall(mainUpdater, newText) end
+	function library._WatermarkControl:Hide() if library._WatermarkScreen then library._WatermarkScreen.Enabled = false end end
+	function library._WatermarkControl:Show() if library._WatermarkScreen then library._WatermarkScreen.Enabled = true end end
+	function library._WatermarkControl:Remove()
+		SafeDestroy(library._WatermarkScreen)
+		library._WatermarkScreen = nil
+		library._WatermarkControl = nil
+	end
+
+	return library._WatermarkControl
+end
+
+-- Main UI Initialization (Called after Key/Greeting)
+function library:Initialize()
+	if library._UI_INITIALIZED then
+		-- Toggle visibility if already initialized
+		if library._ActiveScreen then
+			library._ActiveScreen.Enabled = not library._ActiveScreen.Enabled
+		end
+		return library -- Return self for chaining
+	end
+
+	-- Cleanup any old UI remnants
+	SafeDestroy(CoreGui:FindFirstChild("StableUI_MainScreen"))
+
+	library._ActiveScreen = SafeCreate("ScreenGui", {
+		Name = "StableUI_MainScreen", Parent = CoreGui,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling, DisplayOrder = 990, ResetOnSpawn = false, Enabled = true,
+	})
+	if not library._ActiveScreen then
+		warn("StableUI Error: Failed to create main ScreenGui.")
+		return nil
+	end
+
+	-- Main Window Frame (Edge/Border)
+	local edge = SafeCreate("Frame", {
+		Name = "Edge", Parent = library._ActiveScreen, AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = Color3.fromRGB(50, 50, 50), Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(620, 420), BorderSizePixel = 0,
+	})
+	SafeCreate("UICorner", {CornerRadius = UDim.new(0, 4), Parent = edge})
+
+	-- Main Background Frame
+	local background = SafeCreate("Frame", {
+		Name = "Background", Parent = edge, AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = Color3.fromRGB(30, 30, 30), Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.new(1, -2, 1, -2), ClipsDescendants = true, BorderSizePixel = 0,
+	})
+	SafeCreate("UICorner", {CornerRadius = UDim.new(0, 3), Parent = background})
+	SafeCreate("UIGradient", {
+		Color = ColorSequence.new{ColorSequenceKeypoint.new(0, Color3.fromRGB(42, 42, 42)), ColorSequenceKeypoint.new(1, Color3.fromRGB(30, 30, 30))},
+		Rotation = 90, Parent = background,
+	})
+
+	-- Header Area
+	local headerFrame = SafeCreate("Frame", {
+		Name = "HeaderFrame", Parent = background, Size = UDim2.new(1, 0, 0, 38), BackgroundTransparency = 1.0,
+	})
+
+	local headerLabel = SafeCreate("TextLabel", {
+		Name = "headerLabel", Parent = headerFrame, BackgroundTransparency = 1.0,
+		Size = UDim2.new(1, -12, 1, -12), Position = UDim2.fromOffset(6, 6), Font = Enum.Font.GothamSemibold,
+		Text = library._Title, TextColor3 = Color3.fromRGB(210, 210, 210), TextSize = 18,
+		TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Center, RichText = true,
+	})
+
+	local bar = SafeCreate("Frame", {
+		Name = "bar", Parent = headerFrame, AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, 0), Size = UDim2.new(1, 0, 0, 2),
+		BackgroundColor3 = Color3.fromRGB(159, 115, 255), BackgroundTransparency = 0.2, BorderSizePixel = 0,
+	})
+	SafeCreate("UICorner", {CornerRadius = UDim.new(0, 1), Parent = bar})
+
+	-- Enable Dragging on Header
+	local dragCleanup = EnableDrag(edge, headerFrame) -- Drag edge using header
+
+	-- Main Content Area (Below Header)
+	local contentArea = SafeCreate("Frame", {
+		Name = "ContentArea", Parent = background, AnchorPoint = Vector2.new(0, 0),
+		Position = UDim2.new(0, 0, 0, 38), Size = UDim2.new(1, 0, 1, -38), BackgroundTransparency = 1.0,
+	})
+
+	-- Tab Buttons Area (Left Side)
+	local tabButtonsEdge = SafeCreate("Frame", {
+		Name = "tabButtonsEdge", Parent = contentArea, BackgroundColor3 = Color3.fromRGB(45, 45, 45),
+		Position = UDim2.fromOffset(8, 8), Size = UDim2.new(0, 160, 1, -16), BorderSizePixel = 0,
+	})
+	SafeCreate("UICorner", {CornerRadius = UDim.new(0, 3), Parent = tabButtonsEdge})
+
+	local tabButtonsScroll = SafeCreate("ScrollingFrame", {
+		Name = "tabButtonsScroll", Parent = tabButtonsEdge, AnchorPoint = Vector2.fromScale(0.5, 0.5),
+		BackgroundColor3 = Color3.fromRGB(35, 35, 35), ClipsDescendants = true, Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.new(1, -2, 1, -2), BorderSizePixel = 0, CanvasSize = UDim2.fromOffset(0, 0),
+		ScrollBarThickness = 4, ScrollBarImageColor3 = Color3.fromRGB(159, 115, 255),
+	})
+	SafeCreate("UICorner", {CornerRadius = UDim.new(0, 2), Parent = tabButtonsScroll})
+	SafeCreate("UIListLayout", { Parent = tabButtonsScroll, HorizontalAlignment = Enum.HorizontalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 3)})
+	SafeCreate("UIPadding", { Parent = tabButtonsScroll, PaddingTop = UDim.new(0, 5), PaddingBottom = UDim.new(0, 5)})
+
+	-- Container Area (Right Side)
+	local containerEdge = SafeCreate("Frame", {
+		Name = "containerEdge", Parent = contentArea, BackgroundColor3 = Color3.fromRGB(45, 45, 45),
+		Position = UDim2.new(0, 176, 0, 8), Size = UDim2.new(1, -184, 1, -16), BorderSizePixel = 0,
+	})
+	SafeCreate("UICorner", {CornerRadius = UDim.new(0, 3), Parent = containerEdge})
+
+	local container = SafeCreate("Frame", { -- Holds the actual pages
+		Name = "container", Parent = containerEdge, AnchorPoint = Vector2.fromScale(0.5, 0.5),
+		BackgroundColor3 = Color3.fromRGB(35, 35, 35), Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.new(1, -2, 1, -2), ClipsDescendants = true, BorderSizePixel = 0,
+	})
+	SafeCreate("UICorner", {CornerRadius = UDim.new(0, 2), Parent = container})
+
+	-- Toggle Keybind Handler
+	function library._HandleToggleKey(input, gameProcessed)
+		if not gameProcessed and input.KeyCode == library._ToggleKey then
+			if library._ActiveScreen then
+				library._ActiveScreen.Enabled = not library._ActiveScreen.Enabled
+			end
+		end
+	end
+	library._MainKeybindConnection = UserInputService.InputBegan:Connect(library._HandleToggleKey)
+
+	-- Mark as initialized
+	library._UI_INITIALIZED = true
+	StartFpsCounter() -- Start FPS counter now that UI is up
+	library:InitNotifications() -- Ensure notifications are ready
+	library:Watermark() -- Create watermark
+
+	print("StableUI: Initialized.")
+	return library -- Return self for chaining (e.g., library:Initialize():NewTab(...))
+end
+
+-- / Tab Management
+function library:NewTab(title)
+	if not library._UI_INITIALIZED or not library._ActiveScreen then
+		warn("StableUI NewTab: UI not initialized.")
+		return nil
+	end
+
+	title = tostring(title or "Tab")
+	local pageName = title .. "_Page"
+	local tabButtonName = title .. "_TabButton"
+
+	local tabButtonsScroll = library._ActiveScreen:FindFirstChild("Edge", true):FindFirstChild("Background", true):FindFirstChild("ContentArea", true):FindFirstChild("tabButtonsEdge", true):FindFirstChild("tabButtonsScroll", true)
+	local container = library._ActiveScreen:FindFirstChild("Edge", true):FindFirstChild("Background", true):FindFirstChild("ContentArea", true):FindFirstChild("containerEdge", true):FindFirstChild("container", true)
+
+	if not tabButtonsScroll or not container then
+		warn("StableUI NewTab: Could not find tab/container frames.")
+		return nil
+	end
+
+	-- Check if tab already exists
+	if tabButtonsScroll:FindFirstChild(tabButtonName) or container:FindFirstChild(pageName) then
+		warn("StableUI NewTab: A tab with the name '"..title.."' already exists.")
+		-- Optionally find and return the existing tab's control object
+		return nil
+	end
+
+
+	-- Tab Button Creation
+	local tabButton = SafeCreate("TextButton", {
+		Name = tabButtonName, Parent = tabButtonsScroll, BackgroundColor3 = Color3.fromRGB(55, 55, 55),
+		Size = UDim2.new(1, -10, 0, 28), AutoButtonColor = false, Font = Enum.Font.GothamSemibold,
+		Text = title, TextColor3 = Color3.fromRGB(170, 170, 170), TextSize = 15, RichText = true, ClipsDescendants = true,
+	})
+	SafeCreate("UICorner", {CornerRadius = UDim.new(0, 3), Parent = tabButton})
+
+	-- Page Creation (ScrollingFrame per Tab)
+	local page = SafeCreate("ScrollingFrame", {
+		Name = pageName, Parent = container, Active = true, BackgroundTransparency = 1.0, BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 1), CanvasSize = UDim2.fromOffset(0, 0), ScrollBarThickness = 6,
+		ScrollBarImageColor3 = Color3.fromRGB(159, 115, 255), Visible = false, -- Start hidden
+	})
+	local pageLayout = SafeCreate("UIListLayout", { Name = "PageLayout", Parent = page, HorizontalAlignment = Enum.HorizontalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 6)})
+	local pagePadding = SafeCreate("UIPadding", { Name = "PagePadding", Parent = page, PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8), PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8)})
+
+	-- Debounced Page Size Updater for this specific page
+	local DebouncedUpdatePageSize = CreateDebouncer(function() UpdatePageCanvasSize(page) end, 0.1)
+	library._PageUpdateDebouncers[page] = { _func = DebouncedUpdatePageSize, _connections = {} }
+	table.insert(library._PageUpdateDebouncers[page]._connections, page.ChildAdded:Connect(DebouncedUpdatePageSize))
+	table.insert(library._PageUpdateDebouncers[page]._connections, page.ChildRemoved:Connect(DebouncedUpdatePageSize))
+	table.insert(library._PageUpdateDebouncers[page]._connections, pageLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(DebouncedUpdatePageSize))
+
+
+	-- Tab Button Click Logic
+	local tabClickConn = tabButton.MouseButton1Click:Connect(function()
+		if library._ActiveTab == tabButton then return end -- Do nothing if already selected
+
+		-- Deactivate previous tab/page
+		if library._ActiveTab and library._ActiveTab.Parent then
+			PlayTween(library._ActiveTab, "Fast", {TextColor3 = Color3.fromRGB(170, 170, 170), BackgroundColor3 = Color3.fromRGB(55, 55, 55)})
+		end
+		if library._ActivePage and library._ActivePage.Parent then
+			library._ActivePage.Visible = false
+		end
+
+		-- Activate new tab/page
+		if tabButton and tabButton.Parent then
+			PlayTween(tabButton, "Fast", {TextColor3 = Color3.fromRGB(255, 255, 255), BackgroundColor3 = Color3.fromRGB(159, 115, 255)})
+		end
+		if page and page.Parent then
+			page.Visible = true
+			DebouncedUpdatePageSize() -- Update size when page becomes visible
+		end
+
+		-- Update current references
+		library._ActiveTab = tabButton
+		library._ActivePage = page
+	end)
+
+	-- Activate if first tab
+	if not library._ActiveTab then
+		task.wait() -- Allow button to be parented fully
+		pcall(tabClickConn.Function) -- Manually call the function to activate
+	end
+
+	-- Components API (functions for adding elements to this tab's page)
+	local Components = {}
+	local tabCleanupItems = {} -- Store connections/items for this tab's cleanup
+
+	-- Helper to add component and manage cleanup
+	local function AddComponent(creationFunc, ...)
+		local frame, controlFuncs = creationFunc(page, DebouncedUpdatePageSize, ...)
+		if frame and controlFuncs then
+			-- Store cleanup function for the component itself within the component's control table
+			local originalRemove = controlFuncs.Remove
+			controlFuncs.Remove = function()
+				RunCleanup(page, frame) -- Run the specific component's cleanup
+				if originalRemove then originalRemove() end -- Call original remove if exists
+				return nil
+			end
+			-- Add the component's main frame to the tab's cleanup list
+			table.insert(tabCleanupItems, frame)
+		end
+		return controlFuncs
+	end
+
+	Components.NewLabel = function(...) return AddComponent(library._CreateLabel, ...) end
+	Components.NewButton = function(...) return AddComponent(library._CreateButton, ...) end
+	Components.NewSection = function(...) return AddComponent(library._CreateSection, ...) end
+	Components.NewSeparator = function(...) return AddComponent(library._CreateSeparator, ...) end
+	Components.NewToggle = function(...) return AddComponent(library._CreateToggle, ...) end
+	Components.NewKeybind = function(...) return AddComponent(library._CreateKeybind, ...) end
+	Components.NewTextbox = function(...) return AddComponent(library._CreateTextbox, ...) end
+	Components.NewSlider = function(...) return AddComponent(library._CreateSlider, ...) end
+	Components.NewSelector = function(...) return AddComponent(library._CreateSelector, ...) end
+
+	-- Tab Control Functions
+	function Components:Open()
+		if tabButton and tabButton.Parent then
+			pcall(tabClickConn.Function) -- Simulate click
+		end
+		return Components
+	end
+
+	function Components:Remove()
+		local wasActive = (library._ActiveTab == tabButton)
+		pcall(tabClickConn.Disconnect, tabClickConn) -- Disconnect click listener
+
+		-- Run cleanup for all components on this page first
+		RunPageCleanup(page)
+
+		-- Destroy tab button and page frame
+		SafeDestroy(tabButton)
+		SafeDestroy(page)
+
+		-- Clear references in main library state
+		if wasActive then
+			library._ActiveTab = nil
+			library._ActivePage = nil
+			-- Find and activate the next available tab
+			local nextTabButton = tabButtonsScroll:FindFirstChildWhichIsA("TextButton")
+			if nextTabButton then
+				-- Find its corresponding click connection/function if possible (difficult without storing)
+				-- Safest bet is to just find the page and set state directly, then style button
+				local nextTitle = nextTabButton.Text
+				local nextPage = container:FindFirstChild(nextTitle.."_Page")
+				if nextPage then
+					library._ActiveTab = nextTabButton
+					library._ActivePage = nextPage
+					PlayTween(nextTabButton, "Fast", {TextColor3 = Color3.fromRGB(255, 255, 255), BackgroundColor3 = Color3.fromRGB(159, 115, 255)})
+					nextPage.Visible = true
+					if library._PageUpdateDebouncers[nextPage] then library._PageUpdateDebouncers[nextPage]._func() end -- Update new page size
+				end
+			end
+		end
+		return nil -- Indicate removal
+	end
+
+	function Components:Text(newTitle)
+		newTitle = tostring(newTitle or "Tab")
+		if tabButton and tabButton.Parent then tabButton.Text = newTitle end
+		if page and page.Parent then page.Name = newTitle .. "_Page" end
+		-- Note: Renaming might break internal references if not handled carefully everywhere.
+		return Components
+	end
+
+	return Components -- Return the API for this tab
+end
+
+-- / Component Creation Helpers (_Create...)
+
+-- Label
+function library:_CreateLabel(page, updateSizeFunc, text, alignment)
+	text = tostring(text or "Label")
+	alignment = tostring(alignment or "Left"):lower()
+
+	local label = SafeCreate("TextLabel", {
+		Name = "Label_"..text:sub(1,10):gsub("%s","_"), Parent = page, BackgroundTransparency = 1.0,
+		Size = UDim2.new(1, 0, 0, 20), Font = Enum.Font.Code, Text = text,
+		TextColor3 = Color3.fromRGB(190, 190, 190), TextSize = 14, TextWrapped = true, RichText = true,
+		TextYAlignment = Enum.TextYAlignment.Top, -- Better for wrapped text
+	})
+	if not label then return nil, {} end
+
+	if alignment:find("cent") then label.TextXAlignment = Enum.TextXAlignment.Center
+	elseif alignment:find("right") then label.TextXAlignment = Enum.TextXAlignment.Right
+	else label.TextXAlignment = Enum.TextXAlignment.Left end
+
+	local controlFuncs = {}
+	function controlFuncs:Text(newText) if label and label.Parent then label.Text = tostring(newText or text); updateSizeFunc() end return controlFuncs end
+	function controlFuncs:Hide() if label and label.Parent then label.Visible = false; updateSizeFunc() end return controlFuncs end
+	function controlFuncs:Show() if label and label.Parent then label.Visible = true; updateSizeFunc() end return controlFuncs end
+	-- Remove function added automatically by AddComponent
+
+	updateSizeFunc()
+	return label, controlFuncs
+end
+
+-- Button
+function library:_CreateButton(page, updateSizeFunc, text, callback)
+	text = tostring(text or "Button")
+	callback = callback or function() print("Button '"..text.."' clicked.") end
+
+	local button = SafeCreate("TextButton", {
+		Name = "Button_"..text:sub(1,10):gsub("%s","_"), Parent = page, BackgroundColor3 = Color3.fromRGB(55, 55, 55),
+		Size = UDim2.new(1, 0, 0, 30), AutoButtonColor = false, Font = Enum.Font.GothamSemibold,
+		Text = text, TextColor3 = Color3.fromRGB(200, 200, 200), TextSize = 14,
+	})
+	if not button then return nil, {} end
+	SafeCreate("UICorner", {CornerRadius = UDim.new(0, 3), Parent = button})
+
+	local connections = {}
+	table.insert(connections, button.MouseEnter:Connect(function() PlayTween(button, "Fast", {BackgroundColor3 = Color3.fromRGB(70, 70, 70)}) end))
+	table.insert(connections, button.MouseLeave:Connect(function() PlayTween(button, "Fast", {BackgroundColor3 = Color3.fromRGB(55, 55, 55)}) end))
+	table.insert(connections, button.MouseButton1Down:Connect(function() PlayTween(button, "Instant", {BackgroundColor3 = Color3.fromRGB(159, 115, 255)}) end))
+	table.insert(connections, button.MouseButton1Up:Connect(function() PlayTween(button, "Fast", {BackgroundColor3 = Color3.fromRGB(70, 70, 70)}) end))
+	table.insert(connections, button.MouseButton1Click:Connect(function()
+		local success, err = pcall(callback)
+		if not success then
+			warn("StableUI Button Error:", err)
+			if library._NotificationFunc then library._NotificationFunc("Button Error: "..tostring(err), 5, "error") end
+		end
+	end))
+
+	AddCleanup(page, button, function() for _,c in ipairs(connections) do pcall(c.Disconnect,c) end end)
+
+	local controlFuncs = {}
+	function controlFuncs:Text(newText) if button and button.Parent then button.Text = tostring(newText or text) end return controlFuncs end
+	function controlFuncs:Hide() if button and button.Parent then button.Visible = false; updateSizeFunc() end return controlFuncs end
+	function controlFuncs:Show() if button and button.Parent then button.Visible = true; updateSizeFunc() end return controlFuncs end
+	function controlFuncs:SetFunction(newCallback) callback = newCallback or function() end return controlFuncs end
+	function controlFuncs:Fire() pcall(callback) return controlFuncs end
+
+	updateSizeFunc()
+	return button, controlFuncs
+end
+
+-- Section
+function library:_CreateSection(page, updateSizeFunc, text)
+	text = tostring(text or "Section")
+
+	local sectionFrame = SafeCreate("Frame", {
+		Name = "Section_"..text:sub(1,10):gsub("%s","_"), Parent = page, BackgroundTransparency = 1.0,
+		Size = UDim2.new(1, 0, 0, 22),
+	})
+	if not sectionFrame then return nil, {} end
+
+	local layout = SafeCreate("UIListLayout", {Parent = sectionFrame, FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 6)})
+
+	local leftBar = SafeCreate("Frame", {Name = "LeftBar", Parent = sectionFrame, BackgroundColor3 = Color3.fromRGB(70, 70, 70), BorderSizePixel = 0, Size = UDim2.fromOffset(30, 1)})
+	local label = SafeCreate("TextLabel", {Name = "Label", Parent = sectionFrame, BackgroundTransparency = 1.0, Size = UDim2.new(0, 0, 1, 0), Font = Enum.Font.GothamSemibold, Text = text, TextColor3 = Color3.fromRGB(190, 190, 190), TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left, RichText = true})
+	local rightBar = SafeCreate("Frame", {Name = "RightBar", Parent = sectionFrame, BackgroundColor3 = Color3.fromRGB(70, 70, 70), BorderSizePixel = 0, Size = UDim2.new(1, -100, 0, 1)}) -- Temp size
+
+	local function UpdateLayout()
+		if not label or not label.Parent or not rightBar or not rightBar.Parent then return end
+		local labelWidth = 50
+		local success, size = pcall(TextService.GetTextSize, TextService, label.Text, label.TextSize, label.Font, Vector2.new(math.huge, sectionFrame.AbsoluteSize.Y))
+		if success and size then labelWidth = size.X end
+		label.Size = UDim2.new(0, labelWidth, 1, 0)
+		local padding = layout.Padding.Offset
+		rightBar.Size = UDim2.new(1, -(leftBar.Size.X.Offset + padding + labelWidth + padding), 0, 1)
+		updateSizeFunc()
+	end
+	UpdateLayout()
+
+	local controlFuncs = {}
+	function controlFuncs:Text(newText) if label and label.Parent then label.Text = tostring(newText or text); UpdateLayout() end return controlFuncs end
+	function controlFuncs:Hide() if sectionFrame and sectionFrame.Parent then sectionFrame.Visible = false; updateSizeFunc() end return controlFuncs end
+	function controlFuncs:Show() if sectionFrame and sectionFrame.Parent then sectionFrame.Visible = true; updateSizeFunc() end return controlFuncs end
+
+	updateSizeFunc()
+	return sectionFrame, controlFuncs
+end
+
+-- Separator
+function library:_CreateSeparator(page, updateSizeFunc)
+	local separator = SafeCreate("Frame", {
+		Name = "Separator", Parent = page, BackgroundColor3 = Color3.fromRGB(60, 60, 60),
+		BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 1),
+	})
+	if not separator then return nil, {} end
+
+	local controlFuncs = {}
+	function controlFuncs:Hide() if separator and separator.Parent then separator.Visible = false; updateSizeFunc() end return controlFuncs end
+	function controlFuncs:Show() if separator and separator.Parent then separator.Visible = true; updateSizeFunc() end return controlFuncs end
+
+	updateSizeFunc()
+	return separator, controlFuncs
+end
+
+-- Toggle
+function library:_CreateToggle(page, updateSizeFunc, text, default, callback)
+	text = tostring(text or "Toggle")
+	default = default or false
+	callback = callback or function(state) print("Toggle '"..text.."' set to "..tostring(state)) end
+
+	local toggleFrame = SafeCreate("Frame", {
+		Name = "Toggle_"..text:sub(1,10):gsub("%s","_"), Parent = page, BackgroundTransparency = 1.0,
+		Size = UDim2.new(1, 0, 0, 24),
+	})
+	if not toggleFrame then return nil, {} end
+
+	local layout = SafeCreate("UIListLayout", {Parent = toggleFrame, FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 8)})
+
+	local checkboxButton = SafeCreate("TextButton", {Name = "Checkbox", Parent = toggleFrame, Size = UDim2.fromOffset(18, 18), Text = "", AutoButtonColor = false, BackgroundColor3 = Color3.fromRGB(50, 50, 50), BorderSizePixel = 0})
+	SafeCreate("UICorner", {CornerRadius = UDim.new(0, 3), Parent = checkboxButton})
+	local checkboxBg = SafeCreate("Frame", {Name = "Bg", Parent = checkboxButton, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(1, -2, 1, -2), BackgroundColor3 = Color3.fromRGB(35, 35, 35), BorderSizePixel = 0})
+	SafeCreate("UICorner", {CornerRadius = UDim.new(0, 2), Parent = checkboxBg})
+	local checkmark = SafeCreate("Frame", {Name = "Check", Parent = checkboxBg, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(0.7, 0.7), BackgroundColor3 = Color3.fromRGB(159, 115, 255), BackgroundTransparency = 1, BorderSizePixel = 0})
+	SafeCreate("UICorner", {CornerRadius = UDim.new(0, 1), Parent = checkmark})
+
+	local label = SafeCreate("TextLabel", {Name = "Label", Parent = toggleFrame, BackgroundTransparency = 1.0, Size = UDim2.new(1, -26, 1, 0), Font = Enum.Font.Code, Text = text, TextColor3 = Color3.fromRGB(190, 190, 190), TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left, RichText = true})
+
+	local isOn = default
+	local connections = {}
+
+	local function SetState(newState, runCallback)
+		isOn = newState
+		local targetTransparency = isOn and 0 or 1
+		PlayTween(checkmark, "Fast", {BackgroundTransparency = targetTransparency})
+		if runCallback then
+			local success, err = pcall(callback, isOn)
+			if not success then
+				warn("StableUI Toggle Error:", err)
+				if library._NotificationFunc then library._NotificationFunc("Toggle Error: "..tostring(err), 5, "error") end
+			end
+		end
+	end
+	SetState(isOn, false) -- Set initial state
+
+	table.insert(connections, checkboxButton.MouseButton1Click:Connect(function() SetState(not isOn, true) end))
+	-- Allow clicking label to toggle too
+	table.insert(connections, label.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then SetState(not isOn, true) end end))
+
+	AddCleanup(page, toggleFrame, function() for _,c in ipairs(connections) do pcall(c.Disconnect,c) end end)
+
+	local controlFuncs = {}
+	function controlFuncs:Text(newText) if label and label.Parent then label.Text = tostring(newText or text) end return controlFuncs end
+	function controlFuncs:Hide() if toggleFrame and toggleFrame.Parent then toggleFrame.Visible = false; updateSizeFunc() end return controlFuncs end
+	function controlFuncs:Show() if toggleFrame and toggleFrame.Parent then toggleFrame.Visible = true; updateSizeFunc() end return controlFuncs end
+	function controlFuncs:Set(state) SetState(state == true, true); return controlFuncs end
+	function controlFuncs:GetState() return isOn end
+	function controlFuncs:SetFunction(newCallback) callback = newCallback or function() end return controlFuncs end
+
+	updateSizeFunc()
+	return toggleFrame, controlFuncs
+end
+
+-- Keybind
+function library:_CreateKeybind(page, updateSizeFunc, text, defaultKey, callback)
+	text = tostring(text or "Keybind Action")
+	defaultKey = defaultKey or Enum.KeyCode.P
+	callback = callback or function(key) print("Keybind '"..text.."' ("..key.Name..") pressed.") end
+
+	local keybindFrame = SafeCreate("Frame", {
+		Name = "Keybind_"..text:sub(1,10):gsub("%s","_"), Parent = page, BackgroundTransparency = 1.0,
+		Size = UDim2.new(1, 0, 0, 24),
+	})
+	if not keybindFrame then return nil, {} end
+
+	local layout = SafeCreate("UIListLayout", {Parent = keybindFrame, FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 8)})
+
+	local label = SafeCreate("TextLabel", {Name = "Label", Parent = keybindFrame, BackgroundTransparency = 1.0, Size = UDim2.new(1, -88, 1, 0), Font = Enum.Font.Code, Text = text, TextColor3 = Color3.fromRGB(190, 190, 190), TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left, RichText = true})
+
+	local keyButton = SafeCreate("TextButton", {
+		Name = "KeyButton", Parent = keybindFrame, Size = UDim2.fromOffset(80, 20), BackgroundColor3 = Color3.fromRGB(50, 50, 50),
+		BorderSizePixel = 0, AutoButtonColor = false, Font = Enum.Font.Code, Text = defaultKey.Name,
+		TextColor3 = Color3.fromRGB(160, 160, 160), TextSize = 12,
+	})
+	SafeCreate("UICorner", {CornerRadius = UDim.new(0, 3), Parent = keyButton})
+
+	local currentKey = defaultKey
+	local isListening = false
+	local isEnabled = true
+	local connections = {}
+	local listenConn = nil
+	local activateConn = nil
+
+	local function UpdateKeyText()
+		if not keyButton or not keyButton.Parent then return end
+		keyButton.Text = currentKey.Name
+		local keyTextSize = Vector2.new(30, 12)
+		local success, size = pcall(TextService.GetTextSize, TextService, keyButton.Text, keyButton.TextSize, keyButton.Font, Vector2.new(math.huge, keyButton.AbsoluteSize.Y))
+		if success and size then keyTextSize = size end
+		local newWidth = math.max(40, keyTextSize.X + 10)
+		keyButton.Size = UDim2.new(0, newWidth, 0, 20)
+		label.Size = UDim2.new(1, -(newWidth + layout.Padding.Offset), 1, 0)
+	end
+	UpdateKeyText()
+
+	local function StopListening(newKey)
+		if not isListening then return end
+		isListening = false
+		if listenConn then listenConn:Disconnect(); listenConn = nil end
+		currentKey = newKey or currentKey -- Update key if one was captured
+		UpdateKeyText()
+		keyButton.TextColor3 = Color3.fromRGB(160, 160, 160)
+	end
+
+	table.insert(connections, keyButton.MouseButton1Click:Connect(function()
+		if isListening then StopListening(nil); return end
+		isListening = true
+		keyButton.Text = "..."
+		keyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+		UpdateKeyText()
+
+		listenConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+			if not gameProcessed then
+				if input.KeyCode ~= Enum.KeyCode.Unknown and input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.MouseButton2 then
+					StopListening(input.KeyCode)
+				elseif input.KeyCode == Enum.KeyCode.Escape then
+					StopListening(nil) -- Cancel without changing
+				end
+			end
+		end)
+	end))
+
+	activateConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+		if isEnabled and not gameProcessed and not isListening and input.KeyCode == currentKey then
+			local focused = UserInputService:GetFocusedTextBox()
+			if not focused then
+				local success, err = pcall(callback, currentKey)
+				if not success then
+					warn("StableUI Keybind Error:", err)
+					if library._NotificationFunc then library._NotificationFunc("Keybind Error: "..tostring(err), 5, "error") end
+				end
+			end
+		end
+	end)
+	table.insert(connections, activateConn)
+
+	AddCleanup(page, keybindFrame, function() for _,c in ipairs(connections) do pcall(c.Disconnect,c) end; if listenConn then pcall(listenConn.Disconnect, listenConn) end end)
+
+	local controlFuncs = {}
+	function controlFuncs:Text(newText) if label and label.Parent then label.Text = tostring(newText or text) end return controlFuncs end
+	function controlFuncs:Hide() if keybindFrame and keybindFrame.Parent then keybindFrame.Visible = false; updateSizeFunc() end return controlFuncs end
+	function controlFuncs:Show() if keybindFrame and keybindFrame.Parent then keybindFrame.Visible = true; updateSizeFunc() end return controlFuncs end
+	function controlFuncs:SetKey(newKey) if newKey and typeof(newKey) == "EnumItem" and newKey.EnumType == Enum.KeyCode then currentKey = newKey; UpdateKeyText() else warn("SetKey: Invalid KeyCode") end return controlFuncs end
+	function controlFuncs:GetKey() return currentKey end
+	function controlFuncs:SetFunction(newCallback) callback = newCallback or function() end return controlFuncs end
+	function controlFuncs:Enable() isEnabled = true; if keyButton and keyButton.Parent then keyButton.TextColor3 = Color3.fromRGB(160,160,160) end return controlFuncs end
+	function controlFuncs:Disable() isEnabled = false; if keyButton and keyButton.Parent then keyButton.TextColor3 = Color3.fromRGB(100,100,100) end return controlFuncs end
+	function controlFuncs:Fire() pcall(callback, currentKey) return controlFuncs end
+
+	updateSizeFunc()
+	return keybindFrame, controlFuncs
+end
+
+-- Textbox
+function library:_CreateTextbox(page, updateSizeFunc, text, options)
+	text = tostring(text or "Textbox")
+	options = options or {}
+	local placeholder = options.placeholder or "Enter text..."
+	local default = options.default or ""
+	local clearOnFocus = options.clearOnFocus or false
+	local multiLine = options.multiLine or false
+	local callback = options.callback or function(value) print("Textbox '"..text.."' value: "..value) end
+	local executeOnFocusLost = options.executeOnFocusLost -- If nil, defaults to true if not multiline
+
+	if executeOnFocusLost == nil then executeOnFocusLost = not multiLine end
+
+	local textboxFrame = SafeCreate("Frame", {
+		Name = "Textbox_"..text:sub(1,10):gsub("%s","_"), Parent = page, BackgroundTransparency = 1.0,
+	})
+	if not textboxFrame then return nil, {} end
+
+	local layout = SafeCreate("UIListLayout", {Parent = textboxFrame, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 4)})
+
+	local label = SafeCreate("TextLabel", {Name = "Label", Parent = textboxFrame, BackgroundTransparency = 1.0, Size = UDim2.new(1, 0, 0, 18), Font = Enum.Font.Code, Text = text, TextColor3 = Color3.fromRGB(190, 190, 190), TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left, RichText = true})
+
+	local inputContainer = SafeCreate("Frame", {Name = "InputContainer", Parent = textboxFrame, BackgroundColor3 = Color3.fromRGB(60, 60, 60), BorderSizePixel = 0})
+	SafeCreate("UICorner", {CornerRadius = UDim.new(0, 3), Parent = inputContainer})
+
+	local inputHeight = multiLine and 80 or 30
+	inputContainer.Size = UDim2.new(1, 0, 0, inputHeight)
+	textboxFrame.Size = UDim2.new(1, 0, 0, inputHeight + 18 + layout.Padding.Offset) -- Total height
+
+	local textBox = SafeCreate("TextBox", {
+		Name = "Input", Parent = inputContainer, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.new(1, -2, 1, -2), Font = Enum.Font.Code, Text = default, PlaceholderText = placeholder,
+		PlaceholderColor3 = Color3.fromRGB(120, 120, 120), TextColor3 = Color3.fromRGB(210, 210, 210), TextSize = 14,
+		BackgroundColor3 = Color3.fromRGB(30, 30, 30), BorderSizePixel = 0, ClearTextOnFocus = clearOnFocus,
+		MultiLine = multiLine, TextWrapped = multiLine, TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = multiLine and Enum.TextYAlignment.Top or Enum.TextYAlignment.Center, TextEditable = true,
+	})
+	SafeCreate("UICorner", {CornerRadius = UDim.new(0, 2), Parent = textBox})
+
+	local connections = {}
+	table.insert(connections, textBox.FocusLost:Connect(function(enterPressed)
+		PlayTween(inputContainer, "Fast", {BackgroundColor3 = Color3.fromRGB(60, 60, 60)})
+		if executeOnFocusLost or enterPressed then
+			local success, err = pcall(callback, textBox.Text)
+			if not success then
+				warn("StableUI Textbox Error:", err)
+				if library._NotificationFunc then library._NotificationFunc("Textbox Error: "..tostring(err), 5, "error") end
+			end
+		end
+	end))
+	table.insert(connections, textBox.Focused:Connect(function()
+		PlayTween(inputContainer, "Fast", {BackgroundColor3 = Color3.fromRGB(159, 115, 255)})
+	end))
+
+	AddCleanup(page, textboxFrame, function() for _,c in ipairs(connections) do pcall(c.Disconnect,c) end end)
+
+	local controlFuncs = {}
+	function controlFuncs:Text(newLabelText) if label and label.Parent then label.Text = tostring(newLabelText or text) end return controlFuncs end
+	function controlFuncs:Hide() if textboxFrame and textboxFrame.Parent then textboxFrame.Visible = false; updateSizeFunc() end return controlFuncs end
+	function controlFuncs:Show() if textboxFrame and textboxFrame.Parent then textboxFrame.Visible = true; updateSizeFunc() end return controlFuncs end
+	function controlFuncs:Set(value) if textBox and textBox.Parent then textBox.Text = tostring(value or "") end return controlFuncs end
+	function controlFuncs:Get() if textBox and textBox.Parent then return textBox.Text else return nil end end
+	function controlFuncs:Clear() if textBox and textBox.Parent then textBox.Text = "" end return controlFuncs end
+	function controlFuncs:SetFunction(newCallback) callback = newCallback or function() end return controlFuncs end
+	function controlFuncs:Fire() if textBox and textBox.Parent then pcall(callback, textBox.Text) end return controlFuncs end
+
+	updateSizeFunc()
+	return textboxFrame, controlFuncs
+end
+
+-- Slider (Basic Implementation)
+function library:_CreateSlider(page, updateSizeFunc, text, min, max, default, precision, callback)
+	text = tostring(text or "Slider")
+	min = tonumber(min or 0)
+	max = tonumber(max or 100)
+	default = math.clamp(tonumber(default or min) or min, min, max)
+	precision = math.floor(tonumber(precision or 0))
+	callback = callback or function(value) print("Slider '"..text.."' value: "..value) end
+
+	local sliderFrame = SafeCreate("Frame", {
+		Name = "Slider_"..text:sub(1,10):gsub("%s","_"), Parent = page, BackgroundTransparency = 1.0,
+	})
+	if not sliderFrame then return nil, {} end
+
+	local layout = SafeCreate("UIListLayout", {Parent = sliderFrame, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 4)})
+
+	local topRow = SafeCreate("Frame", {Name="TopRow", Parent=sliderFrame, BackgroundTransparency=1, Size=UDim2.new(1,0,0,18)})
+	local topLayout = SafeCreate("UIListLayout", {Parent=topRow, FillDirection=Enum.FillDirection.Horizontal, VerticalAlignment=Enum.VerticalAlignment.Center, SortOrder=Enum.SortOrder.LayoutOrder, Padding=UDim.new(0,6)})
+
+	local label = SafeCreate("TextLabel", {Name = "Label", Parent = topRow, BackgroundTransparency = 1.0, Size = UDim2.new(1, -56, 1, 0), Font = Enum.Font.Code, Text = text, TextColor3 = Color3.fromRGB(190, 190, 190), TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left, RichText = true})
+	local valueLabel = SafeCreate("TextLabel", {Name = "ValueLabel", Parent = topRow, BackgroundTransparency = 1.0, Size = UDim2.fromOffset(50, 18), Font = Enum.Font.Code, Text = "", TextColor3 = Color3.fromRGB(160, 160, 160), TextSize = 13, TextXAlignment = Enum.TextXAlignment.Right})
+
+	local sliderBarBg = SafeCreate("Frame", {Name = "SliderBarBg", Parent = sliderFrame, BackgroundColor3 = Color3.fromRGB(45, 45, 45), Size = UDim2.new(1, 0, 0, 8), BorderSizePixel = 0})
+	SafeCreate("UICorner", {CornerRadius = UDim.new(0.5, 0), Parent = sliderBarBg})
+
+	local sliderBarFill = SafeCreate("Frame", {Name = "SliderBarFill", Parent = sliderBarBg, BackgroundColor3 = Color3.fromRGB(159, 115, 255), Size = UDim2.fromScale(0, 1), BorderSizePixel = 0})
+	SafeCreate("UICorner", {CornerRadius = UDim.new(0.5, 0), Parent = sliderBarFill})
+
+	local sliderHandle = SafeCreate("TextButton", { -- Button for dragging
+		Name = "SliderHandle", Parent = sliderBarBg, BackgroundColor3 = Color3.fromRGB(200, 200, 200), Size = UDim2.fromOffset(12, 12),
+		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0, 0.5), BorderSizePixel=0, Text="", AutoButtonColor=false, ZIndex=2,
+	})
+	SafeCreate("UICorner", {CornerRadius = UDim.new(0.5, 0), Parent = sliderHandle})
+
+	sliderFrame.Size = UDim2.new(1, 0, 0, 18 + 8 + layout.Padding.Offset) -- Total height
+
+	local currentValue = default
+	local isDragging = false
+	local connections = {}
+
+	local function FormatValue(val)
+		return string.format("%."..precision.."f", val)
+	end
+
+	local function SetValue(newValue, runCallback)
+		newValue = math.clamp(newValue, min, max)
+		if precision == 0 then newValue = math.floor(newValue + 0.5) end -- Round if integer precision
+
+		currentValue = newValue
+		local percentage = (currentValue - min) / (max - min)
+		if max == min then percentage = 0.5 end -- Handle division by zero
+
+		sliderBarFill.Size = UDim2.fromScale(percentage, 1)
+		sliderHandle.Position = UDim2.new(percentage, 0, 0.5, 0)
+		valueLabel.Text = FormatValue(currentValue)
+
+		if runCallback then
+			local success, err = pcall(callback, currentValue)
+			if not success then
+				warn("StableUI Slider Error:", err)
+				if library._NotificationFunc then library._NotificationFunc("Slider Error: "..tostring(err), 5, "error") end
+			end
+		end
+	end
+	SetValue(currentValue, false) -- Set initial value
+
+	local function HandleInput(input)
+		if not sliderBarBg or not sliderBarBg.Parent then return end
+		local mouseX = input.Position.X
+		local barStartX = sliderBarBg.AbsolutePosition.X
+		local barWidth = sliderBarBg.AbsoluteSize.X
+		local percentage = math.clamp((mouseX - barStartX) / barWidth, 0, 1)
+		local newValue = min + (max - min) * percentage
+		SetValue(newValue, true)
+	end
+
+	table.insert(connections, sliderHandle.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then isDragging = true; PlayTween(sliderHandle, "Fast", {Size=UDim2.fromOffset(16,16)}) end end))
+	table.insert(connections, sliderHandle.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then isDragging = false; PlayTween(sliderHandle, "Fast", {Size=UDim2.fromOffset(12,12)}) end end))
+	table.insert(connections, UserInputService.InputChanged:Connect(function(input) if isDragging and input.UserInputType == Enum.UserInputType.MouseMovement then HandleInput(input) end end))
+	-- Allow clicking on bar to set value
+	table.insert(connections, sliderBarBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then HandleInput(input) end end))
+
+
+	AddCleanup(page, sliderFrame, function() for _,c in ipairs(connections) do pcall(c.Disconnect,c) end end)
+
+	local controlFuncs = {}
+	function controlFuncs:Text(newLabelText) if label and label.Parent then label.Text = tostring(newLabelText or text) end return controlFuncs end
+	function controlFuncs:Hide() if sliderFrame and sliderFrame.Parent then sliderFrame.Visible = false; updateSizeFunc() end return controlFuncs end
+	function controlFuncs:Show() if sliderFrame and sliderFrame.Parent then sliderFrame.Visible = true; updateSizeFunc() end return controlFuncs end
+	function controlFuncs:Set(value, runCallback) SetValue(tonumber(value or min), runCallback == true); return controlFuncs end
+	function controlFuncs:Get() return currentValue end
+	function controlFuncs:SetFunction(newCallback) callback = newCallback or function() end return controlFuncs end
+
+	updateSizeFunc()
+	return sliderFrame, controlFuncs
+end
+
+-- Selector (Dropdown - Basic Implementation)
+function library:_CreateSelector(page, updateSizeFunc, text, options, default, callback)
+	text = tostring(text or "Selector")
+	options = options or {"Option 1", "Option 2"}
+	default = default or options[1]
+	callback = callback or function(value) print("Selector '"..text.."' selected: "..tostring(value)) end
+
+	local selectorFrame = SafeCreate("Frame", {
+		Name = "Selector_"..text:sub(1,10):gsub("%s","_"), Parent = page, BackgroundTransparency = 1.0,
+		ZIndex = 1, -- Base ZIndex
+	})
+	if not selectorFrame then return nil, {} end
+
+	local layout = SafeCreate("UIListLayout", {Parent = selectorFrame, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 4)})
+
+	local label = SafeCreate("TextLabel", {Name = "Label", Parent = selectorFrame, BackgroundTransparency = 1.0, Size = UDim2.new(1, 0, 0, 18), Font = Enum.Font.Code, Text = text, TextColor3 = Color3.fromRGB(190, 190, 190), TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left, RichText = true})
+
+	local dropdownButton = SafeCreate("TextButton", {
+		Name = "DropdownButton", Parent = selectorFrame, BackgroundColor3 = Color3.fromRGB(50, 50, 50), Size = UDim2.new(1, 0, 0, 30),
+		Font = Enum.Font.Code, Text = " ", TextColor3 = Color3.fromRGB(200, 200, 200), TextSize = 14,
+		TextXAlignment = Enum.TextXAlignment.Left, AutoButtonColor = false, ZIndex = 2,
+	})
+	SafeCreate("UICorner", {CornerRadius = UDim.new(0, 3), Parent = dropdownButton})
+	SafeCreate("UIPadding", {PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 25), Parent = dropdownButton}) -- Padding for text and arrow
+
+	local arrowLabel = SafeCreate("TextLabel", { -- Simple text arrow
+		Name = "Arrow", Parent = dropdownButton, BackgroundTransparency = 1, Size = UDim2.fromOffset(20, 20),
+		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -5, 0.5, 0), Font = Enum.Font.Code,
+		Text = "▼", TextColor3 = Color3.fromRGB(160, 160, 160), TextSize = 14, TextXAlignment = Enum.TextXAlignment.Center,
+	})
+
+	local dropdownList = SafeCreate("ScrollingFrame", {
+		Name = "DropdownList", Parent = selectorFrame, BackgroundColor3 = Color3.fromRGB(50, 50, 50), Size = UDim2.new(1, 0, 0, 0), -- Start hidden
+		Position = UDim2.new(0, 0, 1, 2), BorderSizePixel = 1, BorderColor3 = Color3.fromRGB(70, 70, 70),
+		CanvasSize = UDim2.fromOffset(0, 0), ScrollBarThickness = 4, Visible = false, ClipsDescendants = true, ZIndex = 3,
+	})
+	SafeCreate("UICorner", {CornerRadius = UDim.new(0, 3), Parent = dropdownList})
+	local listLayout = SafeCreate("UIListLayout", {Parent = dropdownList, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 1)})
+	SafeCreate("UIPadding", {Parent = dropdownList, PaddingTop = UDim.new(0, 2), PaddingBottom = UDim.new(0, 2)})
+
+	selectorFrame.Size = UDim2.new(1, 0, 0, 18 + 30 + layout.Padding.Offset) -- Total height (closed)
+
+	local isOpen = false
+	local currentValue = default
+	local connections = {}
+
+	local function UpdateSelectedText()
+		dropdownButton.Text = tostring(currentValue or "")
+	end
+	UpdateSelectedText()
+
+	local function CloseDropdown()
+		if not isOpen then return end
+		isOpen = false
+		arrowLabel.Text = "▼"
+		PlayTween(dropdownList, "Fast", {Size = UDim2.new(1, 0, 0, 0)})
+		task.wait(0.1) -- Wait for tween
+		if dropdownList and dropdownList.Parent then dropdownList.Visible = false end
+		selectorFrame.ZIndex = 1 -- Reset ZIndex
+	end
+
+	local function OpenDropdown()
+		if isOpen then return end
+		isOpen = true
+		selectorFrame.ZIndex = 10 -- Bring to front
+		arrowLabel.Text = "▲"
+		dropdownList.Visible = true
+		local listHeight = math.min(150, listLayout.AbsoluteContentSize.Y + 4) -- Max height 150
+		PlayTween(dropdownList, "Fast", {Size = UDim2.new(1, 0, 0, listHeight)})
+	end
+
+	table.insert(connections, dropdownButton.MouseButton1Click:Connect(function()
+		if isOpen then CloseDropdown() else OpenDropdown() end
+	end))
+
+	-- Close when clicking outside
+	local function HandleOutsideClick(input)
+		if not isOpen or not dropdownList or not dropdownList.Parent then return end
+		local mouseLocation = input.Position
+		local objects = PlayerGui:GetGuiObjectsAtPosition(mouseLocation.X, mouseLocation.Y)
+		local clickedInside = false
+		for _, obj in ipairs(objects) do
+			if obj == dropdownButton or obj:IsDescendantOf(dropdownButton) or obj == dropdownList or obj:IsDescendantOf(dropdownList) then
+				clickedInside = true
+				break
+			end
+		end
+		if not clickedInside then CloseDropdown() end
+	end
+	table.insert(connections, UserInputService.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then HandleOutsideClick(input) end end))
+
+
+	local optionButtons = {}
+	local function AddOption(optionValue)
+		local optionButton = SafeCreate("TextButton", {
+			Name = "Option_"..tostring(optionValue):sub(1,10):gsub("%s","_"), Parent = dropdownList, BackgroundColor3 = Color3.fromRGB(60, 60, 60),
+			Size = UDim2.new(1, -4, 0, 24), AutoButtonColor = false, Font = Enum.Font.Code,
+			Text = "  "..tostring(optionValue), TextColor3 = Color3.fromRGB(190, 190, 190), TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left,
+		})
+		if not optionButton then return end
+
+		optionButtons[optionValue] = optionButton -- Store reference
+
+		local optConns = {}
+		table.insert(optConns, optionButton.MouseEnter:Connect(function() PlayTween(optionButton, "Fast", {BackgroundColor3 = Color3.fromRGB(75, 75, 75)}) end))
+		table.insert(optConns, optionButton.MouseLeave:Connect(function() PlayTween(optionButton, "Fast", {BackgroundColor3 = Color3.fromRGB(60, 60, 60)}) end))
+		table.insert(optConns, optionButton.MouseButton1Click:Connect(function()
+			currentValue = optionValue
+			UpdateSelectedText()
+			CloseDropdown()
+			local success, err = pcall(callback, currentValue)
+			if not success then
+				warn("StableUI Selector Error:", err)
+				if library._NotificationFunc then library._NotificationFunc("Selector Error: "..tostring(err), 5, "error") end
+			end
+		end))
+		table.insert(connections, function() for _,c in ipairs(optConns) do pcall(c.Disconnect,c) end end) -- Add cleanup for option buttons
+	end
+
+	for _, opt in ipairs(options) do AddOption(opt) end
+
+	AddCleanup(page, selectorFrame, function() for _,c in ipairs(connections) do pcall(c.Disconnect,c) end end)
+
+	local controlFuncs = {}
+	function controlFuncs:Text(newLabelText) if label and label.Parent then label.Text = tostring(newLabelText or text) end return controlFuncs end
+	function controlFuncs:Hide() if selectorFrame and selectorFrame.Parent then selectorFrame.Visible = false; CloseDropdown(); updateSizeFunc() end return controlFuncs end
+	function controlFuncs:Show() if selectorFrame and selectorFrame.Parent then selectorFrame.Visible = true; updateSizeFunc() end return controlFuncs end
+	function controlFuncs:Set(value, runCallback)
+		local found = false
+		for _, opt in ipairs(options) do if opt == value then found = true; break end end
+		if found then
+			currentValue = value
+			UpdateSelectedText()
+			if runCallback == true then pcall(callback, currentValue) end
+		else
+			warn("Selector Set: Value '"..tostring(value).."' not found in options.")
+		end
+		return controlFuncs
+	end
+	function controlFuncs:Get() return currentValue end
+	function controlFuncs:SetFunction(newCallback) callback = newCallback or function() end return controlFuncs end
+	function controlFuncs:SetOptions(newOptions, newDefault) -- Rebuilds the dropdown
+		options = newOptions or {}
+		default = newDefault or options[1]
+		currentValue = default
+		-- Clear existing options
+		for _, btn in pairs(optionButtons) do SafeDestroy(btn) end
+		table.clear(optionButtons)
+		-- Add new options
+		for _, opt in ipairs(options) do AddOption(opt) end
+		UpdateSelectedText()
+		dropdownList.CanvasSize = UDim2.fromOffset(0, listLayout.AbsoluteContentSize.Y + 4) -- Update canvas size
+		return controlFuncs
+	end
+
+	updateSizeFunc()
+	return selectorFrame, controlFuncs
+end
+
+
+-- / Library Management Functions
+
+function library:Destroy()
+	if not library._UI_INITIALIZED then return end
+
+	print("StableUI: Destroying...")
+
+	-- Disconnect global keybind listener
+	if library._MainKeybindConnection then
+		library._MainKeybindConnection:Disconnect()
+		library._MainKeybindConnection = nil
+	end
+
+	-- Destroy Watermark
+	if library._WatermarkControl then
+		library._WatermarkControl:Remove()
+	end
+
+	-- Destroy Notifications
+	SafeDestroy(library._NotificationScreen)
+	library._NotificationScreen = nil
+	library._NotificationFunc = nil
+
+	-- Cleanup all pages and components
+	if library._ActiveScreen then
+		local container = library._ActiveScreen:FindFirstChild("Edge", true):FindFirstChild("Background", true):FindFirstChild("ContentArea", true):FindFirstChild("containerEdge", true):FindFirstChild("container", true)
+		if container then
+			for _, page in ipairs(container:GetChildren()) do
+				if page:IsA("ScrollingFrame") and library._ComponentCleanup[page] then
+					RunPageCleanup(page)
+				end
+			end
+		end
+	end
+	library._PageUpdateDebouncers = {}
+	library._ComponentCleanup = {}
+
+
+	-- Destroy main screen
+	SafeDestroy(library._ActiveScreen)
+	library._ActiveScreen = nil
+
+	-- Reset state
+	library._UI_INITIALIZED = false
+	library._KEY_ACCEPTED = false -- Require key again if reloaded
+	library._TrackingEnabled = false
+	library._ActiveTab = nil
+	library._ActivePage = nil
+	library._FPS = 0
+
+	print("StableUI: Destroyed.")
+	-- Optionally clear the library table itself if desired, but returning nil is usually sufficient
+	-- library = nil
+	return nil
+end
+
+-- / Entry Point Logic
+
+-- Start the process: Check key system -> Show Greeting (optional) -> Initialize UI
+if library._UseKeySystem and not library._KEY_ACCEPTED then
+	library:_RequestKey()
+elseif library._ShowGreeting then
+	library:_StartTracking() -- Start tracking if skipping key but showing greeting
+	library:_ShowGreeting()
+else
+	library:_StartTracking() -- Start tracking if skipping key and greeting
+	library:Initialize()
+end
+
+
+return library
