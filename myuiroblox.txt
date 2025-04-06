@@ -5,6 +5,7 @@
     problem with other people using it, please just make sure you message me and ask me before using.
 
   Enhanced and completed by Assistant.
+  Version 2.0.4: Fixed slider dragging, textbox rendering, main window dragging, keybind input. Added more comments.
 ]]
 
 -- / Locals
@@ -39,59 +40,85 @@ local CreateTween = function(name, speed, style, direction, loop, reverse, delay
     TweenTable[name] = TweenInfo.new(speed, style, direction, loop, reverse, delay)
 end
 
--- / Dragging Functionality
+-- / Dragging Functionality (Applied to the object passed)
 -- Makes a GUI object draggable
--- Note: Directly setting Position might be slightly more performant than tweening for dragging,
--- but tweening provides a smoother visual effect.
-local drag = function(obj, latency)
-    obj = obj
-    latency = latency or 0.06 -- Latency for the tween effect
+local drag = function(draggableObject, targetObject, latency)
+    -- draggableObject: The element that initiates the drag (e.g., header)
+    -- targetObject: The element whose position is changed (e.g., main window frame)
+    -- latency: Smoothness factor for tweening
+    latency = latency or 0.06
 
     local dragging = false
     local dragInput = nil
     local dragStart = nil
     local startPos = nil
+    local inputChangedConn = nil
+    local inputEndedConn = nil
 
     local function updateInput(input)
         if not dragging or not startPos or not dragStart then return end
         local delta = input.Position - dragStart
+        -- Calculate the new position for the targetObject
         local newPosition = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-        -- Use TweenService for smooth dragging
-        TweenService:Create(obj, TweenInfo.new(latency), {Position = newPosition}):Play()
+        -- Use TweenService for smooth dragging of the targetObject
+        TweenService:Create(targetObject, TweenInfo.new(latency), {Position = newPosition}):Play()
     end
 
-    obj.InputBegan:Connect(function(input)
+    local function stopDragging()
+        if dragging then
+            dragging = false
+            dragStart = nil
+            startPos = nil
+            -- Disconnect listeners when dragging stops
+            if inputChangedConn then inputChangedConn:Disconnect(); inputChangedConn = nil end
+            if inputEndedConn then inputEndedConn:Disconnect(); inputEndedConn = nil end
+        end
+    end
+
+    draggableObject.InputBegan:Connect(function(input)
+        -- Start dragging only on left mouse button or touch
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            -- Prevent starting a new drag if already dragging (e.g., fast clicks)
+            if dragging then return end
+
             dragging = true
             dragStart = input.Position
-            startPos = obj.Position
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                    dragStart = nil
-                    startPos = nil
+            startPos = targetObject.Position -- Use targetObject's position
+            dragInput = input -- Store the specific input object that started the drag
+
+            -- Disconnect previous listeners just in case
+            if inputChangedConn then inputChangedConn:Disconnect() end
+            if inputEndedConn then inputEndedConn:Disconnect() end
+
+            -- Listen for movement *globally* while dragging
+            inputChangedConn = UserInputService.InputChanged:Connect(function(changedInput)
+                -- Update only if dragging and the input type is mouse movement or touch
+                if dragging and (changedInput.UserInputType == Enum.UserInputType.MouseMovement or changedInput.UserInputType == Enum.UserInputType.Touch) then
+                    updateInput(changedInput)
+                end
+            end)
+
+            -- Listen for drag end *globally* based on the initial input object
+            inputEndedConn = dragInput.Changed:Connect(function()
+                if dragInput.UserInputState == Enum.UserInputState.End then
+                    stopDragging()
                 end
             end)
         end
     end)
 
-    obj.InputChanged:Connect(function(input)
-        if (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            dragInput = input
+    -- Handle cases where input might end unexpectedly (e.g., focus lost)
+    draggableObject.InputEnded:Connect(function(input)
+        if input == dragInput then -- Check if it's the input that started the drag
+             stopDragging()
         end
     end)
 
-    UserInputService.InputChanged:Connect(function(input)
-        -- Update position only if dragging and the input is the relevant mouse/touch movement
-        if dragging and input == dragInput then
-            updateInput(input)
-        end
-    end)
 end
 
 -- / Library Definition
 local library = {
-    version = "2.0.3", -- Incremented version
+    version = "2.0.4", -- Incremented version
     title = "SC " .. tostring(math.random(1, 366)),
     fps = 0,
     rank = "private",
@@ -791,11 +818,11 @@ function library:KeyPrompt()
     textBox.TextColor3 = TEXT_COLOR
     textBox.TextSize = 15
     textBox.ClearTextOnFocus = false
-    textBox.TextXAlignment = Enum.TextXAlignment.Left
+    textBox.TextXAlignment = Enum.TextXAlignment.Left -- Ensure left alignment
     textBox.TextYAlignment = Enum.TextYAlignment.Center
 
     local textBoxPadding = Instance.new("UIPadding")
-    textBoxPadding.PaddingLeft = UDim.new(0, 10)
+    textBoxPadding.PaddingLeft = UDim.new(0, 10) -- Increased padding
     textBoxPadding.PaddingRight = UDim.new(0, 10)
     textBoxPadding.Parent = textBox
 
@@ -947,6 +974,7 @@ function library:Init(key)
     main.AnchorPoint = Vector2.new(0.5, 0.5)
     main.Position = UDim2.new(0.5, 0, 0.5, 0) -- Center the window
     main.Size = UDim2.new(0, 550, 0, 350) -- Slightly larger default size
+    main.ClipsDescendants = true -- Clip content within main frame bounds
 
     local mainCorner = Instance.new("UICorner")
     mainCorner.CornerRadius = UDim.new(0, CORNER_RADIUS)
@@ -960,6 +988,7 @@ function library:Init(key)
     header.BorderSizePixel = 0
     header.Size = UDim2.new(1, 0, 0, 35) -- Taller header
     header.Position = UDim2.new(0, 0, 0, 0)
+    header.ZIndex = 2 -- Ensure header is above other content in main
 
     -- Apply corner radius only to top corners of header
     local headerCorner = Instance.new("UICorner")
@@ -1015,6 +1044,7 @@ function library:Init(key)
     tabContainer.Position = UDim2.new(0, PADDING, 0, 35 + PADDING) -- Below header, padded
     tabContainer.Size = UDim2.new(0, 130, 1, -(35 + PADDING * 2)) -- Padded size
     tabContainer.ClipsDescendants = true
+    tabContainer.ZIndex = 1
 
     local tabContainerCorner = Instance.new("UICorner")
     tabContainerCorner.CornerRadius = UDim.new(0, CORNER_RADIUS)
@@ -1050,13 +1080,15 @@ function library:Init(key)
     contentContainer.Position = UDim2.new(0, 130 + PADDING * 2, 0, 35 + PADDING) -- Right of tab container, padded
     contentContainer.Size = UDim2.new(1, -(130 + PADDING * 3), 1, -(35 + PADDING * 2)) -- Fill remaining space, padded
     contentContainer.ClipsDescendants = true
+    contentContainer.ZIndex = 1
 
     local contentContainerCorner = Instance.new("UICorner")
     contentContainerCorner.CornerRadius = UDim.new(0, CORNER_RADIUS)
     contentContainerCorner.Parent = contentContainer
 
-    -- Enable dragging of the main window via the header
-    drag(header, 0.08) -- Use header for dragging
+    -- Enable dragging of the main window (using the main frame as the target)
+    -- Dragging initiated by the header, but moves the 'main' frame.
+    drag(header, main, 0.08) -- Pass header to initiate, main to move
 
     -- Enable keybind to toggle UI visibility
     -- Disconnect previous listener if exists
@@ -1067,7 +1099,11 @@ function library:Init(key)
     self.activeKeybindConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
         -- Check if input is not processed by game (e.g., typing in chat) and matches the keybind
         if not gameProcessed and input.KeyCode == self.keybind then
-            SCUI.Enabled = not SCUI.Enabled
+            -- Check if a TextBox is focused, if so, don't toggle UI
+            local focused = UserInputService:GetFocusedTextBox()
+            if not focused then
+                 SCUI.Enabled = not SCUI.Enabled
+            end
         end
     end)
 
@@ -1499,9 +1535,13 @@ function library:Init(key)
                 -- Keybind listener
                 UserInputService.InputBegan:Connect(function(input, gameProcessed)
                     if not gameProcessed and input.KeyCode == key then
-                        state = not state
-                        updateToggleVisuals()
-                        pcall(callback, state)
+                         -- Check if a TextBox is focused, if so, don't trigger toggle keybind
+                         local focused = UserInputService:GetFocusedTextBox()
+                         if not focused then
+                              state = not state
+                              updateToggleVisuals()
+                              pcall(callback, state)
+                         end
                     end
                 end)
 
@@ -1511,7 +1551,7 @@ function library:Init(key)
             return ToggleFunctions
         end
 
-        -- Keybind Element (Completed)
+        -- Keybind Element (Improved Input Handling)
         function Tab:NewKeybind(text, defaultKey, callback)
             text = text or "Keybind"
             defaultKey = defaultKey or Enum.KeyCode.F -- Default to F key
@@ -1519,6 +1559,8 @@ function library:Init(key)
 
             local currentKey = defaultKey
             local isBinding = false -- Flag to check if currently waiting for key input
+            local inputConnection = nil -- To store the InputBegan connection
+            local clickOffConnection = nil -- To handle clicking off
 
             local keybindFrame = createElementFrame(30)
             keybindFrame.Name = "keybindFrame"
@@ -1584,9 +1626,29 @@ function library:Init(key)
                 end
             end)
 
-            -- Keybind click handler (to start binding)
-            local inputConnection = nil -- To store the InputBegan connection
+            -- Function to stop the binding process
+            local function stopBinding(success, newKey)
+                 if not isBinding then return end -- Already stopped
 
+                 isBinding = false
+                 -- Disconnect listeners immediately
+                 if inputConnection then inputConnection:Disconnect(); inputConnection = nil end
+                 if clickOffConnection then clickOffConnection:Disconnect(); clickOffConnection = nil end
+
+                 if success and newKey then
+                      currentKey = newKey
+                      keyDisplay.Text = "[" .. currentKey.Name .. "]"
+                      keyDisplay.TextColor3 = TITLE_COLOR
+                      TweenService:Create(keybindButton, tweenInfo, {BackgroundColor3 = originalColor}):Play()
+                      pcall(callback, currentKey) -- Call callback with the new key
+                 else -- Binding cancelled or failed
+                      keyDisplay.Text = "[" .. currentKey.Name .. "]" -- Revert text
+                      keyDisplay.TextColor3 = TITLE_COLOR
+                      TweenService:Create(keybindButton, tweenInfo, {BackgroundColor3 = originalColor}):Play()
+                 end
+            end
+
+            -- Keybind click handler (to start binding)
             keybindButton.MouseButton1Click:Connect(function()
                 if isBinding then return end -- Prevent starting bind if already binding
 
@@ -1595,43 +1657,44 @@ function library:Init(key)
                 keyDisplay.TextColor3 = Color3.fromRGB(255, 255, 100) -- Yellowish color
                 TweenService:Create(keybindButton, tweenInfo, {BackgroundColor3 = bindingColor}):Play()
 
-                -- Disconnect previous listener if any
-                if inputConnection then inputConnection:Disconnect() end
+                -- Disconnect previous listeners if any (safety check)
+                if inputConnection then inputConnection:Disconnect(); inputConnection = nil end
+                if clickOffConnection then clickOffConnection:Disconnect(); clickOffConnection = nil end
 
-                -- Listen for the next key press
+                -- Listen for the next key press (higher priority than click off)
                 inputConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
-                    if not isBinding then return end -- Exit if binding was cancelled
+                    if not isBinding then return end -- Exit if binding was cancelled somehow
 
-                    -- Ignore mouse buttons, gameProcessed inputs, and UI inputs like Enter/Escape for the binding itself
+                    -- Process keyboard input for binding
                     if input.UserInputType == Enum.UserInputType.Keyboard and not gameProcessed then
-                         -- Allow Escape to cancel binding
+                        -- Allow Escape to cancel binding
                         if input.KeyCode == Enum.KeyCode.Escape then
-                             isBinding = false
-                             keyDisplay.Text = "[" .. currentKey.Name .. "]" -- Revert text
-                             keyDisplay.TextColor3 = TITLE_COLOR
-                             TweenService:Create(keybindButton, tweenInfo, {BackgroundColor3 = originalColor}):Play()
-                             if inputConnection then inputConnection:Disconnect() end
+                             stopBinding(false) -- Cancel binding
                              return
                         end
 
-                        -- Set the new key
-                        currentKey = input.KeyCode
-                        isBinding = false
-                        keyDisplay.Text = "[" .. currentKey.Name .. "]"
-                        keyDisplay.TextColor3 = TITLE_COLOR
-                        TweenService:Create(keybindButton, tweenInfo, {BackgroundColor3 = originalColor}):Play()
+                        -- Set the new key (ignore modifier keys themselves as binds)
+                        if input.KeyCode ~= Enum.KeyCode.LeftShift and input.KeyCode ~= Enum.KeyCode.RightShift and
+                           input.KeyCode ~= Enum.KeyCode.LeftControl and input.KeyCode ~= Enum.KeyCode.RightControl and
+                           input.KeyCode ~= Enum.KeyCode.LeftAlt and input.KeyCode ~= Enum.KeyCode.RightAlt and
+                           input.KeyCode ~= Enum.KeyCode.LeftSuper and input.KeyCode ~= Enum.KeyCode.RightSuper then
+                           stopBinding(true, input.KeyCode) -- Success, stop binding with new key
+                        end
+                    end
+                end)
 
-                        pcall(callback, currentKey) -- Call callback with the new key
+                -- Listen for clicks outside the button to cancel binding
+                -- Use delay to ensure this connects after the current click event finishes
+                task.wait()
+                if not isBinding then return end -- Check if binding was already stopped by key press
 
-                        -- Disconnect the listener after successful binding
-                        if inputConnection then inputConnection:Disconnect() end
-                    elseif input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 then
-                         -- Allow clicking off to cancel binding
-                         isBinding = false
-                         keyDisplay.Text = "[" .. currentKey.Name .. "]" -- Revert text
-                         keyDisplay.TextColor3 = TITLE_COLOR
-                         TweenService:Create(keybindButton, tweenInfo, {BackgroundColor3 = originalColor}):Play()
-                         if inputConnection then inputConnection:Disconnect() end
+                clickOffConnection = UserInputService.InputBegan:Connect(function(input)
+                    if not isBinding then return end
+                    -- Cancel if it's a mouse click and the target isn't the keybind button itself
+                    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 then
+                         if input.SourceUserInput ~= keybindButton then -- Check if click was outside
+                              stopBinding(false) -- Cancel binding
+                         end
                     end
                 end)
             end)
@@ -1654,7 +1717,7 @@ function library:Init(key)
             return KeybindFunctions
         end
 
-        -- Textbox Element
+        -- Textbox Element (Improved Rendering)
         function Tab:NewTextbox(text, placeholder, isPassword, callback)
             text = text or ""
             placeholder = placeholder or "Enter text..."
@@ -1678,15 +1741,18 @@ function library:Init(key)
             textbox.TextSize = 14
             textbox.TextWrapped = false
             textbox.ClearTextOnFocus = false
-            textbox.TextXAlignment = Enum.TextXAlignment.Left
-            textbox.TextYAlignment = Enum.TextYAlignment.Center
+            textbox.TextXAlignment = Enum.TextXAlignment.Left -- Explicitly set Left
+            textbox.TextYAlignment = Enum.TextYAlignment.Center -- Explicitly set Center
             textbox.TextEditable = true
-            textbox.TextTruncate = Enum.TextTruncate.AtEnd
+            -- textbox.TextTruncate = Enum.TextTruncate.AtEnd -- Removed, often causes rendering issues with padding
             textbox.TextPassword = isPassword -- Set password mode
+            textbox.ClipsDescendants = true -- Ensure text clips within bounds
 
             local textboxPadding = Instance.new("UIPadding")
-            textboxPadding.PaddingLeft = UDim.new(0, 8)
-            textboxPadding.PaddingRight = UDim.new(0, 8)
+            textboxPadding.PaddingLeft = UDim.new(0, 10) -- Increased left padding
+            textboxPadding.PaddingRight = UDim.new(0, 10) -- Increased right padding
+            textboxPadding.PaddingTop = UDim.new(0, 2) -- Small top/bottom padding
+            textboxPadding.PaddingBottom = UDim.new(0, 2)
             textboxPadding.Parent = textbox
 
             local textboxCorner = Instance.new("UICorner")
@@ -1707,16 +1773,9 @@ function library:Init(key)
                 pcall(callback, textbox.Text) -- Call callback when focus lost (or enter pressed)
             end)
 
-            -- Update callback on text changed (optional, can be noisy)
-            -- textbox:GetPropertyChangedSignal("Text"):Connect(function()
-            --     pcall(callback, textbox.Text)
-            -- end)
-
             local TextboxFunctions = {}
             function TextboxFunctions:SetText(newText)
                 textbox.Text = newText or ""
-                -- Optionally call callback here too if needed
-                -- pcall(callback, textbox.Text)
                 return TextboxFunctions
             end
             function TextboxFunctions:GetText()
@@ -1724,7 +1783,6 @@ function library:Init(key)
             end
             function TextboxFunctions:Clear()
                 textbox.Text = ""
-                -- pcall(callback, textbox.Text)
                 return TextboxFunctions
             end
             function TextboxFunctions:SetEditable(editable)
@@ -1735,7 +1793,7 @@ function library:Init(key)
             return TextboxFunctions
         end
 
-        -- Slider Element
+        -- Slider Element (Improved Dragging)
         function Tab:NewSlider(text, min, max, default, precision, callback)
             text = text or "Slider"
             min = tonumber(min) or 0
@@ -1805,7 +1863,7 @@ function library:Init(key)
             fillCorner.CornerRadius = UDim.new(1, 0)
             fillCorner.Parent = fill
 
-            -- Slider handle/thumb (optional, can use fill end)
+            -- Slider handle/thumb
             local handleSize = 12
             local handle = Instance.new("Frame")
             handle.Name = "handle"
@@ -1821,12 +1879,21 @@ function library:Init(key)
             handleCorner.CornerRadius = UDim.new(1, 0) -- Circular handle
             handleCorner.Parent = handle
 
-            -- Dragging logic
+            -- Dragging logic variables
             local isDragging = false
+            local dragInput = nil
+            local inputChangedConn = nil
+            local inputEndedConn = nil
 
-            -- Function to update slider value and visuals based on position (0-1)
-            local function updateSliderFromFraction(fraction)
-                fraction = math.clamp(fraction, 0, 1)
+            -- Function to update slider value and visuals based on X coordinate relative to track
+            local function updateSliderFromX(absoluteX)
+                local trackStartX = track.AbsolutePosition.X
+                local trackWidth = track.AbsoluteSize.X
+                if trackWidth <= 0 then return end -- Avoid division by zero
+
+                local relativeX = absoluteX - trackStartX
+                local fraction = math.clamp(relativeX / trackWidth, 0, 1)
+
                 local newValue = min + (max - min) * fraction
                 -- Apply precision rounding
                 local power = 10^precision
@@ -1837,8 +1904,9 @@ function library:Init(key)
                     currentValue = newValue
                     valueLabel.Text = string.format("%." .. precision .. "f", currentValue)
                     local fillFraction = (currentValue - min) / (max - min)
-                    fill.Size = UDim2.new(fillFraction, 0, 1, 0)
-                    handle.Position = UDim2.new(fillFraction, 0, 0.5, 0)
+                    -- Use TweenService for smoother visual update
+                    TweenService:Create(fill, TweenInfo.new(0.05), {Size = UDim2.new(fillFraction, 0, 1, 0)}):Play()
+                    TweenService:Create(handle, TweenInfo.new(0.05), {Position = UDim2.new(fillFraction, 0, 0.5, 0)}):Play()
                     pcall(callback, currentValue) -- Call callback
                 end
             end
@@ -1848,42 +1916,58 @@ function library:Init(key)
             fill.Size = UDim2.new(initialFraction, 0, 1, 0)
             handle.Position = UDim2.new(initialFraction, 0, 0.5, 0)
 
-            -- Input handling on the track itself
+            -- Function to stop dragging
+            local function stopDragging()
+                 if isDragging then
+                      isDragging = false
+                      dragInput = nil
+                      if inputChangedConn then inputChangedConn:Disconnect(); inputChangedConn = nil end
+                      if inputEndedConn then inputEndedConn:Disconnect(); inputEndedConn = nil end
+                 end
+            end
+
+            -- Function to start dragging
+            local function startDragging(input)
+                 if isDragging then return end -- Already dragging
+
+                 isDragging = true
+                 dragInput = input -- Store the input that initiated the drag
+                 updateSliderFromX(input.Position.X) -- Update immediately on click
+
+                 -- Disconnect previous listeners (safety)
+                 if inputChangedConn then inputChangedConn:Disconnect() end
+                 if inputEndedConn then inputEndedConn:Disconnect() end
+
+                 -- Listen for global mouse/touch movement
+                 inputChangedConn = UserInputService.InputChanged:Connect(function(changedInput)
+                      if isDragging and (changedInput.UserInputType == Enum.UserInputType.MouseMovement or changedInput.UserInputType == Enum.UserInputType.Touch) then
+                           updateSliderFromX(changedInput.Position.X)
+                      end
+                 end)
+
+                 -- Listen for input end globally based on the initial input object
+                 inputEndedConn = dragInput.Changed:Connect(function()
+                      if dragInput.UserInputState == Enum.UserInputState.End then
+                           stopDragging()
+                      end
+                 end)
+            end
+
+            -- Add InputBegan listeners to both track and handle
             track.InputBegan:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                    isDragging = true
-                    local relativeX = input.Position.X - track.AbsolutePosition.X
-                    local fraction = relativeX / track.AbsoluteSize.X
-                    updateSliderFromFraction(fraction)
-                    -- Handle dragging state change
-                    input.Changed:Connect(function()
-                         if input.UserInputState == Enum.UserInputState.End then
-                              isDragging = false
-                         end
-                    end)
-                end
+                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                      startDragging(input)
+                 end
             end)
+            handle.InputBegan:Connect(function(input)
+                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                      startDragging(input)
+                 end
+            end)
+             -- Handle cases where input might end unexpectedly
+             track.InputEnded:Connect(function(input) if input == dragInput then stopDragging() end end)
+             handle.InputEnded:Connect(function(input) if input == dragInput then stopDragging() end end)
 
-            track.InputChanged:Connect(function(input)
-                if isDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-                    local relativeX = input.Position.X - track.AbsolutePosition.X
-                    local fraction = relativeX / track.AbsoluteSize.X
-                    updateSliderFromFraction(fraction)
-                end
-            end)
-
-            -- Also allow dragging the handle itself (improves usability)
-             handle.InputBegan:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                    isDragging = true
-                    input.Changed:Connect(function()
-                         if input.UserInputState == Enum.UserInputState.End then
-                              isDragging = false
-                         end
-                    end)
-                end
-            end)
-             -- No InputChanged needed for handle, track's InputChanged covers mouse movement globally
 
             local SliderFunctions = {}
             function SliderFunctions:Set(newValue)
@@ -1896,8 +1980,8 @@ function library:Init(key)
                           currentValue = newValue
                           valueLabel.Text = string.format("%." .. precision .. "f", currentValue)
                           local fillFraction = (currentValue - min) / (max - min)
-                          fill.Size = UDim2.new(fillFraction, 0, 1, 0)
-                          handle.Position = UDim2.new(fillFraction, 0, 0.5, 0)
+                          fill.Size = UDim2.new(fillFraction, 0, 1, 0) -- Update fill directly
+                          handle.Position = UDim2.new(fillFraction, 0, 0.5, 0) -- Update handle directly
                           pcall(callback, currentValue) -- Call callback on programmatic change
                      end
                 end
@@ -1910,7 +1994,7 @@ function library:Init(key)
             return SliderFunctions
         end
 
-        -- Dropdown Element
+        -- Dropdown Element (Verified Implementation)
         function Tab:NewDropdown(text, options, defaultIndex, callback)
             text = text or "Dropdown"
             options = options or {"Option 1", "Option 2"}
@@ -1919,7 +2003,7 @@ function library:Init(key)
 
             local isOpen = false
             local currentSelectionIndex = defaultIndex
-            local currentSelectionText = options[currentSelectionIndex]
+            local currentSelectionText = #options > 0 and options[currentSelectionIndex] or "" -- Handle empty options
 
             local dropdownFrame = createElementFrame(35) -- Standard height for collapsed state
             dropdownFrame.Name = "dropdownFrame"
@@ -2027,69 +2111,81 @@ function library:Init(key)
                 end)
             end
 
-            -- Populate options list
-            for i, optionText in ipairs(options) do
-                local optionButton = Instance.new("TextButton")
-                optionButton.Name = "option_" .. i
-                optionButton.Parent = optionsList
-                optionButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50) -- Option background
-                optionButton.BorderSizePixel = 0
-                optionButton.Size = UDim2.new(1, 0, 0, optionHeight)
-                optionButton.Font = FONT
-                optionButton.Text = optionText
-                optionButton.TextColor3 = TAB_BUTTON_NORMAL_TEXT
-                optionButton.TextSize = 14
-                optionButton.AutoButtonColor = false
+            -- Function to populate options (reusable)
+            local function populateOptions()
+                 -- Clear existing options UI first
+                 for _, child in ipairs(optionsList:GetChildren()) do
+                      if child:IsA("TextButton") then child:Destroy() end
+                 end
+                 -- Update canvas size
+                 optionsList.CanvasSize = UDim2.new(0, 0, 0, #options * optionHeight)
+                 -- Create new option buttons
+                 for i, optionText in ipairs(options) do
+                      local optionButton = Instance.new("TextButton")
+                      optionButton.Name = "option_" .. i
+                      optionButton.Parent = optionsList
+                      optionButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50) -- Option background
+                      optionButton.BorderSizePixel = 0
+                      optionButton.Size = UDim2.new(1, 0, 0, optionHeight)
+                      optionButton.Font = FONT
+                      optionButton.Text = optionText
+                      optionButton.TextColor3 = TAB_BUTTON_NORMAL_TEXT
+                      optionButton.TextSize = 14
+                      optionButton.AutoButtonColor = false
 
-                local optionPadding = Instance.new("UIPadding")
-                optionPadding.PaddingLeft = UDim.new(0, 10)
-                optionPadding.Parent = optionButton
+                      local optionPadding = Instance.new("UIPadding")
+                      optionPadding.PaddingLeft = UDim.new(0, 10)
+                      optionPadding.Parent = optionButton
 
-                -- Highlight selected option
-                if i == currentSelectionIndex then
-                    optionButton.BackgroundColor3 = TITLE_COLOR -- Highlight selected
-                    optionButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-                end
+                      -- Highlight selected option
+                      if i == currentSelectionIndex then
+                           optionButton.BackgroundColor3 = TITLE_COLOR -- Highlight selected
+                           optionButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+                      end
 
-                -- Option hover effect
-                local optHoverColor = Color3.fromRGB(65, 65, 65)
-                local optOriginalColor = optionButton.BackgroundColor3
-                local optTweenInfo = TweenInfo.new(0.1)
+                      -- Option hover effect
+                      local optHoverColor = Color3.fromRGB(65, 65, 65)
+                      local optOriginalColor = optionButton.BackgroundColor3
+                      local optTweenInfo = TweenInfo.new(0.1)
 
-                optionButton.MouseEnter:Connect(function()
-                     if i ~= currentSelectionIndex then -- Don't change bg of selected on hover
-                          TweenService:Create(optionButton, optTweenInfo, {BackgroundColor3 = optHoverColor}):Play()
-                     end
-                end)
-                optionButton.MouseLeave:Connect(function()
-                     if i ~= currentSelectionIndex then
-                          TweenService:Create(optionButton, optTweenInfo, {BackgroundColor3 = optOriginalColor}):Play()
-                     end
-                end)
+                      optionButton.MouseEnter:Connect(function()
+                           if i ~= currentSelectionIndex then -- Don't change bg of selected on hover
+                                TweenService:Create(optionButton, optTweenInfo, {BackgroundColor3 = optHoverColor}):Play()
+                           end
+                      end)
+                      optionButton.MouseLeave:Connect(function()
+                           if i ~= currentSelectionIndex then
+                                TweenService:Create(optionButton, optTweenInfo, {BackgroundColor3 = optOriginalColor}):Play()
+                           end
+                      end)
 
-                -- Option click handler
-                optionButton.MouseButton1Click:Connect(function()
-                    -- Deselect previous in UI
-                    local previousSelected = optionsList:FindFirstChild("option_" .. currentSelectionIndex)
-                    if previousSelected then
-                         previousSelected.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-                         previousSelected.TextColor3 = TAB_BUTTON_NORMAL_TEXT
-                    end
+                      -- Option click handler
+                      optionButton.MouseButton1Click:Connect(function()
+                           -- Deselect previous in UI
+                           local previousSelected = optionsList:FindFirstChild("option_" .. currentSelectionIndex)
+                           if previousSelected then
+                                previousSelected.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+                                previousSelected.TextColor3 = TAB_BUTTON_NORMAL_TEXT
+                           end
 
-                    -- Update selection
-                    currentSelectionIndex = i
-                    currentSelectionText = optionText
-                    dropdownLabel.Text = text .. ": " .. currentSelectionText
+                           -- Update selection
+                           currentSelectionIndex = i
+                           currentSelectionText = optionText
+                           dropdownLabel.Text = text .. ": " .. currentSelectionText
 
-                    -- Select new in UI
-                    optionButton.BackgroundColor3 = TITLE_COLOR
-                    optionButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-                    optOriginalColor = optionButton.BackgroundColor3 -- Update original color for hover effect
+                           -- Select new in UI
+                           optionButton.BackgroundColor3 = TITLE_COLOR
+                           optionButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+                           optOriginalColor = optionButton.BackgroundColor3 -- Update original color for hover effect
 
-                    closeDropdown()
-                    pcall(callback, currentSelectionText, currentSelectionIndex) -- Call callback
-                end)
+                           closeDropdown()
+                           pcall(callback, currentSelectionText, currentSelectionIndex) -- Call callback
+                      end)
+                 end
             end
+
+            -- Initial population
+            populateOptions()
 
             -- Toggle dropdown open/close on main button click
             dropdownButton.MouseButton1Click:Connect(function()
@@ -2101,18 +2197,28 @@ function library:Init(key)
             end)
 
             -- Close dropdown if clicked outside
-            UserInputService.InputBegan:Connect(function(input)
+            local clickOutsideConnection = UserInputService.InputBegan:Connect(function(input)
                  if isOpen and input.UserInputType == Enum.UserInputType.MouseButton1 then
                       -- Check if click was outside the dropdown frame and options list
                       local mousePos = UserInputService:GetMouseLocation()
-                      local frameRect = Rect.new(dropdownFrame.AbsolutePosition, dropdownFrame.AbsolutePosition + dropdownFrame.AbsoluteSize)
-                      local listRect = Rect.new(optionsList.AbsolutePosition, optionsList.AbsolutePosition + optionsList.AbsoluteSize)
+                      -- Get AbsolutePosition/Size safely
+                      local framePos = dropdownFrame and dropdownFrame.AbsolutePosition or Vector2.new()
+                      local frameSize = dropdownFrame and dropdownFrame.AbsoluteSize or Vector2.new()
+                      local listPos = optionsList and optionsList.AbsolutePosition or Vector2.new()
+                      local listSize = optionsList and optionsList.AbsoluteSize or Vector2.new()
+
+                      local frameRect = Rect.new(framePos, framePos + frameSize)
+                      local listRect = Rect.new(listPos, listPos + listSize)
 
                       if not frameRect:Contains(mousePos) and not listRect:Contains(mousePos) then
                            closeDropdown()
                            dropdownFrame.ZIndex = 2 -- Reset ZIndex immediately on click outside
                       end
                  end
+            end)
+            -- Disconnect click listener if dropdown is destroyed
+            dropdownFrame.Destroying:Connect(function()
+                 if clickOutsideConnection then clickOutsideConnection:Disconnect() end
             end)
 
 
@@ -2148,9 +2254,6 @@ function library:Init(key)
                       if newSelected then
                            newSelected.BackgroundColor3 = TITLE_COLOR
                            newSelected.TextColor3 = Color3.fromRGB(255, 255, 255)
-                           -- Update original color for hover of the new selection
-                           local optOriginalColorRef = newSelected:FindFirstChild("optOriginalColor")
-                           if optOriginalColorRef then optOriginalColorRef.Value = newSelected.BackgroundColor3 end
                       end
 
                       pcall(callback, currentSelectionText, currentSelectionIndex) -- Call callback
@@ -2161,72 +2264,23 @@ function library:Init(key)
                 return currentSelectionText, currentSelectionIndex
             end
             function DropdownFunctions:GetOptions()
-                 return options -- Return a copy? Table is mutable.
+                 return options -- Return a copy? Table is mutable. Consider returning a deep copy if necessary.
             end
              function DropdownFunctions:UpdateOptions(newOptions)
                  if type(newOptions) ~= "table" then
                       warn("UpdateOptions requires a table.")
                       return DropdownFunctions
                  end
-                 options = newOptions
-                 -- Clear existing options UI
-                 for _, child in ipairs(optionsList:GetChildren()) do
-                      if child:IsA("TextButton") then child:Destroy() end
-                 end
-                 -- Repopulate
-                 currentSelectionIndex = 1 -- Reset selection? Or try to maintain? Resetting is simpler.
+                 options = newOptions -- Update the internal options table
+                 -- Reset selection or try to maintain it? Resetting is simpler.
+                 currentSelectionIndex = 1
                  if #options == 0 then
                       currentSelectionText = ""
-                      optionsList.CanvasSize = UDim2.new(0,0,0,0)
                  else
                       currentSelectionText = options[currentSelectionIndex] or ""
-                      optionsList.CanvasSize = UDim2.new(0, 0, 0, #options * optionHeight)
-                      for i, optionText in ipairs(options) do
-                           -- (Recreate option buttons as done initially)
-                           -- ... [Code from initial population loop] ...
-                           local optionButton = Instance.new("TextButton")
-                           optionButton.Name = "option_" .. i
-                           optionButton.Parent = optionsList
-                           optionButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-                           optionButton.BorderSizePixel = 0
-                           optionButton.Size = UDim2.new(1, 0, 0, optionHeight)
-                           optionButton.Font = FONT
-                           optionButton.Text = optionText
-                           optionButton.TextColor3 = TAB_BUTTON_NORMAL_TEXT
-                           optionButton.TextSize = 14
-                           optionButton.AutoButtonColor = false
-
-                           local optionPadding = Instance.new("UIPadding")
-                           optionPadding.PaddingLeft = UDim.new(0, 10)
-                           optionPadding.Parent = optionButton
-
-                           if i == currentSelectionIndex then
-                                optionButton.BackgroundColor3 = TITLE_COLOR
-                                optionButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-                           end
-
-                           local optHoverColor = Color3.fromRGB(65, 65, 65)
-                           local optOriginalColor = optionButton.BackgroundColor3
-                           local optTweenInfo = TweenInfo.new(0.1)
-
-                           optionButton.MouseEnter:Connect(function() if i ~= currentSelectionIndex then TweenService:Create(optionButton, optTweenInfo, {BackgroundColor3 = optHoverColor}):Play() end end)
-                           optionButton.MouseLeave:Connect(function() if i ~= currentSelectionIndex then TweenService:Create(optionButton, optTweenInfo, {BackgroundColor3 = optOriginalColor}):Play() end end)
-
-                           optionButton.MouseButton1Click:Connect(function()
-                                local previousSelected = optionsList:FindFirstChild("option_" .. currentSelectionIndex)
-                                if previousSelected then previousSelected.BackgroundColor3 = Color3.fromRGB(50, 50, 50); previousSelected.TextColor3 = TAB_BUTTON_NORMAL_TEXT end
-                                currentSelectionIndex = i
-                                currentSelectionText = optionText
-                                dropdownLabel.Text = text .. ": " .. currentSelectionText
-                                optionButton.BackgroundColor3 = TITLE_COLOR
-                                optionButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-                                optOriginalColor = optionButton.BackgroundColor3
-                                closeDropdown()
-                                pcall(callback, currentSelectionText, currentSelectionIndex)
-                           end)
-                      end
                  end
                  dropdownLabel.Text = text .. ": " .. currentSelectionText
+                 populateOptions() -- Repopulate the visual list
                  return DropdownFunctions
             end
 
