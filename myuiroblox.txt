@@ -424,7 +424,8 @@ do
 		local container = utility:Create("ScreenGui", {
 			Name = title,
 			Parent = game:GetService("CoreGui"), -- Parent to CoreGui now
-			ZIndexBehavior = Enum.ZIndexBehavior.Sibling -- Ensure proper layering
+			ZIndexBehavior = Enum.ZIndexBehavior.Sibling, -- Ensure proper layering
+			Enabled = false -- Start disabled for fade-in
 		}, {
 			utility:Create("ImageLabel", {
 				Name = "Main",
@@ -439,8 +440,8 @@ do
 				utility:Create("ImageLabel", {
 					Name = "Glow",
 					BackgroundTransparency = 1,
-					Position = UDim2.new(0, -15, 0, -15),
-					Size = UDim2.new(1, 30, 1, 30),
+					Position = UDim2.new(0, -18, 0, -18), -- Slightly further out
+					Size = UDim2.new(1, 36, 1, 36), -- Slightly larger glow
 					ZIndex = 0,
 					Image = "rbxassetid://5028857084",
 					ImageColor3 = themes.Glow,
@@ -535,6 +536,18 @@ do
 		-- Show welcome notification using the new system
 		self:Notify("Welcome!", "SC UI Initialized.", { type = "success", duration = 3 })
 
+		-- Fade In Main UI
+		container.Enabled = true
+		local mainFrame = container.Main
+		mainFrame.BackgroundTransparency = 1
+		mainFrame.Glow.ImageTransparency = 1
+		mainFrame.Pages.ImageTransparency = 1
+		mainFrame.TopBar.ImageTransparency = 1
+		utility:Tween(mainFrame, { BackgroundTransparency = 0 }, 0.3)
+		utility:Tween(mainFrame.Glow, { ImageTransparency = 0 }, 0.3)
+		utility:Tween(mainFrame.Pages, { ImageTransparency = 0 }, 0.3)
+		utility:Tween(mainFrame.TopBar, { ImageTransparency = 0 }, 0.3)
+
 
 		return self -- Return the library object
 	end
@@ -566,19 +579,37 @@ do
 				TextTransparency = 0.65,
 				TextXAlignment = Enum.TextXAlignment.Left
 			}),
-			icon and utility:Create("ImageLabel", {
-				Name = "Icon", 
-				AnchorPoint = Vector2.new(0, 0.5),
-				BackgroundTransparency = 1,
-				Position = UDim2.new(0, 12, 0.5, 0),
-				Size = UDim2.new(0, 16, 0, 16),
-				ZIndex = 3,
-				Image = "rbxassetid://" .. tostring(icon),
 				ImageColor3 = themes.TextColor,
 				ImageTransparency = 0.64
-			}) or {}
+			}) or {},
+			-- Add hover effect background
+			utility:Create("Frame", {
+				Name = "HoverBG",
+				BackgroundTransparency = 1, -- Start transparent
+				BackgroundColor3 = themes.LightContrast, -- Hover color
+				Size = UDim2.new(1, 0, 1, 0),
+				ZIndex = 1 -- Behind text/icon
+			})
 		})
-		
+
+		-- Page Button Hover Effect
+		local hoverBG = button.HoverBG
+		button.MouseEnter:Connect(function()
+			if library.focusedPage ~= page then -- Only show hover if not selected
+				utility:Tween(hoverBG, { BackgroundTransparency = 0.8 }, 0.15)
+			end
+		end)
+		button.MouseLeave:Connect(function()
+			utility:Tween(hoverBG, { BackgroundTransparency = 1 }, 0.15)
+		end)
+		-- Ensure hover disappears when page is selected
+		button:GetPropertyChangedSignal("ImageColor3"):Connect(function() -- Use a property that changes on select
+			if library.focusedPage == page then
+				utility:Tween(hoverBG, { BackgroundTransparency = 1 }, 0.1) -- Hide hover instantly
+			end
+		end)
+
+
 		local container = utility:Create("ScrollingFrame", {
 			Name = title,
 			Parent = library.container.Main,
@@ -614,7 +645,7 @@ do
 			Size = UDim2.new(1, -10, 0, 28),
 			ZIndex = 2,
 			Image = "rbxassetid://5028857472",
-			ImageColor3 = themes.LightContrast,
+			ImageColor3 = themes.LightContrast:Lerp(themes.Background, 0.1), -- Slightly darker section background
 			ScaleType = Enum.ScaleType.Slice,
 			SliceCenter = Rect.new(4, 4, 296, 296),
 			ClipsDescendants = true
@@ -1037,6 +1068,9 @@ do
 			Size = UDim2.new(1, 0, 1, 0), -- Fill the auto-sized parent
 			Image = "rbxassetid://5028857472", -- Use existing asset
 			ImageColor3 = theme.Background,
+			-- Add subtle tint based on type
+			ImageTransparency = (type == "info" or type == "success") and 0 or 0.1, -- Slightly transparent for warning/error? Or use Color
+			BackgroundColor3 = barColor:Lerp(theme.Background, 0.95), -- Very subtle tint
 			ScaleType = Enum.ScaleType.Slice,
 			SliceCenter = Rect.new(4, 4, 296, 296),
 			ZIndex = 1
@@ -1045,35 +1079,87 @@ do
 			utility:Create("UIPadding", {
 				PaddingTop = UDim.new(0, PADDING / 2),
 				PaddingBottom = UDim.new(0, PADDING / 2),
-				PaddingLeft = UDim.new(0, PADDING + BAR_WIDTH), -- Padding left for bar
+				PaddingLeft = UDim.new(0, PADDING + BAR_WIDTH + 4), -- Increased left padding for icon + bar
 				PaddingRight = UDim.new(0, PADDING)
 			}),
-			utility:Create("UIListLayout", { -- Layout for title and text
+			utility:Create("UIListLayout", { -- Layout for title and text (Vertical)
 				SortOrder = Enum.SortOrder.LayoutOrder,
 				FillDirection = Enum.FillDirection.Vertical,
 				Padding = UDim.new(0, 2)
 			})
 		})
 
-		-- Type indicator bar
+		-- Type indicator bar (Left edge)
 		local typeBar = utility:Create("Frame", {
 			Name = "TypeBar",
-			Parent = contentFrame, -- Parent to content frame for corner clipping
+			Parent = contentFrame,
 			BackgroundColor3 = barColor,
 			BorderSizePixel = 0,
 			Position = UDim2.new(0, 0, 0, 0),
-			Size = UDim2.new(0, BAR_WIDTH, 1, 0), -- Fixed width, full height
+			Size = UDim2.new(0, BAR_WIDTH, 1, 0),
 			ZIndex = 2
 		}, {
-			utility:Create("UICorner", { CornerRadius = UDim.new(0, 3) }) -- Match content corner
+			utility:Create("UICorner", { CornerRadius = UDim.new(0, 3) })
 		})
+
+		-- Icon Frame (Positioned between bar and text)
+		local iconSize = 16
+		local iconFrame = utility:Create("Frame", {
+			Name = "IconFrame",
+			Parent = contentFrame,
+			BackgroundTransparency = 1,
+			Size = UDim2.new(0, iconSize, 0, iconSize),
+			Position = UDim2.new(0, BAR_WIDTH + PADDING / 2, 0, PADDING / 2), -- Position next to bar
+			ZIndex = 3
+		})
+
+		-- Create Icon based on type (Using simple shapes for now)
+		local iconShape = nil
+		if type == "success" then
+			iconShape = utility:Create("ImageLabel", { -- Checkmark-like (using rotation)
+				Name = "Icon", Parent = iconFrame, BackgroundTransparency = 1, Size = UDim2.fromOffset(iconSize, iconSize),
+				Image = "rbxassetid://3926305904", ImageColor3 = barColor, Rotation = -135 -- Rotated chevron
+			})
+		elseif type == "warning" then
+			iconShape = utility:Create("TextLabel", { -- Exclamation mark
+				Name = "Icon", Parent = iconFrame, BackgroundTransparency = 1, Size = UDim2.fromOffset(iconSize, iconSize),
+				Font = Enum.Font.GothamBold, Text = "!", TextColor3 = barColor, TextSize = 18, TextScaled = false
+			})
+		elseif type == "error" then
+			iconShape = utility:Create("TextLabel", { -- Simple 'X'
+				Name = "Icon", Parent = iconFrame, BackgroundTransparency = 1, Size = UDim2.fromOffset(iconSize, iconSize),
+				Font = Enum.Font.GothamBold, Text = "X", TextColor3 = barColor, TextSize = 16, TextScaled = false
+			})
+		else -- info (default)
+			iconShape = utility:Create("TextLabel", { -- Simple 'i'
+				Name = "Icon", Parent = iconFrame, BackgroundTransparency = 1, Size = UDim2.fromOffset(iconSize, iconSize),
+				Font = Enum.Font.GothamBold, Text = "i", TextColor3 = barColor, TextSize = 16, TextScaled = false
+			})
+		end
+
+		-- Text Container (to use ListLayout)
+		local textContainer = utility:Create("Frame", {
+			Name = "TextContainer",
+			Parent = contentFrame,
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1, 0, 1, 0), -- Takes up space defined by padding
+			AutomaticSize = Enum.AutomaticSize.Y,
+			LayoutOrder = 1 -- Let text flow naturally
+		}, {
+			utility:Create("UIListLayout", {
+				SortOrder = Enum.SortOrder.LayoutOrder,
+				FillDirection = Enum.FillDirection.Vertical,
+				Padding = UDim.new(0, 2)
+			})
+		})
+
 
 		-- Title Label
 		local titleLabel = utility:Create("TextLabel", {
 			Name = "Title",
-			Parent = contentFrame, -- Parent to content for layout
+			Parent = textContainer, -- Parent to text container
 			BackgroundTransparency = 1,
-			Size = UDim2.new(1, 0, 0, 16), -- Auto height based on text
+			Size = UDim2.new(1, 0, 0, 16),
 			AutomaticSize = Enum.AutomaticSize.Y,
 			Font = Enum.Font.GothamSemibold,
 			Text = title or "Notification",
@@ -1088,9 +1174,9 @@ do
 		-- Text Label
 		local textLabel = utility:Create("TextLabel", {
 			Name = "Text",
-			Parent = contentFrame, -- Parent to content for layout
+			Parent = textContainer, -- Parent to text container
 			BackgroundTransparency = 1,
-			Size = UDim2.new(1, 0, 0, 14), -- Auto height based on text
+			Size = UDim2.new(1, 0, 0, 14),
 			AutomaticSize = Enum.AutomaticSize.Y,
 			Font = Enum.Font.Gotham,
 			Text = text or "",
@@ -1100,7 +1186,7 @@ do
 			TextXAlignment = Enum.TextXAlignment.Left,
 			LayoutOrder = 2,
 			ZIndex = 3,
-			Visible = (text and #text > 0) -- Only visible if text exists
+			Visible = (text and #text > 0)
 		})
 
 		-- Animation and Dismissal
@@ -2388,14 +2474,14 @@ do
 		local button = page.button
 		
 		if toggle then
-			-- page button
+			-- page button visual selection
 			button.Title.TextTransparency = 0
 			button.Title.Font = Enum.Font.GothamSemibold
-			
+			button.HoverBG.BackgroundTransparency = 0 -- Make selected background fully opaque
 			if button:FindFirstChild("Icon") then
 				button.Icon.ImageTransparency = 0
 			end
-			
+
 			-- update selected page
 			local focusedPage = self.focusedPage
 			self.focusedPage = page
@@ -2439,26 +2525,29 @@ do
 			end
 			
 			wait(0.05)
+
+			-- Animate section titles after page is visible
+			spawn(function() 
+				for i, section in pairs(page.sections) do
+					section.container.Title.TextTransparency = 1 -- Start transparent
+					utility:Tween(section.container.Title, {TextTransparency = 0}, 0.2) -- Fade in
+					section:Resize(true)
+					wait(0.02) -- Stagger section animation slightly
+				end
+			end)
 			
-			for i, section in pairs(page.sections) do
-			
-				utility:Tween(section.container.Title, {TextTransparency = 0}, 0.1)
-				section:Resize(true)
-				
-				wait(0.05)
-			end
-			
-			wait(0.05)
+			wait(0.05) -- Allow title animation to start before final resize
 			page:Resize(true)
 		else
-			-- page button
+			-- page button visual deselection
 			button.Title.Font = Enum.Font.Gotham
 			button.Title.TextTransparency = 0.65
-			
+			button.HoverBG.BackgroundTransparency = 1 -- Ensure deselected hover BG is hidden
+
 			if button:FindFirstChild("Icon") then
 				button.Icon.ImageTransparency = 0.65
 			end
-			
+
 			-- sections
 			for i, section in pairs(page.sections) do	
 				utility:Tween(section.container.Parent, {Size = UDim2.new(1, -10, 0, 28)}, 0.1)
