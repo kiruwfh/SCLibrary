@@ -551,20 +551,10 @@ do
 
 		return self -- Return the library object
 	end
-	
+
 	function page.new(library, title, icon)
-		local button = utility:Create("TextButton", {
-			Name = title,
-			Parent = library.pagesContainer,
-			BackgroundTransparency = 1,
-			BorderSizePixel = 0,
-			Size = UDim2.new(1, 0, 0, 26),
-			ZIndex = 3,
-			AutoButtonColor = false,
-			Font = Enum.Font.Gotham,
-			Text = "",
-			TextSize = 14
-		}, {
+		-- Build children table separately to handle conditional icon correctly
+		local children = {
 			utility:Create("TextLabel", {
 				Name = "Title",
 				AnchorPoint = Vector2.new(0, 0.5),
@@ -578,28 +568,44 @@ do
 				TextSize = 12,
 				TextTransparency = 0.65,
 				TextXAlignment = Enum.TextXAlignment.Left
-			}),
-            -- Conditionally add Icon as Child 2 if `icon` exists
-            (icon and utility:Create("ImageLabel", {
-                Name = "Icon",
-                AnchorPoint = Vector2.new(0, 0.5),
-                BackgroundTransparency = 1,
-                Position = UDim2.new(0, 15, 0.5, 0), -- Position icon left of title
-                Size = UDim2.new(0, 16, 0, 16), -- Standard icon size?
-                ZIndex = 3,
-                Image = icon, -- Use the provided icon asset ID
-                ImageColor3 = themes.TextColor,
-                ImageTransparency = 0.64
-            }) or nil), -- Pass nil if no icon
-			-- Add hover effect background
-			utility:Create("Frame", {
-				Name = "HoverBG",
-				BackgroundTransparency = 1, -- Start transparent
-				BackgroundColor3 = themes.LightContrast, -- Hover color
-				Size = UDim2.new(1, 0, 1, 0),
-				ZIndex = 1 -- Behind text/icon
-			})
-		})
+			}), -- <<< Added missing comma
+		}
+
+		if icon then
+			table.insert(children, utility:Create("ImageLabel", {
+				Name = "Icon",
+				AnchorPoint = Vector2.new(0, 0.5),
+				BackgroundTransparency = 1,
+				Position = UDim2.new(0, 15, 0.5, 0), -- Position icon left of title
+				Size = UDim2.new(0, 16, 0, 16), -- Standard icon size?
+				ZIndex = 3,
+				Image = icon, -- Use the provided icon asset ID
+				ImageColor3 = themes.TextColor,
+				ImageTransparency = 0.64
+			}))
+		end
+
+		table.insert(children, utility:Create("Frame", {
+			Name = "HoverBG",
+			BackgroundTransparency = 1, -- Start transparent
+			BackgroundColor3 = themes.LightContrast, -- Hover color
+			Size = UDim2.new(1, 0, 1, 0),
+			ZIndex = 1 -- Behind text/icon
+		}))
+
+		-- Create the button with the pre-built children table
+		local button = utility:Create("TextButton", {
+			Name = title,
+			Parent = library.pagesContainer,
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			Size = UDim2.new(1, 0, 0, 26),
+			ZIndex = 3,
+			AutoButtonColor = false,
+			Font = Enum.Font.Gotham,
+			Text = "",
+			TextSize = 14
+		}, children) -- Pass the pre-built children table (Corrected brace to comma and removed duplicated code)
 
 		-- Page Button Hover Effect
 		local hoverBG = button.HoverBG
@@ -826,8 +832,9 @@ do
 		})
 
 		-- Store references within the library instance
-		self.watermarkScreenGui = watermarkContainer -- Reference to the container frame
-		self.watermarkElements = {} -- Table to track individual elements
+		local libraryInstance = self -- Capture the library instance for nested functions
+		libraryInstance.watermarkScreenGui = watermarkContainer -- Reference to the container frame
+		libraryInstance.watermarkElements = {} -- Table to track individual elements
 
 		-- Function to create a single watermark element (reusable)
 		local function createWatermarkElement(elementText)
@@ -899,15 +906,19 @@ do
 		end
 
 		-- Table to hold functions for managing watermarks
-		local WatermarkFunctions = {}
+		local WatermarkFunctions = {
+			_libraryInstance = libraryInstance -- Store the captured instance here
+		}
+		WatermarkFunctions.__index = WatermarkFunctions -- Allow method calls like WatermarkFunctions:AddWatermark(...)
 
 		-- Function to add another watermark element
 		function WatermarkFunctions:AddWatermark(newText, isDynamic) -- isDynamic flag optional
 			newText = newText or "SC UI"
+			local lib = self._libraryInstance -- Access the stored instance
 
 			local newEdge, newBackground, newBar, newWaterText, newRequiredWidth = createWatermarkElement(newText)
-			newEdge.Parent = self.watermarkScreenGui -- Parent to the main container
-			table.insert(self.watermarkElements, newEdge) -- Track element
+			newEdge.Parent = lib.watermarkScreenGui -- Parent to the main container
+			table.insert(lib.watermarkElements, newEdge) -- Track element
 
 			-- Animate the new watermark appearance
 			spawn(function()
@@ -958,10 +969,11 @@ do
 				utility:Tween(newBackground, {BackgroundTransparency = 1}, 0.2)
 				utility:Tween(newWaterText, {TextTransparency = 1}, 0.15)
 				wait(0.2)
+				local lib = self._libraryInstance -- Access the stored instance
 				-- Remove from tracking table
-				for i, el in ipairs(self.watermarkElements) do
+				for i, el in ipairs(lib.watermarkElements) do
 					if el == newEdge then
-						table.remove(self.watermarkElements, i)
+						table.remove(lib.watermarkElements, i)
 						break
 					end
 				end
@@ -976,28 +988,29 @@ do
 
 		-- Add the FPS watermark
 		local fpsCounterElement = WatermarkFunctions:AddWatermark("FPS: 0", true) -- Mark as dynamic
-		self.fpsWatermarkControls = fpsCounterElement -- Store reference specifically for FPS updates
+		local lib = WatermarkFunctions._libraryInstance -- Access stored instance
+		lib.fpsWatermarkControls = fpsCounterElement -- Store reference specifically for FPS updates
 
 		-- FPS Update Coroutine (simplified)
-		if not self.fpsUpdaterRunning then -- Prevent multiple coroutines
-			self.fpsUpdaterRunning = true
+		if not lib.fpsUpdaterRunning then -- Prevent multiple coroutines
+			lib.fpsUpdaterRunning = true
 			spawn(function()
 				local lastUpdate = 0
 				local updateInterval = 0.25 -- Update FPS display 4 times per second
-				while self.fpsUpdaterRunning do -- Use flag to stop
+				while lib.fpsUpdaterRunning do -- Use flag to stop
 					local dt = run.Heartbeat:Wait()
 					local fps = math.floor(1 / dt + 0.5)
 					local now = tick()
 
 					-- Throttle UI updates
-					if self.fpsWatermarkControls and (now - lastUpdate >= updateInterval) then
+					if lib.fpsWatermarkControls and (now - lastUpdate >= updateInterval) then
 						pcall(function() -- Wrap in pcall in case element is destroyed
-							self.fpsWatermarkControls:Text("FPS: " .. fps)
+							lib.fpsWatermarkControls:Text("FPS: " .. fps)
 						end)
 						lastUpdate = now
 					end
-					if not self.watermarkScreenGui or not self.watermarkScreenGui.Parent then
-						self.fpsUpdaterRunning = false -- Stop if watermark is gone
+					if not lib.watermarkScreenGui or not lib.watermarkScreenGui.Parent then
+						lib.fpsUpdaterRunning = false -- Stop if watermark is gone
 					end
 				end
 			end)
@@ -1006,11 +1019,12 @@ do
 
 		-- Function to remove the entire watermark system
 		function WatermarkFunctions:Remove()
-			self.fpsUpdaterRunning = false -- Stop the FPS counter coroutine
-			self.fpsWatermarkControls = nil
+			local lib = self._libraryInstance -- Access the stored instance
+			lib.fpsUpdaterRunning = false -- Stop the FPS counter coroutine
+			lib.fpsWatermarkControls = nil
 			-- Fade out and destroy all elements
-			for i = #self.watermarkElements, 1, -1 do
-				local edge = self.watermarkElements[i]
+			for i = #lib.watermarkElements, 1, -1 do
+				local edge = lib.watermarkElements[i]
 				if edge and edge.Parent then
 					local bg = edge:FindFirstChild("background")
 					local txt = bg and bg:FindFirstChild("waterText")
@@ -1020,14 +1034,14 @@ do
 				end
 			end
 			wait(0.2)
-			if self.watermarkScreenGui and self.watermarkScreenGui.Parent then
-				self.watermarkScreenGui:Destroy()
-				self.watermarkScreenGui = nil
+			if lib.watermarkScreenGui and lib.watermarkScreenGui.Parent then
+				lib.watermarkScreenGui:Destroy()
+				lib.watermarkScreenGui = nil
 			end
-			self.watermarkElements = {}
+			lib.watermarkElements = {}
 		end
 
-		return WatermarkFunctions
+		return setmetatable({}, WatermarkFunctions) -- Return a new table using WatermarkFunctions as metatable
 	end
 
 	-- Reworked Notification System
