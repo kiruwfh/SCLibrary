@@ -302,25 +302,26 @@ function utility:KeyPrompt(correctKeyCallback)
 		}),
 		utility:Create("ImageButton", { -- Submit button
 			Name = "SubmitButton",
-			--Parent = main, -- Parent implicitly set by structure
 			BackgroundTransparency = 1,
 			Position = UDim2.new(0.5, 0, 0.8, 0),
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Size = UDim2.new(0.5, 0, 0, 35),
-			Image = "rbxassetid://5028857472", -- Use existing asset
-			ImageColor3 = theme.Accent, -- Use Accent color
+			Image = "rbxassetid://5028857472",
+			ImageColor3 = theme.Accent,
 			ScaleType = Enum.ScaleType.Slice,
 			SliceCenter = Rect.new(2, 2, 298, 298),
-			ZIndex = 2
+			ZIndex = 2,
+			AutoButtonColor = true
 		}, {
 			utility:Create("TextLabel", {
 				Name = "SubmitText",
 				BackgroundTransparency = 1,
 				Size = UDim2.new(1, 0, 1, 0),
-				Font = Enum.Font.GothamBold,
+				Font = Enum.Font.GothamSemibold,
 				Text = "Submit",
 				TextColor3 = theme.TextColor,
-				TextSize = 16,
+				TextSize = 15,
+				TextWrapped = true,
 				ZIndex = 3
 			})
 		})
@@ -1060,8 +1061,8 @@ do
 		end
 
 		options = options or {}
-		local duration = options.duration or 5 -- Default duration 5 seconds
-		local type = string.lower(options.type or "info") -- Default type info
+		local duration = options.duration or 5
+		local type = string.lower(options.type or "info")
 		local callback = options.callback or function() end
 
 		local theme = themes -- Use global themes
@@ -1083,12 +1084,12 @@ do
 		-- Create notification frame
 		local notification = utility:Create("Frame", {
 			Name = "Notification",
-			Parent = self.notificationContainer, -- Parent to the dedicated container
-			BackgroundTransparency = 1, -- Fully transparent background
-			Size = UDim2.new(1, 0, 0, MIN_HEIGHT), -- Full width of container, min height
-			AutomaticSize = Enum.AutomaticSize.Y, -- Auto-adjust height based on content
+			Parent = self.notificationContainer,
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1, 0, 0, MIN_HEIGHT),
+			AutomaticSize = Enum.AutomaticSize.Y,
 			ClipsDescendants = true,
-			LayoutOrder = tick() -- Use tick for ordering (newest appear first if layout is top-down)
+			LayoutOrder = tick()
 		})
 
 		-- Main content frame with background
@@ -1226,7 +1227,7 @@ do
 		notification.Position = originalPosition + UDim2.new(1, 0, 0, 0) -- Start off-screen right
 
 		-- Animate In
-		utility:Tween(notification, { Position = originalPosition }, 0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+		utility:Tween(notification, { Position = originalPosition }, 0.25, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
 
 		-- Timed Dismissal
 		local active = true
