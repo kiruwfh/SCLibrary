@@ -6,7 +6,9 @@
     - Система вкладок для удобной навигации
     - Поддержка различных типов элементов (кнопки, переключатели, слайдеры)
     - Система авторизации с ключом
-    - Возможность загрузки через GitHub Raw URL
+    - Простая интеграция через GitHub
+    
+    Автор: kiruwfh
 ]]
 
 -- Библиотека UI
@@ -14,16 +16,16 @@ local AriseUI = {}
 
 -- Константы
 AriseUI.Colors = {
-    Background = Color3.fromRGB(25, 25, 35),
-    Primary = Color3.fromRGB(45, 45, 65),
-    Secondary = Color3.fromRGB(35, 35, 50),
-    Accent = Color3.fromRGB(100, 100, 255),
-    AccentHover = Color3.fromRGB(120, 120, 255),
-    Text = Color3.fromRGB(220, 220, 220),
-    TextDark = Color3.fromRGB(180, 180, 180),
-    Success = Color3.fromRGB(100, 255, 100),
-    Error = Color3.fromRGB(255, 100, 100),
-    Warning = Color3.fromRGB(255, 200, 100)
+    Background = {25, 25, 35},
+    Primary = {45, 45, 65},
+    Secondary = {35, 35, 50},
+    Accent = {100, 100, 255},
+    AccentHover = {120, 120, 255},
+    Text = {220, 220, 220},
+    TextDark = {180, 180, 180},
+    Success = {100, 255, 100},
+    Error = {255, 100, 100},
+    Warning = {255, 200, 100}
 }
 
 AriseUI.Config = {
@@ -152,7 +154,7 @@ function AriseUI:Create(title)
     logo.Size = UDim2.new(0, 24, 0, 24)
     logo.Position = UDim2.new(1, -45, 0.5, -12)
     logo.BackgroundTransparency = 1
-    logo.Image = "rbxassetid://6022668888" -- Заглушка, можно заменить на свой лого
+    logo.Image = "rbxassetid://6022668888"
     logo.ImageColor3 = self.Colors.Accent
     logo.Parent = titleBar
     
@@ -500,14 +502,14 @@ function AriseUI:AddButton(parent, text, callback)
     button.AutoButtonColor = false
     button.Parent = buttonContainer
     
-    -- Скругление кнопки
+    -- Скругленные углы
     local corner = Instance.new("UICorner")
     corner.CornerRadius = self.Config.ButtonRadius
     corner.Parent = button
     
-    -- Эффекты наведения и клика
+    -- Эффекты наведения и нажатия
     button.MouseEnter:Connect(function()
-        CreateTween(button, {BackgroundColor3 = self.Colors.Accent}):Play()
+        CreateTween(button, {BackgroundColor3 = self.Colors.Secondary}):Play()
     end)
     
     button.MouseLeave:Connect(function()
@@ -515,22 +517,24 @@ function AriseUI:AddButton(parent, text, callback)
     end)
     
     button.MouseButton1Down:Connect(function()
-        CreateTween(button, {BackgroundColor3 = self.Colors.AccentHover}, 0.1):Play()
+        CreateTween(button, {BackgroundColor3 = self.Colors.Accent}):Play()
     end)
     
     button.MouseButton1Up:Connect(function()
-        CreateTween(button, {BackgroundColor3 = self.Colors.Accent}, 0.1):Play()
+        CreateTween(button, {BackgroundColor3 = self.Colors.Secondary}):Play()
     end)
     
-    -- Добавляем обработчик клика
-    button.MouseButton1Click:Connect(function()
-        pcall(callback)
-    end)
+    -- Привязываем колбэк
+    if callback then
+        button.MouseButton1Click:Connect(function()
+            callback()
+        end)
+    end
     
     return button
 end
 
--- Добавление переключателя (чекбокса)
+-- Добавление переключателя
 function AriseUI:AddToggle(parent, text, default, callback)
     default = default or false
     
@@ -541,92 +545,85 @@ function AriseUI:AddToggle(parent, text, default, callback)
     toggleContainer.LayoutOrder = #parent:GetChildren()
     toggleContainer.Parent = parent
     
+    -- Текст переключателя
+    local label = Instance.new("TextLabel")
+    label.Name = "Label"
+    label.Size = UDim2.new(1, -50, 1, 0)
+    label.BackgroundTransparency = 1
+    label.Font = Enum.Font.Gotham
+    label.Text = text
+    label.TextColor3 = self.Colors.Text
+    label.TextSize = 14
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = toggleContainer
+    
     -- Фон переключателя
     local toggleBackground = Instance.new("Frame")
     toggleBackground.Name = "Background"
-    toggleBackground.Size = UDim2.new(0, 44, 0, 24)
-    toggleBackground.Position = UDim2.new(1, -44, 0.5, -12)
-    toggleBackground.BackgroundColor3 = self.Colors.Primary
+    toggleBackground.Size = UDim2.new(0, 40, 0, 22)
+    toggleBackground.Position = UDim2.new(1, -45, 0.5, -11)
+    toggleBackground.BackgroundColor3 = default and self.Colors.Accent or self.Colors.Primary
     toggleBackground.Parent = toggleContainer
     
-    -- Скругление фона
-    local backgroundCorner = Instance.new("UICorner")
-    backgroundCorner.CornerRadius = UDim.new(0, 12)
-    backgroundCorner.Parent = toggleBackground
+    -- Скругленные углы
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 11)
+    corner.Parent = toggleBackground
     
-    -- Ползунок
-    local toggleHandle = Instance.new("Frame")
-    toggleHandle.Name = "Handle"
-    toggleHandle.Size = UDim2.new(0, 20, 0, 20)
-    toggleHandle.Position = UDim2.new(0, 2, 0.5, -10)
-    toggleHandle.BackgroundColor3 = self.Colors.Text
-    toggleHandle.Parent = toggleBackground
+    -- Индикатор переключателя
+    local indicator = Instance.new("Frame")
+    indicator.Name = "Indicator"
+    indicator.Size = UDim2.new(0, 16, 0, 16)
+    indicator.Position = UDim2.new(0, default and 21 or 3, 0.5, -8)
+    indicator.BackgroundColor3 = self.Colors.Text
+    indicator.Parent = toggleBackground
     
-    -- Скругление ползунка
-    local handleCorner = Instance.new("UICorner")
-    handleCorner.CornerRadius = UDim.new(0, 10)
-    handleCorner.Parent = toggleHandle
+    -- Скругленные углы индикатора
+    local indicatorCorner = Instance.new("UICorner")
+    indicatorCorner.CornerRadius = UDim.new(0, 8)
+    indicatorCorner.Parent = indicator
     
-    -- Текст переключателя
-    local toggleText = Instance.new("TextLabel")
-    toggleText.Name = "Text"
-    toggleText.Size = UDim2.new(1, -54, 1, 0)
-    toggleText.BackgroundTransparency = 1
-    toggleText.Font = Enum.Font.Gotham
-    toggleText.Text = text
-    toggleText.TextColor3 = self.Colors.Text
-    toggleText.TextSize = 14
-    toggleText.TextXAlignment = Enum.TextXAlignment.Left
-    toggleText.Parent = toggleContainer
+    -- Текущее значение
+    local value = default
     
-    -- Состояние переключателя
-    local toggled = default
-    
-    -- Функция обновления визуального состояния
-    local function updateVisual()
-        if toggled then
-            CreateTween(toggleBackground, {BackgroundColor3 = self.Colors.Accent}):Play()
-            CreateTween(toggleHandle, {Position = UDim2.new(0, 22, 0.5, -10)}):Play()
-        else
-            CreateTween(toggleBackground, {BackgroundColor3 = self.Colors.Primary}):Play()
-            CreateTween(toggleHandle, {Position = UDim2.new(0, 2, 0.5, -10)}):Play()
+    -- Функция установки значения
+    local function SetValue(newValue)
+        value = newValue
+        
+        -- Анимация переключателя
+        CreateTween(
+            indicator, 
+            {Position = UDim2.new(0, value and 21 or 3, 0.5, -8)}
+        ):Play()
+        
+        CreateTween(
+            toggleBackground, 
+            {BackgroundColor3 = value and self.Colors.Accent or self.Colors.Primary}
+        ):Play()
+        
+        -- Вызов колбэка
+        if callback then
+            callback(value)
         end
     end
     
-    -- Начальное обновление
-    updateVisual()
-    
-    -- Область нажатия
-    local toggleButton = Instance.new("TextButton")
-    toggleButton.Name = "ToggleButton"
-    toggleButton.Size = UDim2.new(1, 0, 1, 0)
-    toggleButton.BackgroundTransparency = 1
-    toggleButton.Text = ""
-    toggleButton.Parent = toggleContainer
-    
     -- Обработка нажатия
-    toggleButton.MouseButton1Click:Connect(function()
-        toggled = not toggled
-        updateVisual()
-        
-        if callback then
-            pcall(callback, toggled)
+    toggleBackground.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            SetValue(not value)
         end
     end)
     
-    -- Возвращаем функции для управления переключателем
-    return {
-        Set = function(value)
-            toggled = value
-            updateVisual()
-            
-            if callback then
-                pcall(callback, toggled)
-            end
-        end,
-        Get = function()
-            return toggled
+    indicator.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            SetValue(not value)
         end
+    end)
+    
+    -- Возвращаем интерфейс для управления переключателем
+    return {
+        Set = SetValue,
+        Get = function() return value end
     }
 end
 
@@ -634,9 +631,8 @@ end
 function AriseUI:AddSlider(parent, text, min, max, default, callback)
     min = min or 0
     max = max or 100
-    default = default or min
+    default = math.clamp(default or min, min, max)
     
-    -- Контейнер для слайдера
     local sliderContainer = Instance.new("Frame")
     sliderContainer.Name = text .. "SliderContainer"
     sliderContainer.Size = UDim2.new(1, 0, 0, 50)
@@ -645,101 +641,115 @@ function AriseUI:AddSlider(parent, text, min, max, default, callback)
     sliderContainer.Parent = parent
     
     -- Текст слайдера
-    local sliderText = Instance.new("TextLabel")
-    sliderText.Name = "Text"
-    sliderText.Size = UDim2.new(1, 0, 0, 25)
-    sliderText.BackgroundTransparency = 1
-    sliderText.Font = Enum.Font.Gotham
-    sliderText.Text = text
-    sliderText.TextColor3 = self.Colors.Text
-    sliderText.TextSize = 14
-    sliderText.TextXAlignment = Enum.TextXAlignment.Left
-    sliderText.Parent = sliderContainer
+    local label = Instance.new("TextLabel")
+    label.Name = "Label"
+    label.Size = UDim2.new(1, -50, 0, 20)
+    label.Position = UDim2.new(0, 0, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Font = Enum.Font.Gotham
+    label.Text = text
+    label.TextColor3 = self.Colors.Text
+    label.TextSize = 14
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = sliderContainer
+    
+    -- Отображение значения
+    local valueLabel = Instance.new("TextLabel")
+    valueLabel.Name = "Value"
+    valueLabel.Size = UDim2.new(0, 45, 0, 20)
+    valueLabel.Position = UDim2.new(1, -45, 0, 0)
+    valueLabel.BackgroundTransparency = 1
+    valueLabel.Font = Enum.Font.Gotham
+    valueLabel.Text = tostring(default)
+    valueLabel.TextColor3 = self.Colors.Text
+    valueLabel.TextSize = 14
+    valueLabel.TextXAlignment = Enum.TextXAlignment.Right
+    valueLabel.Parent = sliderContainer
     
     -- Фон слайдера
-    local sliderFrame = Instance.new("Frame")
-    sliderFrame.Name = "Frame"
-    sliderFrame.Size = UDim2.new(1, -120, 0, 6)
-    sliderFrame.Position = UDim2.new(0, 0, 0.7, 0)
-    sliderFrame.BackgroundColor3 = self.Colors.Primary
-    sliderFrame.BorderSizePixel = 0
-    sliderFrame.Parent = sliderContainer
+    local sliderBackground = Instance.new("Frame")
+    sliderBackground.Name = "Background"
+    sliderBackground.Size = UDim2.new(1, 0, 0, 8)
+    sliderBackground.Position = UDim2.new(0, 0, 0, 30)
+    sliderBackground.BackgroundColor3 = self.Colors.Primary
+    sliderBackground.Parent = sliderContainer
     
-    -- Скругление фона
-    local sliderCorner = Instance.new("UICorner")
-    sliderCorner.CornerRadius = UDim.new(0, 3)
-    sliderCorner.Parent = sliderFrame
+    -- Скругленные углы
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 4)
+    corner.Parent = sliderBackground
     
     -- Заполнение слайдера
-    local sliderFill = Instance.new("Frame")
-    sliderFill.Name = "Fill"
-    sliderFill.Size = UDim2.new(0, 0, 1, 0)
-    sliderFill.BackgroundColor3 = self.Colors.Accent
-    sliderFill.BorderSizePixel = 0
-    sliderFill.Parent = sliderFrame
+    local fill = Instance.new("Frame")
+    fill.Name = "Fill"
+    fill.Size = UDim2.new((default - min) / (max - min), 0, 1, 0)
+    fill.BackgroundColor3 = self.Colors.Accent
+    fill.BorderSizePixel = 0
+    fill.Parent = sliderBackground
     
-    -- Скругление заполнения
+    -- Скругленные углы для заполнения
     local fillCorner = Instance.new("UICorner")
-    fillCorner.CornerRadius = UDim.new(0, 3)
-    fillCorner.Parent = sliderFill
+    fillCorner.CornerRadius = UDim.new(0, 4)
+    fillCorner.Parent = fill
     
-    -- Ползунок
-    local sliderHandle = Instance.new("Frame")
-    sliderHandle.Name = "Handle"
-    sliderHandle.Size = UDim2.new(0, 14, 0, 14)
-    sliderHandle.Position = UDim2.new(0, -7, 0.5, -7)
-    sliderHandle.BackgroundColor3 = self.Colors.Text
-    sliderHandle.Parent = sliderFill
+    -- Индикатор слайдера
+    local indicator = Instance.new("Frame")
+    indicator.Name = "Indicator"
+    indicator.Size = UDim2.new(0, 16, 0, 16)
+    indicator.Position = UDim2.new((default - min) / (max - min), -8, 0, -4)
+    indicator.BackgroundColor3 = self.Colors.Text
+    indicator.Parent = sliderBackground
     
-    -- Скругление ползунка
-    local handleCorner = Instance.new("UICorner")
-    handleCorner.CornerRadius = UDim.new(0, 7)
-    handleCorner.Parent = sliderHandle
-    
-    -- Значение слайдера
-    local valueText = Instance.new("TextLabel")
-    valueText.Name = "Value"
-    valueText.Size = UDim2.new(0, 110, 0, 25)
-    valueText.Position = UDim2.new(1, -110, 0, 0)
-    valueText.BackgroundTransparency = 1
-    valueText.Font = Enum.Font.GothamBold
-    valueText.Text = tostring(default)
-    valueText.TextColor3 = self.Colors.Text
-    valueText.TextSize = 14
-    valueText.TextXAlignment = Enum.TextXAlignment.Right
-    valueText.Parent = sliderContainer
+    -- Скругленные углы индикатора
+    local indicatorCorner = Instance.new("UICorner")
+    indicatorCorner.CornerRadius = UDim.new(0, 8)
+    indicatorCorner.Parent = indicator
     
     -- Текущее значение
     local value = default
     
-    -- Функция для обновления визуального состояния
-    local function updateVisual()
-        -- Вычисляем процент
+    -- Функция установки значения
+    local function SetValue(newValue)
+        local numberValue = tonumber(newValue)
+        if not numberValue then return end
+        
+        -- Ограничиваем значение
+        value = math.clamp(numberValue, min, max)
+        
+        -- Обновляем отображение
+        valueLabel.Text = string.format("%.1f", value)
+        
+        -- Обновляем позицию и размер
         local percent = (value - min) / (max - min)
+        fill.Size = UDim2.new(percent, 0, 1, 0)
+        indicator.Position = UDim2.new(percent, -8, 0, -4)
         
-        -- Обновляем заполнение
-        CreateTween(sliderFill, {Size = UDim2.new(percent, 0, 1, 0)}):Play()
-        
-        -- Обновляем текст значения
-        valueText.Text = tostring(math.floor(value * 100) / 100)
+        -- Вызов колбэка
+        if callback then
+            callback(value)
+        end
     end
-    
-    -- Начальное обновление
-    updateVisual()
-    
-    -- Область нажатия
-    local sliderButton = Instance.new("TextButton")
-    sliderButton.Name = "SliderButton"
-    sliderButton.Size = UDim2.new(1, 0, 1, 0)
-    sliderButton.BackgroundTransparency = 1
-    sliderButton.Text = ""
-    sliderButton.Parent = sliderContainer
     
     -- Обработка перетаскивания
     local isDragging = false
     
-    sliderButton.MouseButton1Down:Connect(function()
-        isDragging = true
+    sliderBackground.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            isDragging = true
+            
+            -- Обновляем значение на основе позиции мыши
+            local relativeX = input.Position.X - sliderBackground.AbsolutePosition.X
+            local percent = math.clamp(relativeX / sliderBackground.AbsoluteSize.X, 0, 1)
+            local newValue = min + (max - min) * percent
+            
+            SetValue(newValue)
+        end
+    end)
+    
+    indicator.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            isDragging = true
+        end
     end)
     
     game:GetService("UserInputService").InputEnded:Connect(function(input)
@@ -748,301 +758,224 @@ function AriseUI:AddSlider(parent, text, min, max, default, callback)
         end
     end)
     
-    sliderButton.MouseMoved:Connect(function(mouseX)
-        if isDragging then
-            -- Вычисляем новое значение на основе позиции мыши
-            local sliderPos = sliderFrame.AbsolutePosition.X
-            local sliderWidth = sliderFrame.AbsoluteSize.X
-            local percent = math.clamp((mouseX - sliderPos) / sliderWidth, 0, 1)
+    game:GetService("UserInputService").InputChanged:Connect(function(input)
+        if isDragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            -- Обновляем значение на основе позиции мыши
+            local relativeX = input.Position.X - sliderBackground.AbsolutePosition.X
+            local percent = math.clamp(relativeX / sliderBackground.AbsoluteSize.X, 0, 1)
+            local newValue = min + (max - min) * percent
             
-            -- Обновляем значение
-            value = min + percent * (max - min)
-            updateVisual()
-            
-            -- Вызываем колбэк
-            if callback then
-                pcall(callback, value)
-            end
+            SetValue(newValue)
         end
     end)
     
-    -- Возвращаем функции для управления слайдером
+    -- Возвращаем интерфейс для управления слайдером
     return {
-        Set = function(newValue)
-            value = math.clamp(newValue, min, max)
-            updateVisual()
-            
-            if callback then
-                pcall(callback, value)
-            end
-        end,
-        Get = function()
-            return value
-        end
+        Set = SetValue,
+        Get = function() return value end
     }
 end
 
--- Добавление текстового поля
-function AriseUI:AddTextbox(parent, text, placeholder, callback)
-    -- Контейнер для текстбокса
-    local textboxContainer = Instance.new("Frame")
-    textboxContainer.Name = text .. "TextboxContainer"
-    textboxContainer.Size = UDim2.new(1, 0, 0, 60)
-    textboxContainer.BackgroundTransparency = 1
-    textboxContainer.LayoutOrder = #parent:GetChildren()
-    textboxContainer.Parent = parent
-    
-    -- Текст над полем
-    local textboxText = Instance.new("TextLabel")
-    textboxText.Name = "Text"
-    textboxText.Size = UDim2.new(1, 0, 0, 25)
-    textboxText.BackgroundTransparency = 1
-    textboxText.Font = Enum.Font.Gotham
-    textboxText.Text = text
-    textboxText.TextColor3 = self.Colors.Text
-    textboxText.TextSize = 14
-    textboxText.TextXAlignment = Enum.TextXAlignment.Left
-    textboxText.Parent = textboxContainer
-    
-    -- Фон поля ввода
-    local textboxFrame = Instance.new("Frame")
-    textboxFrame.Name = "Frame"
-    textboxFrame.Size = UDim2.new(1, 0, 0, 30)
-    textboxFrame.Position = UDim2.new(0, 0, 0.5, 0)
-    textboxFrame.BackgroundColor3 = self.Colors.Primary
-    textboxFrame.BorderSizePixel = 0
-    textboxFrame.Parent = textboxContainer
-    
-    -- Скругление фона
-    local frameCorner = Instance.new("UICorner")
-    frameCorner.CornerRadius = self.Config.ButtonRadius
-    frameCorner.Parent = textboxFrame
-    
-    -- Поле ввода
-    local textbox = Instance.new("TextBox")
-    textbox.Name = "Textbox"
-    textbox.Size = UDim2.new(1, -20, 1, 0)
-    textbox.Position = UDim2.new(0, 10, 0, 0)
-    textbox.BackgroundTransparency = 1
-    textbox.Font = Enum.Font.Gotham
-    textbox.PlaceholderText = placeholder or "Введите текст..."
-    textbox.PlaceholderColor3 = self.Colors.TextDark
-    textbox.Text = ""
-    textbox.TextColor3 = self.Colors.Text
-    textbox.TextSize = 14
-    textbox.TextXAlignment = Enum.TextXAlignment.Left
-    textbox.ClearTextOnFocus = false
-    textbox.Parent = textboxFrame
-    
-    -- Эффекты фокуса
-    textbox.Focused:Connect(function()
-        CreateTween(textboxFrame, {BackgroundColor3 = self.Colors.Accent}):Play()
-    end)
-    
-    textbox.FocusLost:Connect(function(enterPressed)
-        CreateTween(textboxFrame, {BackgroundColor3 = self.Colors.Primary}):Play()
-        
-        if enterPressed and callback then
-            pcall(callback, textbox.Text)
-        end
-    end)
-    
-    -- Возвращаем функции для управления полем ввода
-    return {
-        Set = function(text)
-            textbox.Text = text
-        end,
-        Get = function()
-            return textbox.Text
-        end
-    }
-end
+-- ===== СИСТЕМА АВТОРИЗАЦИИ =====
 
--- Добавление окна авторизации
+-- Создание интерфейса ввода ключа
 function AriseUI:ShowKeySystem(title, callback)
-    local mainUI = self:Create(title or "ARISE KEY SYSTEM")
-    local content = mainUI.ContentContainer
+    -- Проверяем, авторизован ли уже пользователь
+    if Licensed then
+        if callback then
+            callback(true)
+        end
+        return
+    end
+    
+    -- Создаем ScreenGui
+    local keyGui = Instance.new("ScreenGui")
+    keyGui.Name = "AriseKeySystem"
+    keyGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    ProtectGUI(keyGui)
+    
+    -- Фон с затемнением
+    local background = Instance.new("Frame")
+    background.Name = "Background"
+    background.Size = UDim2.new(1, 0, 1, 0)
+    background.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    background.BackgroundTransparency = 0.5
+    background.BorderSizePixel = 0
+    background.Parent = keyGui
+    
+    -- Основной фрейм
+    local mainFrame = Instance.new("Frame")
+    mainFrame.Name = "MainFrame"
+    mainFrame.Size = UDim2.new(0, 350, 0, 200)
+    mainFrame.Position = UDim2.new(0.5, -175, 0.5, -100)
+    mainFrame.BackgroundColor3 = self.Colors.Background
+    mainFrame.BorderSizePixel = 0
+    mainFrame.Parent = keyGui
+    
+    -- Скругленные углы
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = self.Config.RoundRadius
+    corner.Parent = mainFrame
+    
+    -- Тень
+    local shadow = Instance.new("ImageLabel")
+    shadow.Name = "Shadow"
+    shadow.Size = UDim2.new(1, 30, 1, 30)
+    shadow.Position = UDim2.new(0, -15, 0, -15)
+    shadow.BackgroundTransparency = 1
+    shadow.Image = "rbxassetid://5554236805"
+    shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+    shadow.ImageTransparency = 0.6
+    shadow.ScaleType = Enum.ScaleType.Slice
+    shadow.SliceCenter = Rect.new(23, 23, 277, 277)
+    shadow.ZIndex = -1
+    shadow.Parent = mainFrame
     
     -- Заголовок
     local titleLabel = Instance.new("TextLabel")
     titleLabel.Name = "Title"
-    titleLabel.Size = UDim2.new(1, -40, 0, 40)
-    titleLabel.Position = UDim2.new(0, 20, 0, 20)
-    titleLabel.BackgroundTransparency = 1
+    titleLabel.Size = UDim2.new(1, 0, 0, 50)
+    titleLabel.BackgroundColor3 = self.Colors.Primary
+    titleLabel.BorderSizePixel = 0
     titleLabel.Font = Enum.Font.GothamBold
-    titleLabel.Text = "Авторизация"
+    titleLabel.Text = title or "ARISE АВТОРИЗАЦИЯ"
     titleLabel.TextColor3 = self.Colors.Text
-    titleLabel.TextSize = 20
-    titleLabel.TextXAlignment = Enum.TextXAlignment.Center
-    titleLabel.Parent = content
+    titleLabel.TextSize = 18
+    titleLabel.Parent = mainFrame
     
-    -- Описание
-    local descriptionLabel = Instance.new("TextLabel")
-    descriptionLabel.Name = "Description"
-    descriptionLabel.Size = UDim2.new(1, -60, 0, 40)
-    descriptionLabel.Position = UDim2.new(0, 30, 0, 60)
-    descriptionLabel.BackgroundTransparency = 1
-    descriptionLabel.Font = Enum.Font.Gotham
-    descriptionLabel.Text = "Пожалуйста, введите ключ доступа для использования скрипта."
-    descriptionLabel.TextColor3 = self.Colors.TextDark
-    descriptionLabel.TextSize = 14
-    descriptionLabel.TextXAlignment = Enum.TextXAlignment.Center
-    descriptionLabel.TextWrapped = true
-    descriptionLabel.Parent = content
+    -- Скругленные углы заголовка
+    local titleCorner = Instance.new("UICorner")
+    titleCorner.CornerRadius = self.Config.RoundRadius
+    titleCorner.Parent = titleLabel
     
-    -- Фон поля ввода
-    local keyFrame = Instance.new("Frame")
-    keyFrame.Name = "KeyFrame"
-    keyFrame.Size = UDim2.new(1, -80, 0, 40)
-    keyFrame.Position = UDim2.new(0, 40, 0, 120)
-    keyFrame.BackgroundColor3 = self.Colors.Primary
-    keyFrame.BorderSizePixel = 0
-    keyFrame.Parent = content
-    
-    -- Скругление фона
-    local frameCorner = Instance.new("UICorner")
-    frameCorner.CornerRadius = self.Config.ButtonRadius
-    frameCorner.Parent = keyFrame
+    -- Исправление углов заголовка
+    local titleCornerFix = Instance.new("Frame")
+    titleCornerFix.Name = "CornerFix"
+    titleCornerFix.Size = UDim2.new(1, 0, 0.5, 0)
+    titleCornerFix.Position = UDim2.new(0, 0, 0.5, 0)
+    titleCornerFix.BackgroundColor3 = self.Colors.Primary
+    titleCornerFix.BorderSizePixel = 0
+    titleCornerFix.ZIndex = 0
+    titleCornerFix.Parent = titleLabel
     
     -- Поле ввода ключа
-    local keyTextbox = Instance.new("TextBox")
-    keyTextbox.Name = "KeyTextbox"
-    keyTextbox.Size = UDim2.new(1, -20, 1, 0)
-    keyTextbox.Position = UDim2.new(0, 10, 0, 0)
-    keyTextbox.BackgroundTransparency = 1
-    keyTextbox.Font = Enum.Font.Gotham
-    keyTextbox.PlaceholderText = "Введите ключ..."
-    keyTextbox.PlaceholderColor3 = self.Colors.TextDark
-    keyTextbox.Text = ""
-    keyTextbox.TextColor3 = self.Colors.Text
-    keyTextbox.TextSize = 14
-    keyTextbox.TextXAlignment = Enum.TextXAlignment.Center
-    keyTextbox.ClearTextOnFocus = false
-    keyTextbox.Parent = keyFrame
+    local keyInput = Instance.new("TextBox")
+    keyInput.Name = "KeyInput"
+    keyInput.Size = UDim2.new(0.9, 0, 0, 40)
+    keyInput.Position = UDim2.new(0.05, 0, 0.5, -20)
+    keyInput.BackgroundColor3 = self.Colors.Secondary
+    keyInput.Font = Enum.Font.Gotham
+    keyInput.PlaceholderText = "Введите лицензионный ключ..."
+    keyInput.Text = ""
+    keyInput.TextColor3 = self.Colors.Text
+    keyInput.TextSize = 14
+    keyInput.Parent = mainFrame
     
-    -- Эффекты фокуса
-    keyTextbox.Focused:Connect(function()
-        CreateTween(keyFrame, {BackgroundColor3 = self.Colors.Accent}):Play()
-    end)
+    -- Скругленные углы поля ввода
+    local inputCorner = Instance.new("UICorner")
+    inputCorner.CornerRadius = UDim.new(0, 6)
+    inputCorner.Parent = keyInput
     
-    keyTextbox.FocusLost:Connect(function()
-        CreateTween(keyFrame, {BackgroundColor3 = self.Colors.Primary}):Play()
-    end)
-    
-    -- Кнопка проверки
+    -- Кнопка проверки ключа
     local submitButton = Instance.new("TextButton")
     submitButton.Name = "SubmitButton"
-    submitButton.Size = UDim2.new(0, 200, 0, 40)
-    submitButton.Position = UDim2.new(0.5, -100, 0, 180)
-    submitButton.BackgroundColor3 = self.Colors.Primary
+    submitButton.Size = UDim2.new(0.9, 0, 0, 40)
+    submitButton.Position = UDim2.new(0.05, 0, 0.5, 30)
+    submitButton.BackgroundColor3 = self.Colors.Accent
     submitButton.Font = Enum.Font.GothamBold
-    submitButton.Text = "ПРОВЕРИТЬ"
+    submitButton.Text = "ВОЙТИ"
     submitButton.TextColor3 = self.Colors.Text
-    submitButton.TextSize = 14
+    submitButton.TextSize = 16
     submitButton.AutoButtonColor = false
-    submitButton.Parent = content
+    submitButton.Parent = mainFrame
     
-    -- Скругление кнопки
+    -- Скругленные углы кнопки
     local buttonCorner = Instance.new("UICorner")
-    buttonCorner.CornerRadius = self.Config.ButtonRadius
+    buttonCorner.CornerRadius = UDim.new(0, 6)
     buttonCorner.Parent = submitButton
     
-    -- Эффекты наведения и клика
-    submitButton.MouseEnter:Connect(function()
-        CreateTween(submitButton, {BackgroundColor3 = self.Colors.Accent}):Play()
-    end)
-    
-    submitButton.MouseLeave:Connect(function()
-        CreateTween(submitButton, {BackgroundColor3 = self.Colors.Primary}):Play()
-    end)
-    
-    submitButton.MouseButton1Down:Connect(function()
-        CreateTween(submitButton, {BackgroundColor3 = self.Colors.AccentHover}, 0.1):Play()
-    end)
-    
-    submitButton.MouseButton1Up:Connect(function()
-        CreateTween(submitButton, {BackgroundColor3 = self.Colors.Accent}, 0.1):Play()
-    end)
-    
-    -- Статус ошибки
+    -- Метка ошибки
     local errorLabel = Instance.new("TextLabel")
     errorLabel.Name = "ErrorLabel"
-    errorLabel.Size = UDim2.new(1, -40, 0, 30)
-    errorLabel.Position = UDim2.new(0, 20, 0, 230)
+    errorLabel.Size = UDim2.new(1, 0, 0, 30)
+    errorLabel.Position = UDim2.new(0, 0, 1, -35)
     errorLabel.BackgroundTransparency = 1
     errorLabel.Font = Enum.Font.Gotham
     errorLabel.Text = ""
     errorLabel.TextColor3 = self.Colors.Error
     errorLabel.TextSize = 14
-    errorLabel.TextXAlignment = Enum.TextXAlignment.Center
-    errorLabel.Parent = content
+    errorLabel.Visible = false
+    errorLabel.Parent = mainFrame
+    
+    -- Эффекты наведения для кнопки
+    submitButton.MouseEnter:Connect(function()
+        CreateTween(submitButton, {BackgroundColor3 = self.Colors.AccentHover}):Play()
+    end)
+    
+    submitButton.MouseLeave:Connect(function()
+        CreateTween(submitButton, {BackgroundColor3 = self.Colors.Accent}):Play()
+    end)
     
     -- Функция проверки ключа
-    local function checkKey()
-        local userKey = keyTextbox.Text
+    local function CheckKey()
+        local key = keyInput.Text
         
-        -- Проверяем ключ
-        if userKey == self.Config.LicenseKey then
+        if key == self.Config.LicenseKey then
             -- Успешная авторизация
-            CreateTween(keyFrame, {BackgroundColor3 = self.Colors.Success}):Play()
+            Licensed = true
+            
+            -- Анимация успеха
             CreateTween(submitButton, {BackgroundColor3 = self.Colors.Success}):Play()
-            errorLabel.Text = "Ключ верный! Загрузка..."
+            errorLabel.Visible = true
+            errorLabel.Text = "Авторизация успешна!"
             errorLabel.TextColor3 = self.Colors.Success
             
-            -- Анимация успешной авторизации
+            -- Скрываем окно авторизации
             wait(1)
+            keyGui:Destroy()
             
-            -- Закрываем окно авторизации
-            local fadeTween = CreateTween(mainUI.MainFrame, {BackgroundTransparency = 1})
-            fadeTween:Play()
-            fadeTween.Completed:Connect(function()
-                GUI:Destroy()
-                Licensed = true
-                
-                -- Вызываем колбэк
-                if callback then
-                    pcall(callback, true)
-                end
-            end)
+            -- Вызываем колбэк
+            if callback then
+                callback(true)
+            end
         else
-            -- Неверный ключ
-            CreateTween(keyFrame, {BackgroundColor3 = self.Colors.Error}):Play()
-            errorLabel.Text = "Неверный ключ! Попробуйте еще раз."
+            -- Ошибка авторизации
+            CreateTween(submitButton, {BackgroundColor3 = self.Colors.Error}):Play()
+            errorLabel.Visible = true
+            errorLabel.Text = "Неверный ключ!"
             errorLabel.TextColor3 = self.Colors.Error
             
-            -- Анимация встряски
-            local shake = function()
-                local orig = keyFrame.Position
-                
-                CreateTween(keyFrame, {Position = orig + UDim2.new(0, -5, 0, 0)}, 0.05):Play()
-                wait(0.05)
-                CreateTween(keyFrame, {Position = orig + UDim2.new(0, 5, 0, 0)}, 0.05):Play()
-                wait(0.05)
-                CreateTween(keyFrame, {Position = orig + UDim2.new(0, -5, 0, 0)}, 0.05):Play()
-                wait(0.05)
-                CreateTween(keyFrame, {Position = orig}, 0.05):Play()
-            end
-            
-            spawn(shake)
-            
-            -- Сбрасываем цвет через некоторое время
-            wait(1)
-            CreateTween(keyFrame, {BackgroundColor3 = self.Colors.Primary}):Play()
+            wait(2)
+            CreateTween(submitButton, {BackgroundColor3 = self.Colors.Accent}):Play()
         end
     end
     
     -- Обработка нажатия кнопки
-    submitButton.MouseButton1Click:Connect(checkKey)
+    submitButton.MouseButton1Click:Connect(CheckKey)
     
-    -- Обработка Enter в поле ввода
-    keyTextbox.FocusLost:Connect(function(enterPressed)
+    -- Обработка нажатия Enter в поле ввода
+    keyInput.FocusLost:Connect(function(enterPressed)
         if enterPressed then
-            checkKey()
+            CheckKey()
         end
     end)
+    
+    -- Анимация появления
+    background.BackgroundTransparency = 1
+    mainFrame.Position = UDim2.new(0.5, -175, 0.6, -100)
+    mainFrame.BackgroundTransparency = 1
+    
+    CreateTween(background, {BackgroundTransparency = 0.5}, 0.5):Play()
+    
+    local frameTween = CreateTween(mainFrame, {
+        Position = UDim2.new(0.5, -175, 0.5, -100),
+        BackgroundTransparency = 0
+    }, 0.5)
+    
+    frameTween:Play()
 end
 
--- Функция для проверки ключа и отображения полного интерфейса
+-- Инициализация с авторизацией
 function AriseUI:Initialize(title, mainCallback)
     self:ShowKeySystem(title, function(success)
         if success then
@@ -1058,29 +991,5 @@ function AriseUI:Initialize(title, mainCallback)
     end)
 end
 
--- Загрузка UI через внешний URL
-function AriseUI:LoadFromURL(url, callback)
-    local success, result = pcall(function()
-        return game:HttpGet(url)
-    end)
-    
-    if success then
-        local loadSuccess, loadedUI = pcall(function()
-            return loadstring(result)()
-        end)
-        
-        if loadSuccess and callback then
-            callback(loadedUI)
-            return loadedUI
-        else
-            warn("Не удалось загрузить UI из URL: " .. tostring(loadedUI))
-            return nil
-        end
-    else    
-        warn("Не удалось получить содержимое URL: " .. tostring(result))
-        return nil
-    end
-end
-
--- Создаем и возвращаем объект для тестирования
+-- Возвращаем библиотеку
 return AriseUI
