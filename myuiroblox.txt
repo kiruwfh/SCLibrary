@@ -708,12 +708,13 @@ utility:InitializeKeybind()
 function SC:New(title)
     local self = setmetatable({
         pagesContainer = nil, -- Will be set after UI creation
-        pages = {},
+        pages = {}, -- Initialize empty table for pages
         watermarkScreenGui = nil,
         watermarkElements = {},
         flightEnabled = false,
         fpsUpdaterRunning = false,
-        fpsWatermarkControls = nil
+        fpsWatermarkControls = nil,
+        flightBindKey = Enum.KeyCode.F -- Default flight toggle key
     }, {__index = SC})
 
     -- Show welcome notification (using existing system for now)
@@ -952,9 +953,9 @@ function SC:SetWatermark(options)
         Name = "WatermarkContainer",
         Parent = watermarkScreenGui,
         BackgroundTransparency = 1,
-        Position = UDim2.new(0, 10, 0, 10), -- Top left with padding
+        Position = UDim2.new(0, 10, 1, -50), -- Bottom left with padding
         Size = UDim2.new(0, 200, 0, 40), -- Will auto-size based on content
-        AnchorPoint = Vector2.new(0, 0)
+        AnchorPoint = Vector2.new(0, 1) -- Anchor to bottom left
     })
     
     local bgContainer = utility:Create("Frame", {
@@ -1294,7 +1295,7 @@ function SC:Notify(title, text, options)
     end)
     
     -- Function to close notification with animation
-    local function closeNotification()
+    function closeNotification()
         if isClosing then return end
         isClosing = true
         
@@ -1329,7 +1330,8 @@ function SC:GetFlightModeStatus()
     return {
         enabled = FlightMode.Enabled,
         speed = FlightMode.Speed,
-        boostMultiplier = FlightMode.BoostMultiplier
+        boostMultiplier = FlightMode.BoostMultiplier,
+        bindKey = self.flightBindKey or FlightMode.ToggleKey
     }
 end
 
@@ -1346,6 +1348,35 @@ end
 function SC:SetFlightBoostMultiplier(multiplier)
     if type(multiplier) == "number" and multiplier > 0 then
         FlightMode.BoostMultiplier = multiplier
+        return true
+    end
+    return false
+end
+
+-- Set flight toggle key
+function SC:SetFlightBindKey(keyCode)
+    if typeof(keyCode) == "EnumItem" and keyCode.EnumType == Enum.KeyCode then
+        -- Unbind previous key if it exists
+        if self.flightBindUnbind then
+            self.flightBindUnbind:UnBind()
+            self.flightBindUnbind = nil
+        end
+        
+        -- Store new bind key
+        self.flightBindKey = keyCode
+        FlightMode.ToggleKey = keyCode
+        
+        -- Rebind with new key
+        self.flightBindUnbind = utility:BindToKey(keyCode, function()
+            self:ToggleFlightMode()
+        end)
+        
+        -- Show notification
+        self:Notify("Режим полета", "Горячая клавиша изменена на: " .. keyCode.Name, {
+            duration = 3,
+            type = "success"
+        })
+        
         return true
     end
     return false
@@ -1872,7 +1903,11 @@ function SC:AddPage(title, icon)
     end
     
     -- Add page to library
-    table.insert(self.parent.pages, page)
+    if self.parent and self.parent.pages then
+        table.insert(self.parent.pages, page)
+    else
+        warn("Error in AddPage: parent or parent.pages is nil. Page was not added to pages array.")
+    end
     
     return page
 end
