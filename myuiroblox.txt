@@ -1318,12 +1318,12 @@ function SC:Notify(title, text, options)
     local BAR_WIDTH = 4
     local MIN_HEIGHT = 40
     
-    -- Create notification frame
+    -- Create notification frame (с ограниченным размером)
     local notification = utility:Create("Frame", {
         Name = "Notification",
         Parent = self.notificationContainer,
         BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 0, MIN_HEIGHT),
+        Size = UDim2.new(0.35, 0, 0, MIN_HEIGHT), -- Уменьшен размер до 35% ширины экрана
         AutomaticSize = Enum.AutomaticSize.Y,
         ClipsDescendants = true,
         LayoutOrder = tick()
@@ -1635,8 +1635,18 @@ function SC:AddPage(title, icon)
         pageContainer.CanvasSize = UDim2.new(0, 0, 0, pageContainer.UIListLayout.AbsoluteContentSize.Y + 20)
     end)
     
-    -- Click handler for tab selection
-    pageButton.MouseButton1Click:Connect(function()
+    -- Create a hitbox for better tab selection
+    local pageHitbox = utility:Create("TextButton", {
+        Name = "PageHitbox",
+        Parent = pageButton,
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 1, 0),
+        Text = "",
+        ZIndex = 10 -- Above other elements
+    })
+    
+    -- Function to handle tab selection
+    local function selectTab()
         -- Deselect all other tabs
         for _, p in pairs(self.pages) do
             if p.button and p.button ~= pageButton then
@@ -1651,7 +1661,11 @@ function SC:AddPage(title, icon)
         utility:Tween(pageButton, {ImageColor3 = themes.Accent}, 0.2)
         pageContainer.Visible = true
         utility:Pop(pageButton, 8)
-    end)
+    end
+    
+    -- Connect both the button and hitbox
+    pageButton.MouseButton1Click:Connect(selectTab)
+    pageHitbox.MouseButton1Click:Connect(selectTab)
     
     -- Store references
     page.button = pageButton
@@ -1745,18 +1759,30 @@ function SC:AddPage(title, icon)
                 SliceCenter = Rect.new(4, 4, 296, 296),
                 AutoButtonColor = false,
                 ClipsDescendants = true
-            }, {
-                utility:Create("TextLabel", {
-                    Name = "buttonText",
-                    BackgroundTransparency = 1,
-                    Size = UDim2.new(1, -10, 1, 0),
-                    Position = UDim2.new(0, 5, 0, 0),
-                    Font = Enum.Font.Gotham,
-                    Text = text,
-                    TextColor3 = themes.TextColor,
-                    TextSize = 12,
-                    TextXAlignment = Enum.TextXAlignment.Left
-                })
+            })
+            
+            -- Create transparent hitbox to make clicking easier
+            local hitbox = utility:Create("TextButton", {
+                Name = "Hitbox",
+                Parent = button,
+                BackgroundTransparency = 1,
+                Size = UDim2.new(1, 0, 1, 0),
+                Text = "",
+                ZIndex = 10 -- Above other elements
+            })
+            
+            -- Create text
+            local buttonText = utility:Create("TextLabel", {
+                Name = "buttonText",
+                Parent = button,
+                BackgroundTransparency = 1,
+                Size = UDim2.new(1, -10, 1, 0),
+                Position = UDim2.new(0, 5, 0, 0),
+                Font = Enum.Font.Gotham,
+                Text = text,
+                TextColor3 = themes.TextColor,
+                TextSize = 12,
+                TextXAlignment = Enum.TextXAlignment.Left
             })
             
             -- Button interaction effects
@@ -1774,6 +1800,24 @@ function SC:AddPage(title, icon)
             
             button.MouseButton1Click:Connect(function()
                 callback()
+            end)
+            
+            -- Wire up the hitbox clicks to the button
+            hitbox.MouseButton1Down:Connect(function()
+                utility:Pop(button, 10)
+            end)
+            
+            hitbox.MouseButton1Click:Connect(function()
+                callback()
+            end)
+            
+            -- Sync hover effects
+            hitbox.MouseEnter:Connect(function()
+                utility:Tween(button, {ImageColor3 = themes.Accent}, 0.2)
+            end)
+            
+            hitbox.MouseLeave:Connect(function()
+                utility:Tween(button, {ImageColor3 = themes.DarkContrast}, 0.2)
             end)
             
             -- Add to section objects
@@ -1819,6 +1863,16 @@ function SC:AddPage(title, icon)
                 TextXAlignment = Enum.TextXAlignment.Left
             })
             
+            -- Create transparent hitbox for better clicking
+            local hitbox = utility:Create("TextButton", {
+                Name = "Hitbox",
+                Parent = toggle,
+                BackgroundTransparency = 1,
+                Size = UDim2.new(1, 0, 1, 0),
+                Text = "",
+                ZIndex = 10 -- Above other elements
+            })
+            
             -- Toggle indicator
             local toggleIndicator = utility:Create("ImageLabel", {
                 Name = "toggleIndicator",
@@ -1859,12 +1913,15 @@ function SC:AddPage(title, icon)
             -- Set initial state
             updateToggle()
             
-            -- Click handler
-            toggle.MouseButton1Click:Connect(function()
+            -- Click handler for main toggle and hitbox
+            local function toggleAction()
                 toggled = not toggled
                 updateToggle()
                 callback(toggled)
-            end)
+            end
+            
+            toggle.MouseButton1Click:Connect(toggleAction)
+            hitbox.MouseButton1Click:Connect(toggleAction)
             
             -- Mouse hover effect
             toggle.MouseEnter:Connect(function()
@@ -1872,6 +1929,15 @@ function SC:AddPage(title, icon)
             end)
             
             toggle.MouseLeave:Connect(function()
+                utility:Tween(toggle, {ImageColor3 = themes.DarkContrast}, 0.2)
+            end)
+            
+            -- Sync hover effects
+            hitbox.MouseEnter:Connect(function()
+                utility:Tween(toggle, {ImageColor3 = themes.Accent}, 0.2)
+            end)
+            
+            hitbox.MouseLeave:Connect(function()
                 utility:Tween(toggle, {ImageColor3 = themes.DarkContrast}, 0.2)
             end)
             
@@ -1980,6 +2046,23 @@ function SC:AddPage(title, icon)
                 SliceCenter = Rect.new(4, 4, 296, 296)
             })
             
+            -- Slider indicator (handle)
+            local sliderIndicator = utility:Create("Frame", {
+                Name = "sliderIndicator",
+                Parent = sliderBg,
+                BackgroundColor3 = themes.TextColor,
+                BorderSizePixel = 0,
+                Size = UDim2.new(0, 10, 0, 16),
+                Position = UDim2.new(0, 0, 0.5, -8), -- Center vertically
+                ZIndex = 5 -- Appear above other elements
+            })
+            
+            -- Make indicator rounded
+            utility:Create("UICorner", {
+                Parent = sliderIndicator,
+                CornerRadius = UDim.new(0, 3)
+            })
+            
             -- Update slider visuals
             local function updateSlider(newValue, visualOnly)
                 -- Apply step if needed
@@ -1995,6 +2078,7 @@ function SC:AddPage(title, icon)
                 
                 -- Update visuals
                 utility:Tween(sliderFill, {Size = UDim2.new(percent, 0, 1, 0)}, 0.1)
+                utility:Tween(sliderIndicator, {Position = UDim2.new(percent, -5, 0.5, -8)}, 0.1) -- Move indicator
                 valueLabel.Text = tostring(math.floor(value * 100) / 100) -- Round to 2 decimal places
                 
                 -- Call callback (unless only updating visual)
@@ -2065,21 +2149,37 @@ function SC:AddPage(title, icon)
             }
         end
         
-        -- Add section to page
-        if self.page and self.page.sections then
+        -- Add section to page with safety check
+        if self.page then
+            -- Ensure sections table exists
+            if not self.page.sections then
+                self.page.sections = {}
+            end
             table.insert(self.page.sections, section)
         else
-            warn("Error in AddSection: page or page.sections is nil. Section was not added to sections array.")
+            warn("Error in AddSection: page is nil. Creating sections array and adding section anyway.")
+            if not self.sections then
+                self.sections = {}
+            end
+            table.insert(self.sections, section)
         end
         
         return section
     end
     
-    -- Add page to library
-    if self.parent and self.parent.pages then
+    -- Add page to library with safety check
+    if self.parent then
+        -- Ensure pages table exists
+        if not self.parent.pages then
+            self.parent.pages = {}
+        end
         table.insert(self.parent.pages, page)
     else
-        warn("Error in AddPage: parent or parent.pages is nil. Page was not added to pages array.")
+        warn("Error in AddPage: parent is nil. Creating pages array and adding page anyway.")
+        if not self.pages then
+            self.pages = {}
+        end
+        table.insert(self.pages, page)
     end
     
     return page
