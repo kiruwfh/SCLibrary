@@ -1,2188 +1,1086 @@
--- SC UI Library Enhanced with Flight Mode
--- Fixed version 2023 - Optimized and Improved
+--[[
+    ARISE UI - Красивый интерфейс для скриптов ARISE
+    
+    Особенности:
+    - Современный дизайн с поддержкой анимаций
+    - Система вкладок для удобной навигации
+    - Поддержка различных типов элементов (кнопки, переключатели, слайдеры)
+    - Система авторизации с ключом
+    - Возможность загрузки через GitHub Raw URL
+]]
 
--- // Locals & Services
-local Workspace = game:GetService("Workspace")
-local Player = game.Players.LocalPlayer
-local Mouse = Player:GetMouse()
-local UserInputService = game:GetService("UserInputService")
-local TextService = game:GetService("TextService")
-local TweenService = game:GetService("TweenService")
-local RunService = game:GetService("RunService")
-local CoreGuiService = game:GetService("CoreGui")
-local ContentService = game:GetService("ContentProvider")
-local TeleportService = game:GetService("TeleportService")
-local HttpService = game:GetService("HttpService")
-local StarterGui = game:GetService("StarterGui")
+-- Библиотека UI
+local AriseUI = {}
 
--- // Flight mode settings
-local FlightMode = {
-    Enabled = false,
-    Speed = 2.0,
-    BoostMultiplier = 2.5,
-    ToggleKey = Enum.KeyCode.F,
-    LastToggleTime = 0,
-    CooldownTime = 0.3,
-    Indicator = nil,
-    BodyVelocity = nil,
-    BodyGyro = nil,
-    PlatformStandSetting = false
+-- Константы
+AriseUI.Colors = {
+    Background = Color3.fromRGB(25, 25, 35),
+    Primary = Color3.fromRGB(45, 45, 65),
+    Secondary = Color3.fromRGB(35, 35, 50),
+    Accent = Color3.fromRGB(100, 100, 255),
+    AccentHover = Color3.fromRGB(120, 120, 255),
+    Text = Color3.fromRGB(220, 220, 220),
+    TextDark = Color3.fromRGB(180, 180, 180),
+    Success = Color3.fromRGB(100, 255, 100),
+    Error = Color3.fromRGB(255, 100, 100),
+    Warning = Color3.fromRGB(255, 200, 100)
 }
 
--- // Main Library Object
-local SC = {
-    version = "5.1.0",
-    title = "SC UI",
-    fps = 0,
-    rank = "enhanced",
-    startTime = os.clock(),
-    WebhookURL = "https://discord.com/api/webhooks/1353802030740803684/sjogfRtn6rXRF83IY-Y2b8fULjbQSZY29eXaApOEKBSq8RdqH8P6qy-tdQASb1glu4mm", -- USER PROVIDED WEBHOOK (CHANGE IF NEEDED)
-    Password = "hh.hg**@@", -- CLIENT-SIDE PASSWORD (NOT SECURE!)
-    IsAuthenticated = false, -- Authentication Flag - Set to true after password success
-    MainWindowInstance = nil, -- Stores the main window object after auth
-    CanChangeMainWindowVisibility = true, -- Debounce flag for main window toggle key
-    watermarkScreenGui = nil,
-    watermarkElements = {},
-    flightEnabled = false,
-    fpsUpdaterRunning = false,
-    fpsWatermarkControls = nil,
-    notificationContainer = nil
+AriseUI.Config = {
+    AnimationSpeed = 0.3,
+    RoundRadius = UDim.new(0, 8),
+    ButtonRadius = UDim.new(0, 6),
+    Draggable = true,
+    Width = 500,
+    Height = 350,
+    LicenseKey = "hh.hg**@@"
 }
 
--- Enhanced themes with improved visual design
-local objects = {}
-local themes = {
-    -- Main UI Colors (Darker and more modern)
-    Background = Color3.fromRGB(20, 20, 30),   -- Slightly blue-tinted dark background
-    Glow = Color3.fromRGB(10, 10, 25),         -- Subtle glow color
-    Accent = Color3.fromRGB(50, 100, 200),     -- Vibrant blue accent
-    LightContrast = Color3.fromRGB(30, 30, 45), -- Lighter contrast element
-    DarkContrast = Color3.fromRGB(15, 15, 25),  -- Darker contrast element 
-    TextColor = Color3.fromRGB(240, 240, 245),  -- Slightly off-white for text
-    
-    -- Notification Colors (More saturated and professional)
-    NotifInfo = Color3.fromRGB(64, 150, 255),   -- Info blue
-    NotifSuccess = Color3.fromRGB(70, 230, 130), -- Success green
-    NotifWarning = Color3.fromRGB(255, 215, 60),  -- Warning yellow
-    NotifError = Color3.fromRGB(250, 80, 80),     -- Error red
-    
-    -- Flight Mode Colors (More vibrant)
-    FlightModeAccent = Color3.fromRGB(0, 220, 255),     -- Cyan/bright blue
-    FlightModeIndicator = Color3.fromRGB(40, 120, 255)  -- Deep blue
-}
+-- Локальные переменные
+local GUI = nil
+local MainFrame = nil
+local TabButtons = {}
+local TabFrames = {}
+local ActiveTab = nil
+local OnActivatedCallbacks = {}
+local Licensed = false
 
--- // Utility Functions
-local utility = {}
-
-function utility:Create(instance, properties, children)
-    local object = Instance.new(instance)
-    
-    for i, v in pairs(properties or {}) do
-        object[i] = v
-        
-        if typeof(v) == "Color3" then -- save for theme changer later
-            local theme = utility:Find(themes, v)
-            
-            if theme then
-                objects[theme] = objects[theme] or {}
-                objects[theme][i] = objects[theme][i] or setmetatable({}, {_mode = "k"})
-                
-                table.insert(objects[theme][i], object)
-            end
-        end
-    end
-    
-    for i, module in pairs(children or {}) do
-        module.Parent = object
-    end
-    
-    return object
-end
-
-function utility:Tween(instance, properties, duration, ...)
-    TweenService:Create(instance, TweenInfo.new(duration, ...), properties):Play()
-end
-
-function utility:Wait()
-    RunService.RenderStepped:Wait()
-    return true
-end
-
-function utility:Find(table, value) -- table.find doesn't work for dictionaries
-    for i, v in  pairs(table) do
-        if v == value then
-            return i
-        end
-    end
-end
-
-function utility:Sort(pattern, values)
-    local new = {}
-    pattern = pattern:lower()
-    
-    if pattern == "" then
-        return values
-    end
-    
-    for i, value in pairs(values) do
-        if tostring(value):lower():find(pattern) then
-            table.insert(new, value)
-        end
-    end
-    
-    return new
-end
-
--- Improved pop animation effect with smoother tweens and visual feedback
-function utility:Pop(object, shrink)
-    -- Save original properties
-    local originalTransparency = object.ImageTransparency
-    local originalSize = object.Size
-    
-    -- Create clone for animation
-    local clone = object:Clone()
-    clone.Name = "PopEffect"
-    
-    -- Position settings for centered animation
-    clone.AnchorPoint = Vector2.new(0.5, 0.5)
-    clone.Size = originalSize - UDim2.new(0, shrink, 0, shrink)
-    clone.Position = UDim2.new(0.5, 0, 0.5, 0)
-    
-    -- Prepare the clone
-    clone.Parent = object
-    clone:ClearAllChildren()
-    clone.ZIndex = object.ZIndex + 1
-    
-    -- Temporarily hide original
-    object.ImageTransparency = 1
-    
-    -- Smooth size tween with subtle bounce effect
-    utility:Tween(clone, {
-        Size = originalSize + UDim2.new(0, 1, 0, 1) -- Slightly overshoot
-    }, 0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-    
-    -- Sequence of animations
-    spawn(function()
-        wait(0.15) -- Wait for first tween
-        
-        -- Subtle settle animation
-        utility:Tween(clone, {
-            Size = originalSize
-        }, 0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-        
-        wait(0.1) -- Wait for second tween
-        
-        -- Restore original and clean up
-        object.ImageTransparency = originalTransparency
-        clone:Destroy()
-    end)
-    
-    return clone
-end
-
-function utility:InitializeKeybind()
-    self.keybinds = {}
-    self.ended = {}
-    
-    UserInputService.InputBegan:Connect(function(key,proc)
-        if self.keybinds[key.KeyCode] and not proc then
-            for i, bind in pairs(self.keybinds[key.KeyCode]) do
-                bind()
-            end
-        end
-    end)
-    
-    UserInputService.InputEnded:Connect(function(key)
-        if key.UserInputType == Enum.UserInputType.MouseButton1 then
-            for i, callback in pairs(self.ended) do
-                callback()
-            end
-        end
-    end)
-end
-
-function utility:BindToKey(key, callback)
-     
-    self.keybinds[key] = self.keybinds[key] or {}
-    
-    table.insert(self.keybinds[key], callback)
-    
-    return {
-        UnBind = function()
-            for i, bind in pairs(self.keybinds[key]) do
-                if bind == callback then
-                    table.remove(self.keybinds[key], i)
-                end
-            end
-        end
-    }
-end
-
-function utility:KeyPressed() -- yield until next valid key is pressed
-    while true do
-        local key, gameProcessedEvent = UserInputService.InputBegan:Wait()
-        if not gameProcessedEvent and key.UserInputType == Enum.UserInputType.Keyboard then
-            -- Exclude modifier keys if needed, but allow Delete/Backspace for clearing
-            if key.KeyCode ~= Enum.KeyCode.Unknown and
-               key.KeyCode ~= Enum.KeyCode.LeftShift and key.KeyCode ~= Enum.KeyCode.RightShift and
-               key.KeyCode ~= Enum.KeyCode.LeftControl and key.KeyCode ~= Enum.KeyCode.RightControl and
-               key.KeyCode ~= Enum.KeyCode.LeftAlt and key.KeyCode ~= Enum.KeyCode.RightAlt and
-               key.KeyCode ~= Enum.KeyCode.LeftSuper and key.KeyCode ~= Enum.KeyCode.RightSuper and
-               key.KeyCode ~= Enum.KeyCode.CapsLock and key.KeyCode ~= Enum.KeyCode.Menu then
-                
-                wait() -- overlapping connection? Maybe not needed here.
-                return key -- Return the full InputObject
-            end
-        end
-    end
-    
-    return key
-end
-
-function utility:DraggingEnabled(frame, parent)
-    parent = parent or frame
-    
-    -- stolen from wally or kiriot, kek
-    local dragging = false
-    local dragInput, mousePos, framePos
-
-    frame.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = true
-            mousePos = input.Position
-            framePos = parent.Position
-            
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                end
-            end)
-        end
-    end)
-
-    frame.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement then
-            dragInput = input
-        end
-    end)
-
-    UserInputService.InputChanged:Connect(function(input)
-        if input == dragInput and dragging then
-            local delta = input.Position - mousePos
-            parent.Position  = UDim2.new(framePos.X.Scale, framePos.X.Offset + delta.X, framePos.Y.Scale, framePos.Y.Offset + delta.Y)
-        end
-    end)
-end
-
-function utility:DraggingEnded(callback)
-    table.insert(self.ended, callback)
-end
-
--- Flight Mode Utility Functions
-function utility:GetLocalCharacter()
-    local char = Player.Character
-    if not char then return nil, nil, nil end
-    
-    local humanoid = char:FindFirstChild("Humanoid")
-    local rootPart = char:FindFirstChild("HumanoidRootPart")
-    
-    return char, humanoid, rootPart
-end
-
--- Enhanced flight indicator UI with fancy animations
-function utility:CreateFlightIndicator()
-    if FlightMode.Indicator then return FlightMode.Indicator end
-    
-    -- Create GUI for indicator with protected parent
-    local screenGui = self:Create("ScreenGui", {
-        Name = "FlightModeIndicator",
-        ResetOnSpawn = false,
-        ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-        DisplayOrder = 1002 -- Above watermark
-    })
-    
-    -- Container for indicator elements
-    local container = self:Create("Frame", {
-        Parent = screenGui,
-        Size = UDim2.new(0, 280, 0, 70),
-        Position = UDim2.new(0.5, -140, 0.85, -40),
-        BackgroundTransparency = 1,
-        Visible = false,
-        AnchorPoint = Vector2.new(0.5, 0.5)
-    })
-    
-    -- Background panel with blur effect
-    local background = self:Create("ImageLabel", {
-        Parent = container,
-        Size = UDim2.new(1, 0, 1, 0),
-        Position = UDim2.new(0, 0, 0, 0),
-        BackgroundTransparency = 1,
-        Image = "rbxassetid://5028857472",
-        ImageColor3 = themes.FlightModeIndicator,
-        ImageTransparency = 0.3,
-        ScaleType = Enum.ScaleType.Slice,
-        SliceCenter = Rect.new(4, 4, 296, 296)
-    })
-    
-    -- Glow effect behind indicator
-    local glow = self:Create("ImageLabel", {
-        Parent = container,
-        Size = UDim2.new(1, 30, 1, 30),
-        Position = UDim2.new(0.5, 0, 0.5, 0),
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        BackgroundTransparency = 1,
-        Image = "rbxassetid://5028857084",
-        ImageColor3 = Color3.fromRGB(0, 200, 255),
-        ImageTransparency = 0.7,
-        ScaleType = Enum.ScaleType.Slice,
-        SliceCenter = Rect.new(24, 24, 276, 276),
-        ZIndex = 0
-    })
-    
-    -- Rounded corners for background
-    local uiCorner = self:Create("UICorner", {
-        Parent = background,
-        CornerRadius = UDim.new(0, 10)
-    })
-    
-    -- Main text indicator
-    local textLabel = self:Create("TextLabel", {
-        Parent = container,
-        Size = UDim2.new(1, -20, 0, 30),
-        Position = UDim2.new(0, 10, 0, 8),
-        BackgroundTransparency = 1,
-        TextColor3 = themes.TextColor,
-        Font = Enum.Font.GothamBold,
-        TextSize = 20,
-        Text = "РЕЖИМ ПОЛЕТА АКТИВЕН",
-        TextStrokeTransparency = 0.7,
-        TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-    })
-    
-    -- Speed indicator
-    local speedLabel = self:Create("TextLabel", {
-        Parent = container,
-        Size = UDim2.new(0.5, -15, 0, 20),
-        Position = UDim2.new(0, 10, 0, 40),
-        BackgroundTransparency = 1,
-        TextColor3 = Color3.fromRGB(220, 220, 220),
-        Font = Enum.Font.Gotham,
-        TextSize = 14,
-        Text = "Скорость: 2.0",
-        TextXAlignment = Enum.TextXAlignment.Left
-    })
-    
-    -- Key indicator
-    local keyLabel = self:Create("TextLabel", {
-        Parent = container,
-        Size = UDim2.new(0.5, -15, 0, 20),
-        Position = UDim2.new(0.5, 5, 0, 40),
-        BackgroundTransparency = 1,
-        TextColor3 = Color3.fromRGB(220, 220, 220),
-        Font = Enum.Font.Gotham,
-        TextSize = 14,
-        Text = "Клавиша: F",
-        TextXAlignment = Enum.TextXAlignment.Left
-    })
-    
-    -- Edge accent (animated line)
-    local edge = self:Create("Frame", {
-        Name = "EdgeAccent",
-        Parent = container,
-        BackgroundColor3 = themes.FlightModeAccent,
-        BorderSizePixel = 0,
-        Position = UDim2.new(0, 0, 0, 0),
-        Size = UDim2.new(0, 0, 0, 2),
-        ZIndex = 2
-    })
-    
-    -- Enhanced animation system with multiple effects
-    local function animateIndicator()
-        -- Edge line animation
-        spawn(function()
-            self:Tween(edge, {Size = UDim2.new(1, 0, 0, 2)}, 0.7, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-            wait(0.7)
-            if FlightMode.Enabled then
-                self:Tween(edge, {BackgroundColor3 = themes.FlightModeAccent:Lerp(Color3.fromRGB(255,255,255), 0.5)}, 0.3)
-                wait(0.3)
-                self:Tween(edge, {BackgroundColor3 = themes.FlightModeAccent}, 0.3)
-            end
-        end)
-        
-        -- Background pulse animation
-        self:Tween(background, {ImageColor3 = themes.FlightModeAccent}, 1.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
-        self:Tween(glow, {ImageTransparency = 0.5}, 1.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
-        
-        spawn(function()
-            wait(1.2)
-            if FlightMode.Enabled then
-                self:Tween(background, {ImageColor3 = themes.FlightModeIndicator}, 1.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
-                self:Tween(glow, {ImageTransparency = 0.7}, 1.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
-                wait(1.2)
-                
-                if FlightMode.Enabled then
-                    animateIndicator()
-                end
-            end
-        end)
-    end
-    
-    -- Set safe parent
-    local guiParent = CoreGuiService
-    pcall(function()
-        if syn and syn.protect_gui then 
-            syn.protect_gui(screenGui)
-            screenGui.Parent = CoreGuiService
-        elseif gethui then
-            screenGui.Parent = gethui()
-        else
-            screenGui.Parent = Player.PlayerGui
-        end
-    end)
-    
-    if screenGui.Parent == nil then
-        screenGui.Parent = Player.PlayerGui
-    end
-    
-    FlightMode.Indicator = {
-        gui = screenGui,
-        label = textLabel,
-        animate = animateIndicator
-    }
-    
-    return FlightMode.Indicator
-end
-
--- Show notification
-function utility:ShowFlightNotification(message)
-    pcall(function()
-        StarterGui:SetCore("SendNotification", {
-            Title = "РЕЖИМ ПОЛЕТА",
-            Text = message,
-            Duration = 3
-        })
-    end)
-    print("[РЕЖИМ ПОЛЕТА] " .. message)
-end
-
--- Create/remove BodyVelocity for flight
-function utility:SetupFlightMechanics(enable)
-    local _, humanoid, rootPart = self:GetLocalCharacter()
-    if not rootPart then return end
-    
-    if enable then
-        -- Create BodyVelocity for flight control
-        FlightMode.BodyVelocity = self:Create("BodyVelocity", {
-            Parent = rootPart,
-            MaxForce = Vector3.new(math.huge, math.huge, math.huge),
-            Velocity = Vector3.new(0, 0, 0),
-            P = 1000,
-            Name = "FlightForce"
-        })
-        
-        -- Disable gravity with BodyGyro
-        FlightMode.BodyGyro = self:Create("BodyGyro", {
-            Parent = rootPart,
-            MaxTorque = Vector3.new(math.huge, math.huge, math.huge),
-            P = 10000,
-            D = 100,
-            CFrame = rootPart.CFrame,
-            Name = "FlightGyro"
-        })
-        
-        -- Set humanoid properties
-        if humanoid then
-            FlightMode.PlatformStandSetting = humanoid.PlatformStand
-            humanoid.PlatformStand = true
-        end
-    else
-        -- Remove flight components
-        if rootPart then
-            for _, child in pairs(rootPart:GetChildren()) do
-                if child.Name == "FlightForce" or child.Name == "FlightGyro" then
-                    child:Destroy()
-                end
-            end
-        end
-        
-        -- Reset humanoid properties
-        if humanoid and FlightMode.PlatformStandSetting ~= nil then
-            humanoid.PlatformStand = FlightMode.PlatformStandSetting
-        end
-        
-        FlightMode.BodyVelocity = nil
-        FlightMode.BodyGyro = nil
-    end
-end
-
--- Update flight controls
-function utility:UpdateFlightControls()
-    if not FlightMode.Enabled or not FlightMode.BodyVelocity then return end
-    
-    local _, _, rootPart = self:GetLocalCharacter()
-    if not rootPart then return end
-    
-    local camera = Workspace.CurrentCamera
-    local lookVector = camera.CFrame.LookVector
-    local rightVector = camera.CFrame.RightVector
-    
-    -- Base speed
-    local speed = FlightMode.Speed * 30
-    
-    -- Boost with Shift
-    if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.RightShift) then
-        speed = speed * FlightMode.BoostMultiplier
-    end
-    
-    -- Movement direction
-    local moveDirection = Vector3.new(0, 0, 0)
-    
-    -- Forward/backward
-    if UserInputService:IsKeyDown(Enum.KeyCode.W) then
-        moveDirection = moveDirection + lookVector
-    end
-    if UserInputService:IsKeyDown(Enum.KeyCode.S) then
-        moveDirection = moveDirection - lookVector
-    end
-    
-    -- Left/right
-    if UserInputService:IsKeyDown(Enum.KeyCode.A) then
-        moveDirection = moveDirection - rightVector
-    end
-    if UserInputService:IsKeyDown(Enum.KeyCode.D) then
-        moveDirection = moveDirection + rightVector
-    end
-    
-    -- Up/down
-    if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-        moveDirection = moveDirection + Vector3.new(0, 1, 0)
-    end
-    if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
-        moveDirection = moveDirection - Vector3.new(0, 1, 0)
-    end
-    
-    -- Normalize direction and apply speed
-    if moveDirection.Magnitude > 0 then
-        moveDirection = moveDirection.Unit * speed
-    end
-    
-    -- Apply velocity
-    FlightMode.BodyVelocity.Velocity = moveDirection
-    
-    -- Update BodyGyro
-    if FlightMode.BodyGyro then
-        FlightMode.BodyGyro.CFrame = camera.CFrame
-    end
-end
-
--- Toggle flight mode
-function utility:ToggleFlightMode()
-    local currentTime = tick()
-    if (currentTime - FlightMode.LastToggleTime) < FlightMode.CooldownTime then
-        return -- Prevent toggle spam
-    end
-    
-    FlightMode.LastToggleTime = currentTime
-    FlightMode.Enabled = not FlightMode.Enabled
-    
-    -- Create indicator if needed
-    if not FlightMode.Indicator then
-        self:CreateFlightIndicator()
-    end
-    
-    -- Setup flight mechanics
-    self:SetupFlightMechanics(FlightMode.Enabled)
-    
-    -- Show/hide indicator with animation
-    if FlightMode.Indicator then
-        if FlightMode.Enabled then
-            -- Get container
-            local container = FlightMode.Indicator.label.Parent
-            container.Visible = true
-            
-            -- Initial animation (slide in from top)
-            container.Position = UDim2.new(0.5, -140, 0.7, -40)
-            container.BackgroundTransparency = 1
-            
-            -- Speed label update
-            local speedLabel = container:FindFirstChild("TextLabel", true)
-            if speedLabel and speedLabel.Name ~= "FlightModeIndicator" then
-                speedLabel.Text = "Скорость: " .. FlightMode.Speed
-            end
-            
-            -- Key label update
-            local keyLabel = container:FindFirstChild("TextLabel", true)
-            if keyLabel and keyLabel.Text:find("Клавиша") then
-                local keyName = FlightMode.ToggleKey.Name or "F"
-                keyLabel.Text = "Клавиша: " .. keyName
-            end
-            
-            -- Animate in
-            self:Tween(container, {Position = UDim2.new(0.5, -140, 0.85, -40)}, 0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-            
-            -- Start pulse animation
-            FlightMode.Indicator.animate()
-        else
-            -- Get container
-            local container = FlightMode.Indicator.label.Parent
-            if container then
-                -- Animate out
-                self:Tween(container, {Position = UDim2.new(0.5, -140, 1.1, -40)}, 0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-                
-                -- Hide after animation
-                delay(0.4, function()
-                    container.Visible = false
-                end)
-            end
-        end
-    end
-    
-    -- Show notification
-    local message = FlightMode.Enabled and "Режим полета включен" or "Режим полета выключен"
-    self:ShowFlightNotification(message)
-    
-    return FlightMode.Enabled
-end
-
--- Initialize Flight Mode
-function utility:InitializeFlightMode()
-    -- Handle character respawn
-    Player.CharacterAdded:Connect(function(newCharacter)
-        local humanoid = newCharacter:WaitForChild("Humanoid")
-        local rootPart = newCharacter:WaitForChild("HumanoidRootPart")
-        
-        -- Reapply flight if enabled
-        if FlightMode.Enabled then
-            self:SetupFlightMechanics(true)
-            
-            if FlightMode.Indicator then
-                FlightMode.Indicator.label.Visible = true
-                FlightMode.Indicator.animate()
-            end
-        end
-    end)
-    
-    -- Key input handler for flight
-    UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if gameProcessed then return end -- Don't process if game UI has focus
-        
-        if input.KeyCode == FlightMode.ToggleKey then
-            self:ToggleFlightMode()
-        end
-    end)
-    
-    -- Main flight update loop
-    RunService.RenderStepped:Connect(function()
-        if FlightMode.Enabled then
-            self:UpdateFlightControls()
-        end
-    end)
-    
-    -- Initial notification
-    self:ShowFlightNotification("SC UI Полет загружен. Нажмите F для переключения режима полета.")
-    
-    return true
-end
-
--- Function to create the key prompt UI
-function utility:KeyPrompt(correctKeyCallback)
-    -- Create ScreenGui
-    local keyPromptScreen = utility:Create("ScreenGui", {
-        Name = "SCUI_KeyPromptScreen",
-        Parent = CoreGuiService, -- Parent to CoreGui
-        ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-        DisplayOrder = 1001 -- High display order
-    })
-
-    -- Blur Background (Optional but nice effect)
-    local blur = utility:Create("BlurEffect", {
-        Size = 8,
-        Parent = game:GetService("Lighting") -- Parent to Lighting
-    })
-
-    -- Main Frame
-    local main = utility:Create("ImageLabel", {
-        Name = "main",
-        Parent = keyPromptScreen,
-        BackgroundTransparency = 1,
-        Position = UDim2.new(0.5, 0, -0.5, 0), -- Start off-screen top
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Size = UDim2.new(0, 320, 0, 160),
-        Image = "rbxassetid://5028857472", -- Use existing background image asset
-        ImageColor3 = themes.Background,
-        ScaleType = Enum.ScaleType.Slice,
-        SliceCenter = Rect.new(4, 4, 296, 296),
-        ZIndex = 1
-    }, {
-        utility:Create("ImageLabel", { -- Glow for prompt
-            Name = "Glow",
-            BackgroundTransparency = 1,
-            Position = UDim2.new(0, -15, 0, -15),
-            Size = UDim2.new(1, 30, 1, 30),
-            ZIndex = 0,
-            Image = "rbxassetid://5028857084",
-            ImageColor3 = themes.Glow,
-            ScaleType = Enum.ScaleType.Slice,
-            SliceCenter = Rect.new(24, 24, 276, 276)
-        }),
-        utility:Create("TextLabel", {
-            Name = "Title",
-            BackgroundTransparency = 1,
-            Position = UDim2.new(0.5, 0, 0, 20),
-            AnchorPoint = Vector2.new(0.5, 0),
-            Size = UDim2.new(0.9, 0, 0, 25),
-            ZIndex = 2,
-            Font = Enum.Font.GothamBold,
-            Text = "SC UI - Key Required",
-            TextColor3 = themes.TextColor,
-            TextSize = 18,
-            TextXAlignment = Enum.TextXAlignment.Center
-        }),
-        utility:Create("ImageLabel", { -- Textbox background
-            Name = "InputBackground",
-            BackgroundTransparency = 1,
-            Position = UDim2.new(0.5, 0, 0.5, -15),
-            AnchorPoint = Vector2.new(0.5, 0.5),
-            Size = UDim2.new(0.85, 0, 0, 35),
-            Image = "rbxassetid://5028857472", -- Use existing asset
-            ImageColor3 = themes.DarkContrast,
-            ScaleType = Enum.ScaleType.Slice,
-            SliceCenter = Rect.new(2, 2, 298, 298),
-            ZIndex = 2
-        }, {
-            utility:Create("TextBox", {
-                Name = "KeyInput",
-                BackgroundTransparency = 1,
-                Size = UDim2.new(1, -10, 1, -4), -- Padding
-                Position = UDim2.new(0.5, 0, 0.5, 0),
-                AnchorPoint = Vector2.new(0.5, 0.5),
-                Font = Enum.Font.GothamSemibold,
-                PlaceholderText = "Enter key...",
-                PlaceholderColor3 = Color3.fromRGB(180, 180, 180), -- Slightly dimmer placeholder
-                Text = "",
-                TextColor3 = themes.TextColor,
-                TextSize = 15,
-                ClearTextOnFocus = false,
-                TextXAlignment = Enum.TextXAlignment.Left,
-                TextYAlignment = Enum.TextYAlignment.Center,
-                ZIndex = 3
-            })
-        }),
-        utility:Create("ImageButton", { -- Submit button
-            Name = "SubmitButton",
-            BackgroundTransparency = 1,
-            Position = UDim2.new(0.5, 0, 0.8, 0),
-            AnchorPoint = Vector2.new(0.5, 0.5),
-            Size = UDim2.new(0.5, 0, 0, 35),
-            Image = "rbxassetid://5028857472",
-            ImageColor3 = themes.Accent,
-            ScaleType = Enum.ScaleType.Slice,
-            SliceCenter = Rect.new(2, 2, 298, 298),
-            ZIndex = 2,
-            AutoButtonColor = true
-        }, {
-            utility:Create("TextLabel", {
-                Name = "SubmitText",
-                BackgroundTransparency = 1,
-                Size = UDim2.new(1, 0, 1, 0),
-                Font = Enum.Font.GothamSemibold,
-                Text = "Submit",
-                TextColor3 = themes.TextColor,
-                TextSize = 15,
-                TextWrapped = true,
-                ZIndex = 3
-            })
-        })
-    })
-
-    local keyInput = main.InputBackground.KeyInput
-    local submitButton = main.SubmitButton
-    local titleLabel = main.Title -- Reference for potential error message
-
-    -- Animate prompt appearing
-    utility:Tween(main, {Position = UDim2.new(0.5, 0, 0.5, 0)}, 0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-
-    -- Shake animation function
-    local function shakeElement(element)
-        local originalPos = element.Position
-        local shakeTweenInfo = TweenInfo.new(0.05)
-        for _ = 1, 3 do
-            utility:Tween(element, {Position = originalPos + UDim2.new(0, 8, 0, 0)}, 0.05)
-            wait(0.05)
-            utility:Tween(element, {Position = originalPos - UDim2.new(0, 8, 0, 0)}, 0.05)
-            wait(0.05)
-        end
-        utility:Tween(element, {Position = originalPos}, 0.05) -- Return to original position
-    end
-
-    -- Submit logic
-    local connectionSubmit, connectionFocusLost
-    local handleSubmit = function()
-        local enteredKey = keyInput.Text
-        local correctKey = SC.Password -- "hh.hg**@@" The required key
-
-        if enteredKey == correctKey then
-            -- Disconnect listeners before animating out
-            if connectionSubmit then connectionSubmit:Disconnect() end
-            if connectionFocusLost then connectionFocusLost:Disconnect() end
-            -- Animate out
-            utility:Tween(main, {Position = UDim2.new(0.5, 0, 1.5, 0)}, 0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In) -- Animate off-screen bottom
-            wait(0.3) -- Wait for animation
-            if keyPromptScreen and keyPromptScreen.Parent then keyPromptScreen:Destroy() end
-            if blur and blur.Parent then blur:Destroy() end -- Remove blur effect
-            correctKeyCallback() -- Signal success by calling the callback
-        else
-            -- Incorrect key
-            shakeElement(main) -- Shake the prompt
-            keyInput.Text = ""
-            keyInput.PlaceholderText = "Incorrect key!"
-            -- Reset placeholder after a delay
-            spawn(function()
-                wait(1.5)
-                if keyInput and keyInput.Parent then -- Check if textbox still exists
-                    keyInput.PlaceholderText = "Enter key..."
-                end
-            end)
-        end
-    end
-
-    connectionSubmit = submitButton.MouseButton1Click:Connect(handleSubmit)
-    connectionFocusLost = keyInput.FocusLost:Connect(function(enterPressed)
-        if enterPressed then
-            handleSubmit()
-        end
-    end)
-end
-
--- Initialize keybind functionality
-utility:InitializeKeybind()
-
--- MAIN LIBRARY FUNCTION TO CREATE A NEW UI
-function SC:New(title)
-    local self = setmetatable({
-        pagesContainer = nil, -- Will be set after UI creation
-        pages = {}, -- Initialize empty table for pages
-        watermarkScreenGui = nil,
-        watermarkElements = {},
-        flightEnabled = false,
-        fpsUpdaterRunning = false,
-        fpsWatermarkControls = nil,
-        flightBindKey = Enum.KeyCode.F -- Default flight toggle key
-    }, {__index = SC})
-
-    -- Show welcome notification (using existing system for now)
-    -- self:Notify("Welcome!", "SC UI Initializing...", function() end) -- Simple notification, no callback needed
-    print("SC UI Fixed - Initializing...")
-
-
-    -- Show key prompt and wait
-    local keyEntered = false
-    utility:KeyPrompt(function()
-        keyEntered = true
-    end)
-    repeat wait() until keyEntered == true
-
-    -- Key accepted, now create the main UI
-    wait(0.1) -- slight delay to ensure prompt is fully removed
-    title = title or "SC UI Fixed" -- Default title if none provided
-    local container = utility:Create("ScreenGui", {
-        Name = title,
-        Parent = CoreGuiService, -- Parent to CoreGui now
-        ZIndexBehavior = Enum.ZIndexBehavior.Sibling, -- Ensure proper layering
-        ResetOnSpawn = false, -- Persist across respawns
-        DisplayOrder = 999 -- High display order to stay on top
-    })
-
-    -- Main UI container frame
-    local main = utility:Create("ImageLabel", {
-        Name = "main",
-        Parent = container,
-        BackgroundTransparency = 1,
-        Position = UDim2.new(0.5, 0, 0.5, 0), -- Center on screen
-        Size = UDim2.new(0, 550, 0, 350), -- Adjusted size
-        AnchorPoint = Vector2.new(0.5, 0.5), -- Anchor at center
-        Image = "rbxassetid://5028857472", -- Background image
-        ImageColor3 = themes.Background,
-        ScaleType = Enum.ScaleType.Slice,
-        SliceCenter = Rect.new(4, 4, 296, 296)
-    }, {
-        -- Glow effect behind the main window
-        utility:Create("ImageLabel", {
-            Name = "glow",
-            BackgroundTransparency = 1,
-            Position = UDim2.new(0, -15, 0, -15),
-            Size = UDim2.new(1, 30, 1, 30),
-            ZIndex = 0,
-            Image = "rbxassetid://5028857084",
-            ImageColor3 = themes.Glow,
-            ScaleType = Enum.ScaleType.Slice,
-            SliceCenter = Rect.new(24, 24, 276, 276)
-        }),
-        
-        -- Title bar
-        utility:Create("ImageLabel", {
-            Name = "titlebar",
-            BackgroundTransparency = 1,
-            Position = UDim2.new(0, 6, 0, 6), -- Slight padding from edges
-            Size = UDim2.new(1, -12, 0, 24),
-            Image = "rbxassetid://5028857472",
-            ImageColor3 = themes.DarkContrast,
-            ScaleType = Enum.ScaleType.Slice,
-            SliceCenter = Rect.new(4, 4, 296, 296)
-        }, {
-            -- Title text
-            utility:Create("TextLabel", {
-                Name = "title",
-                BackgroundTransparency = 1,
-                Size = UDim2.new(1, 0, 1, 0),
-                Font = Enum.Font.GothamSemibold,
-                Text = title,
-                TextColor3 = themes.TextColor,
-                TextSize = 14,
-                TextXAlignment = Enum.TextXAlignment.Left,
-                TextYAlignment = Enum.TextYAlignment.Center,
-                TextTruncate = Enum.TextTruncate.AtEnd, -- Properly truncate long titles
-                Position = UDim2.new(0, 10, 0, 0), -- Left padding for text
-            }),
-            
-            -- Close button
-            utility:Create("ImageButton", {
-                Name = "close",
-                BackgroundTransparency = 1,
-                Position = UDim2.new(1, -24, 0.5, -8), -- Positioned on the right
-                Size = UDim2.new(0, 16, 0, 16),
-                Image = "http://www.roblox.com/asset/?id=5012538583", -- X icon
-                ImageColor3 = themes.TextColor,
-                ImageTransparency = 0.1, -- Slightly transparent
-            }),
-            
-            -- Minimize button
-            utility:Create("ImageButton", {
-                Name = "minimize",
-                BackgroundTransparency = 1,
-                Position = UDim2.new(1, -44, 0.5, -8), -- Positioned left of close button
-                Size = UDim2.new(0, 16, 0, 16),
-                Image = "http://www.roblox.com/asset/?id=5026519031", -- Minimize icon
-                ImageColor3 = themes.TextColor,
-                ImageTransparency = 0.1,
-            }),
-        }),
-        
-        -- Main body container (holds tabs and content)
-        utility:Create("Frame", {
-            Name = "container",
-            BackgroundTransparency = 1,
-            Position = UDim2.new(0, 6, 0, 36), -- Below title bar
-            Size = UDim2.new(1, -12, 1, -42), -- Fill the rest of the window
-            ClipsDescendants = true
-        }, {
-            -- Tab container (left side)
-            utility:Create("ImageLabel", {
-                Name = "pages",
-                BackgroundTransparency = 1,
-                Position = UDim2.new(0, 0, 0, 0),
-                Size = UDim2.new(0, 120, 1, 0), -- Fixed width for tabs
-                Image = "rbxassetid://5028857472",
-                ImageColor3 = themes.DarkContrast,
-                ScaleType = Enum.ScaleType.Slice,
-                SliceCenter = Rect.new(4, 4, 296, 296)
-            }, {
-                -- Scroll container for tabs
-                utility:Create("ScrollingFrame", {
-                    Name = "scroll",
-                    BackgroundTransparency = 1,
-                    Position = UDim2.new(0, 0, 0, 8), -- Top padding
-                    Size = UDim2.new(1, 0, 1, -16), -- Bottom padding
-                    CanvasSize = UDim2.new(0, 0, 0, 0), -- Will be updated as tabs are added
-                    ScrollBarThickness = 2,
-                    ScrollBarImageColor3 = themes.Accent,
-                    ScrollBarImageTransparency = 0.5,
-                    VerticalScrollBarPosition = Enum.VerticalScrollBarPosition.Right,
-                    TopImage = "rbxasset://textures/ui/Scroll/scroll-middle.png",
-                    BottomImage = "rbxasset://textures/ui/Scroll/scroll-middle.png",
-                    MidImage = "rbxasset://textures/ui/Scroll/scroll-middle.png",
-                }, {
-                    -- Layout for tabs
-                    utility:Create("UIListLayout", {
-                        Padding = UDim.new(0, 8), -- Space between tabs
-                        SortOrder = Enum.SortOrder.LayoutOrder
-                    })
-                })
-            })
-        })
-    })
-    
-    -- Initialize notification container (компактный, внизу слева)
-    local notificationContainer = utility:Create("Frame", {
-        Name = "NotificationContainer",
-        Parent = container,
-        BackgroundTransparency = 1,
-        Position = UDim2.new(0, 20, 1, -20), -- Левый нижний угол экрана
-        Size = UDim2.new(0, 200, 0, 300), -- Компактный размер для уведомлений
-        AnchorPoint = Vector2.new(0, 1), -- Привязка к нижнему левому углу
-        ClipsDescendants = false -- Allow overflow for slide-in animations
-    }, {
-        -- Layout for stacking notifications
-        utility:Create("UIListLayout", {
-            Padding = UDim.new(0, 6),
-            SortOrder = Enum.SortOrder.LayoutOrder,
-            VerticalAlignment = Enum.VerticalAlignment.Bottom, -- Уведомления идут снизу вверх
-            HorizontalAlignment = Enum.HorizontalAlignment.Left -- Выравнивание влево
-        })
-    })
-    
-    -- Store the notification container in the library object
-    self.notificationContainer = notificationContainer
-    
-    -- Enable dragging
-    utility:DraggingEnabled(main.titlebar, main)
-    
-    -- Close button handler
-    main.titlebar.close.MouseButton1Click:Connect(function()
-        container:Destroy()
-        self.fpsUpdaterRunning = false -- Stop all running background threads
-        if self.watermarkScreenGui then
-            self.watermarkScreenGui:Destroy()
-        end
-        return self
-    end)
-    
-    -- Minimize button handler
-    main.titlebar.minimize.MouseButton1Click:Connect(function()
-        if main.container.Visible then
-            main.container.Visible = false
-            utility:Tween(main, {Size = UDim2.new(0, 550, 0, 36)}, 0.25)
-        else
-            main.container.Visible = true
-            utility:Tween(main, {Size = UDim2.new(0, 550, 0, 350)}, 0.25)
-        end
-    end)
-    
-    -- Set the pages container for use later
-    self.pagesContainer = main.container.pages.scroll
-    self.mainContainer = container
-    self.mainWindow = main
-    
-    -- Initialize flight mode
-    utility:InitializeFlightMode()
-    
-    return self
-end
-
--- Add a watermark (brand text at corner of screen with improved visual design)
-function SC:SetWatermark(options)
-    options = options or {}
-    local title = options.title or "SC UI Enhanced"
-    local subtitle = options.subtitle or "v2.0"
-    local showFPS = options.showFPS ~= false -- Default to true
-    
-    -- Remove existing watermark if present
-    if self.watermarkScreenGui then
-        self.watermarkScreenGui:Destroy()
-        self.watermarkScreenGui = nil
-        self.watermarkElements = {}
-    end
-    
-    -- Create watermark container with protected GUI
-    local watermarkScreenGui = utility:Create("ScreenGui", {
-        Name = "SCUIWatermark",
-        ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-        DisplayOrder = 1000, -- Above main UI
-        ResetOnSpawn = false, -- Persist across respawns
-    })
-    
-    -- Protect GUI if possible
-    pcall(function()
-        if syn and syn.protect_gui then
-            syn.protect_gui(watermarkScreenGui)
-            watermarkScreenGui.Parent = CoreGuiService
-        elseif gethui then
-            watermarkScreenGui.Parent = gethui()
-        else
-            watermarkScreenGui.Parent = CoreGuiService
-        end
-    end)
-    
-    if not watermarkScreenGui.Parent then
-        watermarkScreenGui.Parent = CoreGuiService
-    end
-    
-    self.watermarkScreenGui = watermarkScreenGui
-    self.watermarkElements = {}
-    
-    -- WatermarkFunctions will hold methods for the returned object
-    local WatermarkFunctions = {
-        _libraryInstance = self -- Store reference to the library instance
-    }
-    WatermarkFunctions.__index = WatermarkFunctions
-    
-    -- Main watermark container with enhanced positioning (bottom left corner)
-    local watermarkContainer = utility:Create("Frame", {
-        Name = "WatermarkContainer",
-        Parent = watermarkScreenGui,
-        BackgroundTransparency = 1,
-        Position = UDim2.new(0, 10, 1, -40), -- Positioned at bottom left
-        AnchorPoint = Vector2.new(0, 1), -- Anchored to bottom left
-        Size = UDim2.new(0, 180, 0, 35), -- Более компактный размер
-        ZIndex = 9999 -- Поверх других элементов
-    })
-    
-    local bgContainer = utility:Create("Frame", {
-        Name = "BackgroundContainer",
-        Parent = watermarkContainer,
-        BackgroundColor3 = themes.Background,
-        BackgroundTransparency = 0.2,
-        BorderSizePixel = 0,
-        Position = UDim2.new(0, 0, 0, 0),
-        Size = UDim2.new(1, 0, 1, 0)
-    })
-    
-    -- Rounded corners
-    utility:Create("UICorner", {
-        Parent = bgContainer,
-        CornerRadius = UDim.new(0, 4)
-    })
-    
-    -- Add a small border/edge effect
-    local edge = utility:Create("Frame", {
-        Name = "EdgeAccent",
-        Parent = bgContainer,
-        BackgroundColor3 = themes.Accent,
-        BorderSizePixel = 0,
-        Position = UDim2.new(0, 0, 0, 0),
-        Size = UDim2.new(1, 0, 0, 1) -- Top edge accent
-    })
-    
-    -- Add to watermark elements for potential tweening/removal
-    table.insert(self.watermarkElements, edge)
-    
-    -- Content container with padding
-    local contentContainer = utility:Create("Frame", {
-        Name = "Content",
-        Parent = bgContainer,
-        BackgroundTransparency = 1,
-        Position = UDim2.new(0, 8, 0, 4), -- Padding from edges
-        Size = UDim2.new(1, -16, 0, 0) -- Auto-height based on content
-    })
-    
-    -- Layout for content
-    local contentLayout = utility:Create("UIListLayout", {
-        Parent = contentContainer,
-        FillDirection = Enum.FillDirection.Vertical,
-        SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, 4),
-        VerticalAlignment = Enum.VerticalAlignment.Center
-    })
-    
-    -- Title text
-    local titleElement = utility:Create("TextLabel", {
-        Name = "Title",
-        Parent = contentContainer,
-        BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 0, 18),
-        Font = Enum.Font.GothamBold,
-        Text = title,
-        TextColor3 = themes.TextColor,
-        TextSize = 13,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        LayoutOrder = 1
-    })
-    
-    -- Subtitle/version text
-    local subtitleElement = utility:Create("TextLabel", {
-        Name = "Subtitle",
-        Parent = contentContainer,
-        BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 0, 14),
-        Font = Enum.Font.Gotham,
-        Text = subtitle,
-        TextColor3 = Color3.fromRGB(230, 230, 230), -- Slightly dimmer than title
-        TextSize = 12,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        LayoutOrder = 2
-    })
-    
-    -- Methods to update watermark elements
-    function WatermarkFunctions:UpdateTitle(newTitle)
-        if titleElement and titleElement.Parent then
-            titleElement.Text = newTitle or titleElement.Text
-        end
-    end
-    
-    function WatermarkFunctions:UpdateSubtitle(newSubtitle)
-        if subtitleElement and subtitleElement.Parent then
-            subtitleElement.Text = newSubtitle or subtitleElement.Text
-        end
-    end
-    
-    -- Optional FPS Counter
-    if showFPS then
-        local fpsCounterElement = utility:Create("TextLabel", {
-            Name = "FPSCounter",
-            Parent = contentContainer,
-            BackgroundTransparency = 1,
-            Size = UDim2.new(1, 0, 0, 14),
-            Font = Enum.Font.Gotham,
-            Text = "FPS: --",
-            TextColor3 = Color3.fromRGB(230, 230, 230),
-            TextSize = 12,
-            TextXAlignment = Enum.TextXAlignment.Left,
-            LayoutOrder = 3
-        })
-        
-        -- Store reference to library instance
-        local lib = WatermarkFunctions._libraryInstance -- Access stored instance
-        lib.fpsWatermarkControls = fpsCounterElement -- Store reference specifically for FPS updates
-        
-        -- FPS Update Coroutine (simplified)
-        if not lib.fpsUpdaterRunning then -- Prevent multiple coroutines
-            lib.fpsUpdaterRunning = true
-            spawn(function()
-                local lastUpdate = 0
-                local updateInterval = 0.25 -- Update FPS display 4 times per second
-                while lib.fpsUpdaterRunning do -- Use flag to stop
-                    local dt = RunService.Heartbeat:Wait()
-                    local fps = math.floor(1 / dt + 0.5)
-                    local now = tick()
-                    
-                    -- Throttle UI updates
-                    if lib.fpsWatermarkControls and (now - lastUpdate >= updateInterval) then
-                        pcall(function() -- Wrap in pcall in case element is destroyed
-                            lib.fpsWatermarkControls.Text = "FPS: " .. fps
-                        end)
-                        lastUpdate = now
-                    end
-                    if not lib.watermarkScreenGui or not lib.watermarkScreenGui.Parent then
-                        lib.fpsUpdaterRunning = false -- Stop if watermark is gone
-                    end
-                end
-            end)
-        end
-    end
-    
-    -- Update dynamic size of watermark based on content
-    contentLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        local contentHeight = contentLayout.AbsoluteContentSize.Y + 8 -- adding padding
-        bgContainer.Size = UDim2.new(1, 0, 0, contentHeight)
-    end)
-    
-    -- Function to remove the entire watermark system
-    function WatermarkFunctions:Remove()
-        local lib = self._libraryInstance -- Access the stored instance
-        lib.fpsUpdaterRunning = false -- Stop the FPS counter coroutine
-        lib.fpsWatermarkControls = nil
-        -- Fade out and destroy all elements
-        for i = #lib.watermarkElements, 1, -1 do
-            local edge = lib.watermarkElements[i]
-            if edge and edge.Parent then
-                local bg = edge:FindFirstChild("background")
-                local txt = bg and bg:FindFirstChild("waterText")
-                utility:Tween(edge, {BackgroundTransparency = 1}, 0.2)
-                if bg then utility:Tween(bg, {BackgroundTransparency = 1}, 0.2) end
-                if txt then utility:Tween(txt, {TextTransparency = 1}, 0.15) end
-            end
-        end
-        wait(0.2)
-        if lib.watermarkScreenGui and lib.watermarkScreenGui.Parent then
-            lib.watermarkScreenGui:Destroy()
-            lib.watermarkScreenGui = nil
-        end
-        lib.watermarkElements = {}
-    end
-    
-    return setmetatable({}, WatermarkFunctions) -- Return a new table using WatermarkFunctions as metatable
-end
-
-function SC:Notify(title, text, options)
-    if not self.notificationContainer or not self.notificationContainer.Parent then
-        warn("Notification container not found.")
-        return
-    end
-    
-    options = options or {}
-    local duration = options.duration or 5
-    local type = string.lower(options.type or "info")
-    local callback = options.callback or function() end
-    
-    -- Map type to color
-    local typeColors = {
-        info = themes.NotifInfo,
-        success = themes.NotifSuccess,
-        warning = themes.NotifWarning,
-        error = themes.NotifError
-    }
-    local barColor = typeColors[type] or themes.NotifInfo -- Default to info color
-    
-    local FONT = Enum.Font.Gotham
-    local PADDING = 8
-    local BAR_WIDTH = 4
-    local MIN_HEIGHT = 40
-    
-    -- Create notification frame (с гораздо меньшим размером)
-    local notification = utility:Create("Frame", {
-        Name = "Notification",
-        Parent = self.notificationContainer,
-        BackgroundTransparency = 1,
-        Size = UDim2.new(0.25, 0, 0, MIN_HEIGHT), -- Уменьшен размер до 25% ширины экрана
-        AutomaticSize = Enum.AutomaticSize.Y,
-        ClipsDescendants = true,
-        LayoutOrder = tick()
-    })
-    
-    -- Main content frame with background
-    local contentFrame = utility:Create("ImageLabel", {
-        Name = "Content",
-        Parent = notification,
-        BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 1, 0), -- Fill the auto-sized parent
-        Image = "rbxassetid://5028857472",
-        ImageColor3 = themes.Background,
-        ScaleType = Enum.ScaleType.Slice,
-        SliceCenter = Rect.new(4, 4, 296, 296)
-    })
-    
-    -- Type indicator bar
-    local typeBar = utility:Create("Frame", {
-        Name = "TypeBar",
-        Parent = contentFrame,
-        BackgroundColor3 = barColor,
-        BorderSizePixel = 0,
-        Position = UDim2.new(0, 0, 0, 0),
-        Size = UDim2.new(0, BAR_WIDTH, 1, 0)
-    })
-    
-    -- Content container
-    local container = utility:Create("Frame", {
-        Name = "Container",
-        Parent = contentFrame,
-        BackgroundTransparency = 1,
-        Position = UDim2.new(0, BAR_WIDTH + PADDING, 0, PADDING),
-        Size = UDim2.new(1, -(BAR_WIDTH + PADDING * 2), 1, -PADDING * 2)
-    })
-    
-    -- Title text
-    local titleLabel = utility:Create("TextLabel", {
-        Name = "Title",
-        Parent = container,
-        BackgroundTransparency = 1,
-        Position = UDim2.new(0, 0, 0, 0),
-        Size = UDim2.new(1, 0, 0, 18),
-        Font = Enum.Font.GothamBold,
-        Text = title or "Notification",
-        TextColor3 = themes.TextColor,
-        TextSize = 14,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextWrapped = false,
-        TextTruncate = Enum.TextTruncate.AtEnd
-    })
-    
-    -- Message text with auto-size
-    local messageLabel = utility:Create("TextLabel", {
-        Name = "Message",
-        Parent = container,
-        BackgroundTransparency = 1,
-        Position = UDim2.new(0, 0, 0, 22), -- Below title with spacing
-        Size = UDim2.new(1, 0, 0, 0), -- Zero height, will be auto-sized
-        Font = FONT,
-        Text = text or "",
-        TextColor3 = Color3.fromRGB(220, 220, 220), -- Slightly dimmer than title
-        TextSize = 13,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextYAlignment = Enum.TextYAlignment.Top,
-        TextWrapped = true
-    })
-    
-    -- Set auto-size for the message label
-    local textSize = TextService:GetTextSize(
-        messageLabel.Text,
-        messageLabel.TextSize,
-        messageLabel.Font,
-        Vector2.new(messageLabel.AbsoluteSize.X, 10000)
+-- Утилиты
+local function CreateTween(instance, properties, duration)
+    duration = duration or AriseUI.Config.AnimationSpeed
+    return game:GetService("TweenService"):Create(
+        instance,
+        TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        properties
     )
-    messageLabel.Size = UDim2.new(1, 0, 0, textSize.Y)
+end
+
+-- Функция для защиты GUI
+local function ProtectGUI(gui)
+    if syn and syn.protect_gui then
+        syn.protect_gui(gui)
+        gui.Parent = game:GetService("CoreGui")
+    elseif gethui then
+        gui.Parent = gethui()
+    else
+        gui.Parent = game:GetService("CoreGui")
+    end
+end
+
+-- Создание базового GUI
+function AriseUI:Create(title)
+    -- Если GUI уже существует, удаляем
+    if GUI then 
+        GUI:Destroy()
+        GUI = nil
+    end
     
-    -- Round the corners
-    local corner = utility:Create("UICorner", {
-        Parent = contentFrame,
-        CornerRadius = UDim.new(0, 4)
-    })
+    -- Создаем основной ScreenGui
+    GUI = Instance.new("ScreenGui")
+    GUI.Name = "AriseUI"
+    GUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    ProtectGUI(GUI)
     
-    -- Make sure the bar stays aligned with the rounded container
-    local barCorner = utility:Create("UICorner", {
-        Parent = typeBar,
-        CornerRadius = UDim.new(0, 4)
-    })
+    -- Основной фрейм
+    MainFrame = Instance.new("Frame")
+    MainFrame.Name = "MainFrame"
+    MainFrame.Size = UDim2.new(0, self.Config.Width, 0, self.Config.Height)
+    MainFrame.Position = UDim2.new(0.5, -self.Config.Width/2, 0.5, -self.Config.Height/2)
+    MainFrame.BackgroundColor3 = self.Colors.Background
+    MainFrame.BorderSizePixel = 0
+    MainFrame.ClipsDescendants = true
+    MainFrame.Parent = GUI
     
-    -- Only round the left corners of the bar
-    local barCornerFixL = utility:Create("Frame", {
-        Name = "CornerFixL",
-        Parent = typeBar,
-        BackgroundColor3 = barColor,
-        BorderSizePixel = 0,
-        Position = UDim2.new(0.5, 0, 0, 0),
-        Size = UDim2.new(0.5, 0, 1, 0)
-    })
+    -- Скругленные углы
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = self.Config.RoundRadius
+    corner.Parent = MainFrame
     
-    -- Animation: slide in from bottom
-    notification.Position = UDim2.new(0, 0, 1, 0)
-    utility:Tween(notification, {Position = UDim2.new(0, 0, 0, 0)}, 0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    -- Тень
+    local shadow = Instance.new("ImageLabel")
+    shadow.Name = "Shadow"
+    shadow.Size = UDim2.new(1, 30, 1, 30)
+    shadow.Position = UDim2.new(0, -15, 0, -15)
+    shadow.BackgroundTransparency = 1
+    shadow.Image = "rbxassetid://5554236805"
+    shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+    shadow.ImageTransparency = 0.6
+    shadow.ScaleType = Enum.ScaleType.Slice
+    shadow.SliceCenter = Rect.new(23, 23, 277, 277)
+    shadow.ZIndex = -1
+    shadow.Parent = MainFrame
     
-    -- Make notification clickable and highlight on hover
-    local button = utility:Create("TextButton", {
-        Name = "Button",
-        Parent = contentFrame,
-        BackgroundTransparency = 1,
-        Position = UDim2.new(0, 0, 0, 0),
-        Size = UDim2.new(1, 0, 1, 0),
-        Text = "",
-        AutoButtonColor = false
-    })
+    -- Заголовок
+    local titleBar = Instance.new("Frame")
+    titleBar.Name = "TitleBar"
+    titleBar.Size = UDim2.new(1, 0, 0, 40)
+    titleBar.BackgroundColor3 = self.Colors.Primary
+    titleBar.BorderSizePixel = 0
+    titleBar.Parent = MainFrame
     
-    -- Track if notification is closing
-    local isClosing = false
+    -- Скругление заголовка
+    local titleCorner = Instance.new("UICorner")
+    titleCorner.CornerRadius = self.Config.RoundRadius
+    titleCorner.Parent = titleBar
     
-    -- Hover effect
-    button.MouseEnter:Connect(function()
-        if not isClosing then
-            utility:Tween(contentFrame, {ImageColor3 = Color3.fromRGB(30, 30, 30)}, 0.2)
+    -- Исправление скругления заголовка
+    local titleCornerFix = Instance.new("Frame")
+    titleCornerFix.Name = "CornerFix"
+    titleCornerFix.Size = UDim2.new(1, 0, 0.5, 0)
+    titleCornerFix.Position = UDim2.new(0, 0, 0.5, 0)
+    titleCornerFix.BackgroundColor3 = self.Colors.Primary
+    titleCornerFix.BorderSizePixel = 0
+    titleCornerFix.ZIndex = 0
+    titleCornerFix.Parent = titleBar
+    
+    -- Заголовок текст
+    local titleText = Instance.new("TextLabel")
+    titleText.Name = "Title"
+    titleText.Size = UDim2.new(1, -120, 1, 0)
+    titleText.Position = UDim2.new(0, 15, 0, 0)
+    titleText.BackgroundTransparency = 1
+    titleText.Font = Enum.Font.GothamBold
+    titleText.Text = title or "ARISE UI"
+    titleText.TextColor3 = self.Colors.Text
+    titleText.TextSize = 16
+    titleText.TextXAlignment = Enum.TextXAlignment.Left
+    titleText.Parent = titleBar
+    
+    -- Логотип
+    local logo = Instance.new("ImageLabel")
+    logo.Name = "Logo"
+    logo.Size = UDim2.new(0, 24, 0, 24)
+    logo.Position = UDim2.new(1, -45, 0.5, -12)
+    logo.BackgroundTransparency = 1
+    logo.Image = "rbxassetid://6022668888" -- Заглушка, можно заменить на свой лого
+    logo.ImageColor3 = self.Colors.Accent
+    logo.Parent = titleBar
+    
+    -- Кнопка закрытия
+    local closeButton = Instance.new("TextButton")
+    closeButton.Name = "CloseButton"
+    closeButton.Size = UDim2.new(0, 24, 0, 24)
+    closeButton.Position = UDim2.new(1, -35, 0.5, -12)
+    closeButton.BackgroundColor3 = self.Colors.Error
+    closeButton.Text = ""
+    closeButton.AutoButtonColor = false
+    closeButton.Parent = titleBar
+    
+    -- Скругление кнопки
+    local closeCorner = Instance.new("UICorner")
+    closeCorner.CornerRadius = UDim.new(0, 4)
+    closeCorner.Parent = closeButton
+    
+    -- Иконка X
+    local closeIcon = Instance.new("TextLabel")
+    closeIcon.Name = "CloseIcon"
+    closeIcon.Size = UDim2.new(1, 0, 1, 0)
+    closeIcon.BackgroundTransparency = 1
+    closeIcon.Font = Enum.Font.GothamBold
+    closeIcon.Text = "×"
+    closeIcon.TextColor3 = self.Colors.Text
+    closeIcon.TextSize = 20
+    closeIcon.Parent = closeButton
+    
+    -- Эффект наведения
+    closeButton.MouseEnter:Connect(function()
+        CreateTween(closeButton, {BackgroundColor3 = Color3.fromRGB(255, 50, 50)}):Play()
+    end)
+    
+    closeButton.MouseLeave:Connect(function()
+        CreateTween(closeButton, {BackgroundColor3 = self.Colors.Error}):Play()
+    end)
+    
+    -- Действие кнопки закрытия
+    closeButton.MouseButton1Click:Connect(function()
+        local fadeTween = CreateTween(MainFrame, {BackgroundTransparency = 1})
+        fadeTween:Play()
+        fadeTween.Completed:Connect(function()
+            GUI:Destroy()
+        end)
+    end)
+    
+    -- Фрейм для содержимого
+    local contentContainer = Instance.new("Frame")
+    contentContainer.Name = "ContentContainer"
+    contentContainer.Size = UDim2.new(1, 0, 1, -90) -- 40px для заголовка, 50px для вкладок
+    contentContainer.Position = UDim2.new(0, 0, 0, 90)
+    contentContainer.BackgroundTransparency = 1
+    contentContainer.ClipsDescendants = true
+    contentContainer.Parent = MainFrame
+    
+    -- Контейнер для вкладок
+    local tabContainer = Instance.new("Frame")
+    tabContainer.Name = "TabContainer"
+    tabContainer.Size = UDim2.new(1, 0, 0, 50)
+    tabContainer.Position = UDim2.new(0, 0, 0, 40)
+    tabContainer.BackgroundColor3 = self.Colors.Secondary
+    tabContainer.BorderSizePixel = 0
+    tabContainer.Parent = MainFrame
+    
+    -- Нижняя линия для подсветки активной вкладки
+    local activeTabLine = Instance.new("Frame")
+    activeTabLine.Name = "ActiveTabLine"
+    activeTabLine.Size = UDim2.new(0, 0, 0, 3)
+    activeTabLine.Position = UDim2.new(0, 0, 1, -3)
+    activeTabLine.BackgroundColor3 = self.Colors.Accent
+    activeTabLine.BorderSizePixel = 0
+    activeTabLine.Visible = false
+    activeTabLine.Parent = tabContainer
+    
+    -- Делаем окно перетаскиваемым
+    if self.Config.Draggable then
+        local isDragging = false
+        local dragInput
+        local dragStart
+        local startPos
+        
+        titleBar.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                isDragging = true
+                dragStart = input.Position
+                startPos = MainFrame.Position
+            end
+        end)
+        
+        titleBar.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                isDragging = false
+            end
+        end)
+        
+        game:GetService("UserInputService").InputChanged:Connect(function(input)
+            if isDragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+                local delta = input.Position - dragStart
+                MainFrame.Position = UDim2.new(
+                    startPos.X.Scale, 
+                    startPos.X.Offset + delta.X, 
+                    startPos.Y.Scale, 
+                    startPos.Y.Offset + delta.Y
+                )
+            end
+        end)
+    end
+    
+    -- Возвращаем созданный интерфейс
+    return {
+        GUI = GUI,
+        MainFrame = MainFrame,
+        TitleBar = titleBar,
+        ContentContainer = contentContainer,
+        TabContainer = tabContainer,
+        ActiveTabLine = activeTabLine
+    }
+end
+
+-- Добавление новой вкладки
+function AriseUI:AddTab(name, icon)
+    if not GUI then
+        error("UI не создан. Сначала вызовите метод Create.")
+    end
+    
+    -- Создаем кнопку вкладки
+    local tabContainerWidth = MainFrame.TabContainer.AbsoluteSize.X
+    local tabCount = #TabButtons + 1
+    local tabWidth = math.min(150, tabContainerWidth / (tabCount > 2 and tabCount or 2))
+    
+    local tabButton = Instance.new("TextButton")
+    tabButton.Name = name .. "Tab"
+    tabButton.Size = UDim2.new(0, tabWidth, 1, 0)
+    tabButton.Position = UDim2.new(0, tabWidth * (#TabButtons), 0, 0)
+    tabButton.BackgroundTransparency = 1
+    tabButton.Font = Enum.Font.Gotham
+    tabButton.Text = name
+    tabButton.TextColor3 = self.Colors.TextDark
+    tabButton.TextSize = 14
+    tabButton.Parent = MainFrame.TabContainer
+    
+    -- Добавляем иконку, если указана
+    if icon then
+        local iconImage = Instance.new("ImageLabel")
+        iconImage.Name = "Icon"
+        iconImage.Size = UDim2.new(0, 20, 0, 20)
+        iconImage.Position = UDim2.new(0, 10, 0.5, -10)
+        iconImage.BackgroundTransparency = 1
+        iconImage.Image = icon
+        iconImage.ImageColor3 = self.Colors.TextDark
+        iconImage.Parent = tabButton
+        
+        -- Сдвигаем текст вправо
+        tabButton.Text = "    " .. name
+    end
+    
+    -- Создаем контент для вкладки
+    local tabFrame = Instance.new("ScrollingFrame")
+    tabFrame.Name = name .. "Content"
+    tabFrame.Size = UDim2.new(1, 0, 1, 0)
+    tabFrame.BackgroundTransparency = 1
+    tabFrame.BorderSizePixel = 0
+    tabFrame.ScrollBarThickness = 6
+    tabFrame.ScrollBarImageColor3 = self.Colors.Primary
+    tabFrame.Visible = false
+    tabFrame.Parent = MainFrame.ContentContainer
+    
+    -- Устанавливаем автоматическую компоновку элементов
+    local uiListLayout = Instance.new("UIListLayout")
+    uiListLayout.Padding = UDim.new(0, 10)
+    uiListLayout.FillDirection = Enum.FillDirection.Vertical
+    uiListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    uiListLayout.Parent = tabFrame
+    
+    -- Верхний отступ
+    local topPadding = Instance.new("UIPadding")
+    topPadding.PaddingTop = UDim.new(0, 10)
+    topPadding.PaddingLeft = UDim.new(0, 15)
+    topPadding.PaddingRight = UDim.new(0, 15)
+    topPadding.PaddingBottom = UDim.new(0, 10)
+    topPadding.Parent = tabFrame
+    
+    -- Обработка изменения размера контента
+    uiListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        tabFrame.CanvasSize = UDim2.new(0, 0, 0, uiListLayout.AbsoluteContentSize.Y + 20)
+    end)
+    
+    -- Сохраняем ссылки на вкладку
+    table.insert(TabButtons, tabButton)
+    TabFrames[tabButton] = tabFrame
+    
+    -- Обработка нажатия на вкладку
+    tabButton.MouseButton1Click:Connect(function()
+        self:SelectTab(tabButton)
+    end)
+    
+    -- Эффекты наведения
+    tabButton.MouseEnter:Connect(function()
+        if ActiveTab ~= tabButton then
+            CreateTween(tabButton, {TextColor3 = self.Colors.Text}):Play()
+            
+            local icon = tabButton:FindFirstChild("Icon")
+            if icon then
+                CreateTween(icon, {ImageColor3 = self.Colors.Text}):Play()
+            end
         end
+    end)
+    
+    tabButton.MouseLeave:Connect(function()
+        if ActiveTab ~= tabButton then
+            CreateTween(tabButton, {TextColor3 = self.Colors.TextDark}):Play()
+            
+            local icon = tabButton:FindFirstChild("Icon")
+            if icon then
+                CreateTween(icon, {ImageColor3 = self.Colors.TextDark}):Play()
+            end
+        end
+    end)
+    
+    -- Если это первая вкладка, активируем ее
+    if #TabButtons == 1 then
+        self:SelectTab(tabButton)
+    end
+    
+    -- Возвращаем фрейм контента вкладки для добавления элементов
+    return tabFrame
+end
+
+-- Выбор вкладки
+function AriseUI:SelectTab(tabButton)
+    if not tabButton or not TabFrames[tabButton] then return end
+    
+    -- Скрываем все вкладки и сбрасываем цвета кнопок
+    for _, btn in ipairs(TabButtons) do
+        TabFrames[btn].Visible = false
+        CreateTween(btn, {TextColor3 = self.Colors.TextDark}):Play()
+        
+        local icon = btn:FindFirstChild("Icon")
+        if icon then
+            CreateTween(icon, {ImageColor3 = self.Colors.TextDark}):Play()
+        end
+    end
+    
+    -- Показываем выбранную вкладку и обновляем ее кнопку
+    TabFrames[tabButton].Visible = true
+    CreateTween(tabButton, {TextColor3 = self.Colors.Accent}):Play()
+    
+    local icon = tabButton:FindFirstChild("Icon")
+    if icon then
+        CreateTween(icon, {ImageColor3 = self.Colors.Accent}):Play()
+    end
+    
+    -- Анимация подсветки активной вкладки
+    local activeLine = MainFrame.TabContainer.ActiveTabLine
+    activeLine.Visible = true
+    
+    -- Анимация перемещения и изменения размера
+    CreateTween(
+        activeLine, 
+        {
+            Size = UDim2.new(0, tabButton.AbsoluteSize.X, 0, 3),
+            Position = UDim2.new(0, tabButton.AbsolutePosition.X - MainFrame.AbsolutePosition.X, 1, -3)
+        }
+    ):Play()
+    
+    -- Запоминаем активную вкладку
+    ActiveTab = tabButton
+    
+    -- Вызываем колбэк, если есть
+    local tabName = tabButton.Name:gsub("Tab$", "")
+    if OnActivatedCallbacks[tabName] then
+        OnActivatedCallbacks[tabName]()
+    end
+end
+
+-- Добавление заголовка секции
+function AriseUI:AddSection(parent, title)
+    -- Создаем контейнер секции
+    local section = Instance.new("Frame")
+    section.Name = title .. "Section"
+    section.Size = UDim2.new(1, 0, 0, 30)
+    section.BackgroundTransparency = 1
+    section.LayoutOrder = #parent:GetChildren()
+    section.Parent = parent
+    
+    -- Заголовок секции
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Name = "Title"
+    titleLabel.Size = UDim2.new(1, 0, 1, 0)
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.Font = Enum.Font.GothamBold
+    titleLabel.Text = title
+    titleLabel.TextColor3 = self.Colors.Accent
+    titleLabel.TextSize = 14
+    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    titleLabel.Parent = section
+    
+    -- Линия под заголовком
+    local line = Instance.new("Frame")
+    line.Name = "Line"
+    line.Size = UDim2.new(1, 0, 0, 1)
+    line.Position = UDim2.new(0, 0, 1, -1)
+    line.BackgroundColor3 = self.Colors.Primary
+    line.BorderSizePixel = 0
+    line.Parent = section
+    
+    return section
+end
+
+-- Добавление текстовой метки
+function AriseUI:AddLabel(parent, text)
+    local label = Instance.new("TextLabel")
+    label.Name = "Label"
+    label.Size = UDim2.new(1, 0, 0, 25)
+    label.BackgroundTransparency = 1
+    label.Font = Enum.Font.Gotham
+    label.Text = text
+    label.TextColor3 = self.Colors.Text
+    label.TextSize = 14
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.LayoutOrder = #parent:GetChildren()
+    label.Parent = parent
+    
+    return label
+end
+
+-- Добавление кнопки
+function AriseUI:AddButton(parent, text, callback)
+    local buttonContainer = Instance.new("Frame")
+    buttonContainer.Name = text .. "ButtonContainer"
+    buttonContainer.Size = UDim2.new(1, 0, 0, 35)
+    buttonContainer.BackgroundTransparency = 1
+    buttonContainer.LayoutOrder = #parent:GetChildren()
+    buttonContainer.Parent = parent
+    
+    local button = Instance.new("TextButton")
+    button.Name = text .. "Button"
+    button.Size = UDim2.new(1, 0, 1, 0)
+    button.BackgroundColor3 = self.Colors.Primary
+    button.Font = Enum.Font.Gotham
+    button.Text = text
+    button.TextColor3 = self.Colors.Text
+    button.TextSize = 14
+    button.AutoButtonColor = false
+    button.Parent = buttonContainer
+    
+    -- Скругление кнопки
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = self.Config.ButtonRadius
+    corner.Parent = button
+    
+    -- Эффекты наведения и клика
+    button.MouseEnter:Connect(function()
+        CreateTween(button, {BackgroundColor3 = self.Colors.Accent}):Play()
     end)
     
     button.MouseLeave:Connect(function()
-        if not isClosing then
-            utility:Tween(contentFrame, {ImageColor3 = themes.Background}, 0.2)
-        end
+        CreateTween(button, {BackgroundColor3 = self.Colors.Primary}):Play()
     end)
     
-    -- Click to dismiss and trigger callback
+    button.MouseButton1Down:Connect(function()
+        CreateTween(button, {BackgroundColor3 = self.Colors.AccentHover}, 0.1):Play()
+    end)
+    
+    button.MouseButton1Up:Connect(function()
+        CreateTween(button, {BackgroundColor3 = self.Colors.Accent}, 0.1):Play()
+    end)
+    
+    -- Добавляем обработчик клика
     button.MouseButton1Click:Connect(function()
-        if not isClosing then
-            isClosing = true
-            closeNotification()
-            pcall(callback)
-        end
+        pcall(callback)
     end)
     
-    -- Function to close notification with animation
-    function closeNotification()
-        if isClosing then return end
-        isClosing = true
-        
-        -- Tween out to the bottom
-        utility:Tween(notification, {Position = UDim2.new(0, 0, 1, 0)}, 0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-        
-        -- Remove after animation
-        delay(0.3, function()
-            notification:Destroy()
-        end)
-    end
-    
-    -- Auto close after duration
-    delay(duration, function()
-        if notification and notification.Parent then
-            closeNotification()
-        end
-    end)
-    
-    return {
-        Close = closeNotification
-    }
+    return button
 end
 
--- Flight mode toggle function (new)
-function SC:ToggleFlightMode()
-    return utility:ToggleFlightMode()
-end
-
--- Get flight mode status
-function SC:GetFlightModeStatus()
-    return {
-        enabled = FlightMode.Enabled,
-        speed = FlightMode.Speed,
-        boostMultiplier = FlightMode.BoostMultiplier,
-        bindKey = self.flightBindKey or FlightMode.ToggleKey
-    }
-end
-
--- Set flight speed
-function SC:SetFlightSpeed(speed)
-    if type(speed) == "number" and speed > 0 then
-        FlightMode.Speed = speed
-        return true
-    end
-    return false
-end
-
--- Set flight boost multiplier
-function SC:SetFlightBoostMultiplier(multiplier)
-    if type(multiplier) == "number" and multiplier > 0 then
-        FlightMode.BoostMultiplier = multiplier
-        return true
-    end
-    return false
-end
-
--- Set flight toggle key
-function SC:SetFlightBindKey(keyCode)
-    if typeof(keyCode) == "EnumItem" and keyCode.EnumType == Enum.KeyCode then
-        -- Unbind previous key if it exists
-        if self.flightBindUnbind then
-            self.flightBindUnbind:UnBind()
-            self.flightBindUnbind = nil
-        end
-        
-        -- Store new bind key
-        self.flightBindKey = keyCode
-        FlightMode.ToggleKey = keyCode
-        
-        -- Rebind with new key
-        self.flightBindUnbind = utility:BindToKey(keyCode, function()
-            self:ToggleFlightMode()
-        end)
-        
-        -- Show notification
-        self:Notify("Режим полета", "Горячая клавиша изменена на: " .. keyCode.Name, {
-            duration = 3,
-            type = "success"
-        })
-        
-        return true
-    end
-    return false
-end
-
--- Creates a new page/tab
-function SC:AddPage(title, icon)
-    local page = {
-        title = title,
-        icon = icon,
-        sections = {},
-        parent = self
-    }
+-- Добавление переключателя (чекбокса)
+function AriseUI:AddToggle(parent, text, default, callback)
+    default = default or false
     
-    -- Create tab button in the left sidebar
-    local pageButton = utility:Create("ImageButton", {
-        Parent = self.pagesContainer,
-        Name = title,
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, -10, 0, 26),
-        Position = UDim2.new(0, 5, 0, 0),
-        AutoButtonColor = false,
-        Image = "rbxassetid://5028857472",
-        ImageColor3 = #self.pages == 0 and themes.Accent or themes.LightContrast,
-        ScaleType = Enum.ScaleType.Slice,
-        SliceCenter = Rect.new(4, 4, 296, 296)
-    }, {
-        utility:Create("TextLabel", {
-            Name = "title",
-            BackgroundTransparency = 1,
-            Size = UDim2.new(1, 0, 1, 0),
-            Font = Enum.Font.GothamSemibold,
-            Text = title,
-            TextColor3 = themes.TextColor,
-            TextSize = 12
-        })
-    })
+    local toggleContainer = Instance.new("Frame")
+    toggleContainer.Name = text .. "ToggleContainer"
+    toggleContainer.Size = UDim2.new(1, 0, 0, 35)
+    toggleContainer.BackgroundTransparency = 1
+    toggleContainer.LayoutOrder = #parent:GetChildren()
+    toggleContainer.Parent = parent
     
-    -- Add icon if provided
-    if icon then
-        local iconImage = utility:Create("ImageLabel", {
-            Name = "icon",
-            Parent = pageButton,
-            BackgroundTransparency = 1,
-            Position = UDim2.new(0, 5, 0.5, -8),
-            Size = UDim2.new(0, 16, 0, 16),
-            Image = icon,
-            ImageColor3 = themes.TextColor
-        })
-        
-        -- Adjust title position
-        pageButton.title.Position = UDim2.new(0, 26, 0, 0)
-        pageButton.title.Size = UDim2.new(1, -26, 1, 0)
-    end
+    -- Фон переключателя
+    local toggleBackground = Instance.new("Frame")
+    toggleBackground.Name = "Background"
+    toggleBackground.Size = UDim2.new(0, 44, 0, 24)
+    toggleBackground.Position = UDim2.new(1, -44, 0.5, -12)
+    toggleBackground.BackgroundColor3 = self.Colors.Primary
+    toggleBackground.Parent = toggleContainer
     
-    -- Create the page content container
-    local pageContainer = utility:Create("ScrollingFrame", {
-        Name = "Page_" .. title,
-        Parent = self.mainWindow.container,
-        BackgroundTransparency = 1,
-        Position = UDim2.new(0, 126, 0, 0), -- To the right of tabs
-        Size = UDim2.new(1, -126, 1, 0),
-        CanvasSize = UDim2.new(0, 0, 0, 0), -- Will be updated as sections are added
-        VerticalScrollBarPosition = Enum.VerticalScrollBarPosition.Right,
-        ScrollBarThickness = 4,
-        ScrollBarImageColor3 = themes.Accent,
-        ScrollBarImageTransparency = 0.5,
-        Visible = #self.pages == 0, -- Only first page visible by default
-        TopImage = "rbxasset://textures/ui/Scroll/scroll-middle.png",
-        BottomImage = "rbxasset://textures/ui/Scroll/scroll-middle.png",
-        MidImage = "rbxasset://textures/ui/Scroll/scroll-middle.png",
-    }, {
-        utility:Create("UIListLayout", {
-            Padding = UDim.new(0, 10),
-            SortOrder = Enum.SortOrder.LayoutOrder,
-            HorizontalAlignment = Enum.HorizontalAlignment.Center
-        }),
-        utility:Create("UIPadding", {
-            PaddingTop = UDim.new(0, 10),
-            PaddingBottom = UDim.new(0, 10)
-        })
-    })
+    -- Скругление фона
+    local backgroundCorner = Instance.new("UICorner")
+    backgroundCorner.CornerRadius = UDim.new(0, 12)
+    backgroundCorner.Parent = toggleBackground
     
-    -- Auto-update canvas size as content changes
-    pageContainer.UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        pageContainer.CanvasSize = UDim2.new(0, 0, 0, pageContainer.UIListLayout.AbsoluteContentSize.Y + 20)
-    end)
+    -- Ползунок
+    local toggleHandle = Instance.new("Frame")
+    toggleHandle.Name = "Handle"
+    toggleHandle.Size = UDim2.new(0, 20, 0, 20)
+    toggleHandle.Position = UDim2.new(0, 2, 0.5, -10)
+    toggleHandle.BackgroundColor3 = self.Colors.Text
+    toggleHandle.Parent = toggleBackground
     
-    -- Create a hitbox for better tab selection
-    local pageHitbox = utility:Create("TextButton", {
-        Name = "PageHitbox",
-        Parent = pageButton,
-        BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 1, 0),
-        Text = "",
-        ZIndex = 10 -- Above other elements
-    })
+    -- Скругление ползунка
+    local handleCorner = Instance.new("UICorner")
+    handleCorner.CornerRadius = UDim.new(0, 10)
+    handleCorner.Parent = toggleHandle
     
-    -- Function to handle tab selection
-    local function selectTab()
-        -- Deselect all other tabs
-        for _, p in pairs(self.pages) do
-            if p.button and p.button ~= pageButton then
-                utility:Tween(p.button, {ImageColor3 = themes.LightContrast}, 0.2)
-            end
-            if p.container then
-                p.container.Visible = false
-            end
-        end
-        
-        -- Select this tab
-        utility:Tween(pageButton, {ImageColor3 = themes.Accent}, 0.2)
-        pageContainer.Visible = true
-        utility:Pop(pageButton, 8)
-    end
+    -- Текст переключателя
+    local toggleText = Instance.new("TextLabel")
+    toggleText.Name = "Text"
+    toggleText.Size = UDim2.new(1, -54, 1, 0)
+    toggleText.BackgroundTransparency = 1
+    toggleText.Font = Enum.Font.Gotham
+    toggleText.Text = text
+    toggleText.TextColor3 = self.Colors.Text
+    toggleText.TextSize = 14
+    toggleText.TextXAlignment = Enum.TextXAlignment.Left
+    toggleText.Parent = toggleContainer
     
-    -- Connect both the button and hitbox
-    pageButton.MouseButton1Click:Connect(selectTab)
-    pageHitbox.MouseButton1Click:Connect(selectTab)
+    -- Состояние переключателя
+    local toggled = default
     
-    -- Store references
-    page.button = pageButton
-    page.container = pageContainer
-    
-    -- Add methods to the page object
-    page.AddSection = function(self, title)
-        local section = {
-            page = self,
-            title = title,
-            objects = {}
-        }
-        
-        -- Create section container
-        local sectionFrame = utility:Create("ImageLabel", {
-            Name = title .. "Section",
-            Parent = self.container,
-            BackgroundTransparency = 1,
-            Size = UDim2.new(1, -20, 0, 30), -- Initial height (will be auto-sized)
-            Image = "rbxassetid://5028857472",
-            ImageColor3 = themes.Background,
-            ScaleType = Enum.ScaleType.Slice,
-            SliceCenter = Rect.new(4, 4, 296, 296),
-            ClipsDescendants = true
-        })
-        
-        -- Section title bar
-        local sectionTitle = utility:Create("ImageLabel", {
-            Name = "sectionTitle",
-            Parent = sectionFrame,
-            BackgroundTransparency = 1,
-            Size = UDim2.new(1, -10, 0, 26),
-            Position = UDim2.new(0, 5, 0, 2),
-            Image = "rbxassetid://5028857472",
-            ImageColor3 = themes.DarkContrast,
-            ScaleType = Enum.ScaleType.Slice,
-            SliceCenter = Rect.new(4, 4, 296, 296)
-        }, {
-            utility:Create("TextLabel", {
-                Name = "sectionText",
-                BackgroundTransparency = 1,
-                Size = UDim2.new(1, -10, 1, 0),
-                Position = UDim2.new(0, 5, 0, 0),
-                Font = Enum.Font.GothamSemibold,
-                Text = title,
-                TextColor3 = themes.TextColor,
-                TextSize = 12,
-                TextXAlignment = Enum.TextXAlignment.Left
-            })
-        })
-        
-        -- Content container
-        local sectionContent = utility:Create("Frame", {
-            Name = "sectionContent",
-            Parent = sectionFrame,
-            BackgroundTransparency = 1,
-            Position = UDim2.new(0, 5, 0, 30), -- Below title
-            Size = UDim2.new(1, -10, 1, -30), -- Fill the rest of the section
-            ClipsDescendants = false
-        }, {
-            utility:Create("UIListLayout", {
-                Padding = UDim.new(0, 6),
-                SortOrder = Enum.SortOrder.LayoutOrder
-            })
-        })
-        
-        -- Auto-size the section based on content
-        sectionContent.UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-            -- Add extra padding to ensure all content is visible
-            sectionFrame.Size = UDim2.new(1, -20, 0, sectionContent.UIListLayout.AbsoluteContentSize.Y + 35)
-        end)
-        
-        -- Store section container
-        section.frame = sectionFrame
-        section.container = sectionContent
-        
-        -- Add AddButton method to section
-        section.AddButton = function(self, text, callback)
-            callback = callback or function() end
-            text = text or "Button"
-            
-            -- Create button
-            local button = utility:Create("ImageButton", {
-                Name = text .. "Button",
-                Parent = self.container,
-                BackgroundTransparency = 1,
-                Size = UDim2.new(1, 0, 0, 30),
-                Image = "rbxassetid://5028857472",
-                ImageColor3 = themes.DarkContrast,
-                ScaleType = Enum.ScaleType.Slice,
-                SliceCenter = Rect.new(4, 4, 296, 296),
-                AutoButtonColor = false,
-                ClipsDescendants = true
-            })
-            
-            -- Create transparent hitbox to make clicking easier
-            local hitbox = utility:Create("TextButton", {
-                Name = "Hitbox",
-                Parent = button,
-                BackgroundTransparency = 1,
-                Size = UDim2.new(1, 0, 1, 0),
-                Text = "",
-                ZIndex = 10 -- Above other elements
-            })
-            
-            -- Create text
-            local buttonText = utility:Create("TextLabel", {
-                Name = "buttonText",
-                Parent = button,
-                BackgroundTransparency = 1,
-                Size = UDim2.new(1, -10, 1, 0),
-                Position = UDim2.new(0, 5, 0, 0),
-                Font = Enum.Font.Gotham,
-                Text = text,
-                TextColor3 = themes.TextColor,
-                TextSize = 12,
-                TextXAlignment = Enum.TextXAlignment.Left
-            })
-            
-            -- Button interaction effects
-            button.MouseEnter:Connect(function()
-                utility:Tween(button, {ImageColor3 = themes.Accent}, 0.2)
-            end)
-            
-            button.MouseLeave:Connect(function()
-                utility:Tween(button, {ImageColor3 = themes.DarkContrast}, 0.2)
-            end)
-            
-            button.MouseButton1Down:Connect(function()
-                utility:Pop(button, 10)
-            end)
-            
-            button.MouseButton1Click:Connect(function()
-                callback()
-            end)
-            
-            -- Wire up the hitbox clicks to the button
-            hitbox.MouseButton1Down:Connect(function()
-                utility:Pop(button, 10)
-            end)
-            
-            hitbox.MouseButton1Click:Connect(function()
-                callback()
-            end)
-            
-            -- Sync hover effects
-            hitbox.MouseEnter:Connect(function()
-                utility:Tween(button, {ImageColor3 = themes.Accent}, 0.2)
-            end)
-            
-            hitbox.MouseLeave:Connect(function()
-                utility:Tween(button, {ImageColor3 = themes.DarkContrast}, 0.2)
-            end)
-            
-            -- Add to section objects
-            table.insert(self.objects, button)
-            
-            return button
-        end
-        
-        -- Add AddToggle method to section
-        section.AddToggle = function(self, options)
-            options = options or {}
-            local text = options.text or "Toggle"
-            local default = options.default or false
-            local callback = options.callback or function() end
-            
-            -- State tracking
-            local toggled = default
-            
-            -- Create toggle container
-            local toggle = utility:Create("ImageButton", {
-                Name = text .. "Toggle",
-                Parent = self.container,
-                BackgroundTransparency = 1,
-                Size = UDim2.new(1, 0, 0, 30),
-                Image = "rbxassetid://5028857472",
-                ImageColor3 = themes.DarkContrast,
-                ScaleType = Enum.ScaleType.Slice,
-                SliceCenter = Rect.new(4, 4, 296, 296),
-                AutoButtonColor = false
-            })
-            
-            -- Toggle label
-            local toggleLabel = utility:Create("TextLabel", {
-                Name = "toggleText",
-                Parent = toggle,
-                BackgroundTransparency = 1,
-                Size = UDim2.new(1, -50, 1, 0),
-                Position = UDim2.new(0, 5, 0, 0),
-                Font = Enum.Font.Gotham,
-                Text = text,
-                TextColor3 = themes.TextColor,
-                TextSize = 12,
-                TextXAlignment = Enum.TextXAlignment.Left
-            })
-            
-            -- Create transparent hitbox for better clicking
-            local hitbox = utility:Create("TextButton", {
-                Name = "Hitbox",
-                Parent = toggle,
-                BackgroundTransparency = 1,
-                Size = UDim2.new(1, 0, 1, 0),
-                Text = "",
-                ZIndex = 10 -- Above other elements
-            })
-            
-            -- Toggle indicator
-            local toggleIndicator = utility:Create("ImageLabel", {
-                Name = "toggleIndicator",
-                Parent = toggle,
-                BackgroundTransparency = 1,
-                Position = UDim2.new(1, -40, 0.5, -8),
-                Size = UDim2.new(0, 30, 0, 16),
-                Image = "rbxassetid://5028857472",
-                ImageColor3 = themes.LightContrast,
-                ScaleType = Enum.ScaleType.Slice,
-                SliceCenter = Rect.new(4, 4, 296, 296)
-            })
-            
-            -- Toggle switch dot
-            local toggleDot = utility:Create("ImageLabel", {
-                Name = "toggleDot",
-                Parent = toggleIndicator,
-                BackgroundTransparency = 1,
-                Position = UDim2.new(0, 2, 0.5, -6),
-                Size = UDim2.new(0, 12, 0, 12),
-                Image = "rbxassetid://5028857472",
-                ImageColor3 = themes.TextColor,
-                ScaleType = Enum.ScaleType.Slice,
-                SliceCenter = Rect.new(4, 4, 296, 296)
-            })
-            
-            -- Function to update toggle state visually
-            local function updateToggle()
-                if toggled then
-                    utility:Tween(toggleIndicator, {ImageColor3 = themes.Accent}, 0.2)
-                    utility:Tween(toggleDot, {Position = UDim2.new(1, -14, 0.5, -6)}, 0.2)
-                else
-                    utility:Tween(toggleIndicator, {ImageColor3 = themes.LightContrast}, 0.2)
-                    utility:Tween(toggleDot, {Position = UDim2.new(0, 2, 0.5, -6)}, 0.2)
-                end
-            end
-            
-            -- Set initial state
-            updateToggle()
-            
-            -- Click handler for main toggle and hitbox
-            local function toggleAction()
-                toggled = not toggled
-                updateToggle()
-                callback(toggled)
-            end
-            
-            toggle.MouseButton1Click:Connect(toggleAction)
-            hitbox.MouseButton1Click:Connect(toggleAction)
-            
-            -- Mouse hover effect
-            toggle.MouseEnter:Connect(function()
-                utility:Tween(toggle, {ImageColor3 = themes.Accent}, 0.2)
-            end)
-            
-            toggle.MouseLeave:Connect(function()
-                utility:Tween(toggle, {ImageColor3 = themes.DarkContrast}, 0.2)
-            end)
-            
-            -- Sync hover effects
-            hitbox.MouseEnter:Connect(function()
-                utility:Tween(toggle, {ImageColor3 = themes.Accent}, 0.2)
-            end)
-            
-            hitbox.MouseLeave:Connect(function()
-                utility:Tween(toggle, {ImageColor3 = themes.DarkContrast}, 0.2)
-            end)
-            
-            -- Add to section objects
-            table.insert(self.objects, toggle)
-            
-            -- Return methods for external control
-            return {
-                Set = function(value)
-                    toggled = value
-                    updateToggle()
-                    callback(toggled)
-                end,
-                Toggle = function()
-                    toggled = not toggled
-                    updateToggle()
-                    callback(toggled)
-                end,
-                GetState = function()
-                    return toggled
-                end
-            }
-        end
-        
-        -- Add AddSlider method to section
-        section.AddSlider = function(self, options)
-            options = options or {}
-            local text = options.text or "Slider"
-            local min = options.min or 0
-            local max = options.max or 100
-            local default = options.default or min
-            local callback = options.callback or function() end
-            
-            -- Calculate steps if provided
-            local step = options.step
-            local useSteps = step and true or false
-            
-            -- Clamp default value to range
-            default = math.max(min, math.min(max, default))
-            
-            -- State tracking
-            local value = default
-            
-            -- Create slider container
-            local slider = utility:Create("ImageLabel", {
-                Name = text .. "Slider",
-                Parent = self.container,
-                BackgroundTransparency = 1,
-                Size = UDim2.new(1, 0, 0, 45),
-                Image = "rbxassetid://5028857472",
-                ImageColor3 = themes.DarkContrast,
-                ScaleType = Enum.ScaleType.Slice,
-                SliceCenter = Rect.new(4, 4, 296, 296)
-            })
-            
-            -- Slider label
-            local sliderLabel = utility:Create("TextLabel", {
-                Name = "sliderText",
-                Parent = slider,
-                BackgroundTransparency = 1,
-                Size = UDim2.new(1, -10, 0, 25),
-                Position = UDim2.new(0, 5, 0, 0),
-                Font = Enum.Font.Gotham,
-                Text = text,
-                TextColor3 = themes.TextColor,
-                TextSize = 12,
-                TextXAlignment = Enum.TextXAlignment.Left
-            })
-            
-            -- Value display
-            local valueLabel = utility:Create("TextLabel", {
-                Name = "valueText",
-                Parent = slider,
-                BackgroundTransparency = 1,
-                Size = UDim2.new(0, 50, 0, 25),
-                Position = UDim2.new(1, -55, 0, 0),
-                Font = Enum.Font.Gotham,
-                Text = tostring(default),
-                TextColor3 = themes.TextColor,
-                TextSize = 12,
-                TextXAlignment = Enum.TextXAlignment.Right
-            })
-            
-            -- Slider background track
-            local sliderBg = utility:Create("ImageLabel", {
-                Name = "sliderBg",
-                Parent = slider,
-                BackgroundTransparency = 1,
-                Size = UDim2.new(1, -10, 0, 10),
-                Position = UDim2.new(0, 5, 0, 30),
-                Image = "rbxassetid://5028857472",
-                ImageColor3 = themes.LightContrast,
-                ScaleType = Enum.ScaleType.Slice,
-                SliceCenter = Rect.new(4, 4, 296, 296)
-            })
-            
-            -- Slider fill (progress bar)
-            local sliderFill = utility:Create("ImageLabel", {
-                Name = "sliderFill",
-                Parent = sliderBg,
-                BackgroundTransparency = 1,
-                Size = UDim2.new(0, 0, 1, 0), -- Will be set based on value
-                Image = "rbxassetid://5028857472",
-                ImageColor3 = themes.Accent,
-                ScaleType = Enum.ScaleType.Slice,
-                SliceCenter = Rect.new(4, 4, 296, 296)
-            })
-            
-            -- Slider indicator (handle)
-            local sliderIndicator = utility:Create("Frame", {
-                Name = "sliderIndicator",
-                Parent = sliderBg,
-                BackgroundColor3 = themes.TextColor,
-                BorderSizePixel = 0,
-                Size = UDim2.new(0, 10, 0, 16),
-                Position = UDim2.new(0, 0, 0.5, -8), -- Center vertically
-                ZIndex = 5 -- Appear above other elements
-            })
-            
-            -- Make indicator rounded
-            utility:Create("UICorner", {
-                Parent = sliderIndicator,
-                CornerRadius = UDim.new(0, 3)
-            })
-            
-            -- Update slider visuals
-            local function updateSlider(newValue, visualOnly)
-                -- Apply step if needed
-                if useSteps and step > 0 then
-                    newValue = math.floor((newValue - min) / step + 0.5) * step + min
-                end
-                
-                -- Clamp to range
-                value = math.max(min, math.min(max, newValue))
-                
-                -- Calculate percentage filled
-                local percent = (value - min) / (max - min)
-                
-                -- Update visuals
-                utility:Tween(sliderFill, {Size = UDim2.new(percent, 0, 1, 0)}, 0.1)
-                utility:Tween(sliderIndicator, {Position = UDim2.new(percent, -5, 0.5, -8)}, 0.1) -- Move indicator
-                valueLabel.Text = tostring(math.floor(value * 100) / 100) -- Round to 2 decimal places
-                
-                -- Call callback (unless only updating visual)
-                if not visualOnly then
-                    callback(value)
-                end
-            end
-            
-            -- Set initial value
-            updateSlider(default, true)
-            
-            -- Slider interaction
-            local isDragging = false
-            
-            -- Handle clicking on the slider
-            sliderBg.InputBegan:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                    isDragging = true
-                    
-                    -- Calculate value based on mouse position
-                    local relativePos = input.Position.X - sliderBg.AbsolutePosition.X
-                    local percent = math.clamp(relativePos / sliderBg.AbsoluteSize.X, 0, 1)
-                    local newValue = min + (max - min) * percent
-                    
-                    updateSlider(newValue)
-                end
-            end)
-            
-            -- Handle dragging
-            UserInputService.InputChanged:Connect(function(input)
-                if isDragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-                    -- Calculate value based on mouse position
-                    local relativePos = input.Position.X - sliderBg.AbsolutePosition.X
-                    local percent = math.clamp(relativePos / sliderBg.AbsoluteSize.X, 0, 1)
-                    local newValue = min + (max - min) * percent
-                    
-                    updateSlider(newValue)
-                end
-            end)
-            
-            -- Handle drag end
-            UserInputService.InputEnded:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                    isDragging = false
-                end
-            end)
-            
-            -- Mouse hover effects
-            slider.MouseEnter:Connect(function()
-                utility:Tween(slider, {ImageColor3 = themes.Accent}, 0.2)
-            end)
-            
-            slider.MouseLeave:Connect(function()
-                utility:Tween(slider, {ImageColor3 = themes.DarkContrast}, 0.2)
-            end)
-            
-            -- Add to section objects
-            table.insert(self.objects, slider)
-            
-            -- Return methods for external control
-            return {
-                Set = function(newValue)
-                    updateSlider(newValue)
-                end,
-                GetValue = function()
-                    return value
-                end
-            }
-        end
-        
-        -- Add section to page with safety check
-        if self.page then
-            -- Ensure sections table exists
-            if not self.page.sections then
-                self.page.sections = {}
-            end
-            table.insert(self.page.sections, section)
+    -- Функция обновления визуального состояния
+    local function updateVisual()
+        if toggled then
+            CreateTween(toggleBackground, {BackgroundColor3 = self.Colors.Accent}):Play()
+            CreateTween(toggleHandle, {Position = UDim2.new(0, 22, 0.5, -10)}):Play()
         else
-            warn("Error in AddSection: page is nil. Creating sections array and adding section anyway.")
-            if not self.sections then
-                self.sections = {}
-            end
-            table.insert(self.sections, section)
+            CreateTween(toggleBackground, {BackgroundColor3 = self.Colors.Primary}):Play()
+            CreateTween(toggleHandle, {Position = UDim2.new(0, 2, 0.5, -10)}):Play()
         end
+    end
+    
+    -- Начальное обновление
+    updateVisual()
+    
+    -- Область нажатия
+    local toggleButton = Instance.new("TextButton")
+    toggleButton.Name = "ToggleButton"
+    toggleButton.Size = UDim2.new(1, 0, 1, 0)
+    toggleButton.BackgroundTransparency = 1
+    toggleButton.Text = ""
+    toggleButton.Parent = toggleContainer
+    
+    -- Обработка нажатия
+    toggleButton.MouseButton1Click:Connect(function()
+        toggled = not toggled
+        updateVisual()
         
-        return section
-    end
-    
-    -- Add page to library with safety check
-    if self.parent then
-        -- Ensure pages table exists
-        if not self.parent.pages then
-            self.parent.pages = {}
+        if callback then
+            pcall(callback, toggled)
         end
-        table.insert(self.parent.pages, page)
-    else
-        warn("Error in AddPage: parent is nil. Creating pages array and adding page anyway.")
-        if not self.pages then
-            self.pages = {}
-        end
-        table.insert(self.pages, page)
-    end
+    end)
     
-    return page
+    -- Возвращаем функции для управления переключателем
+    return {
+        Set = function(value)
+            toggled = value
+            updateVisual()
+            
+            if callback then
+                pcall(callback, toggled)
+            end
+        end,
+        Get = function()
+            return toggled
+        end
+    }
 end
 
-return SC
+-- Добавление слайдера
+function AriseUI:AddSlider(parent, text, min, max, default, callback)
+    min = min or 0
+    max = max or 100
+    default = default or min
+    
+    -- Контейнер для слайдера
+    local sliderContainer = Instance.new("Frame")
+    sliderContainer.Name = text .. "SliderContainer"
+    sliderContainer.Size = UDim2.new(1, 0, 0, 50)
+    sliderContainer.BackgroundTransparency = 1
+    sliderContainer.LayoutOrder = #parent:GetChildren()
+    sliderContainer.Parent = parent
+    
+    -- Текст слайдера
+    local sliderText = Instance.new("TextLabel")
+    sliderText.Name = "Text"
+    sliderText.Size = UDim2.new(1, 0, 0, 25)
+    sliderText.BackgroundTransparency = 1
+    sliderText.Font = Enum.Font.Gotham
+    sliderText.Text = text
+    sliderText.TextColor3 = self.Colors.Text
+    sliderText.TextSize = 14
+    sliderText.TextXAlignment = Enum.TextXAlignment.Left
+    sliderText.Parent = sliderContainer
+    
+    -- Фон слайдера
+    local sliderFrame = Instance.new("Frame")
+    sliderFrame.Name = "Frame"
+    sliderFrame.Size = UDim2.new(1, -120, 0, 6)
+    sliderFrame.Position = UDim2.new(0, 0, 0.7, 0)
+    sliderFrame.BackgroundColor3 = self.Colors.Primary
+    sliderFrame.BorderSizePixel = 0
+    sliderFrame.Parent = sliderContainer
+    
+    -- Скругление фона
+    local sliderCorner = Instance.new("UICorner")
+    sliderCorner.CornerRadius = UDim.new(0, 3)
+    sliderCorner.Parent = sliderFrame
+    
+    -- Заполнение слайдера
+    local sliderFill = Instance.new("Frame")
+    sliderFill.Name = "Fill"
+    sliderFill.Size = UDim2.new(0, 0, 1, 0)
+    sliderFill.BackgroundColor3 = self.Colors.Accent
+    sliderFill.BorderSizePixel = 0
+    sliderFill.Parent = sliderFrame
+    
+    -- Скругление заполнения
+    local fillCorner = Instance.new("UICorner")
+    fillCorner.CornerRadius = UDim.new(0, 3)
+    fillCorner.Parent = sliderFill
+    
+    -- Ползунок
+    local sliderHandle = Instance.new("Frame")
+    sliderHandle.Name = "Handle"
+    sliderHandle.Size = UDim2.new(0, 14, 0, 14)
+    sliderHandle.Position = UDim2.new(0, -7, 0.5, -7)
+    sliderHandle.BackgroundColor3 = self.Colors.Text
+    sliderHandle.Parent = sliderFill
+    
+    -- Скругление ползунка
+    local handleCorner = Instance.new("UICorner")
+    handleCorner.CornerRadius = UDim.new(0, 7)
+    handleCorner.Parent = sliderHandle
+    
+    -- Значение слайдера
+    local valueText = Instance.new("TextLabel")
+    valueText.Name = "Value"
+    valueText.Size = UDim2.new(0, 110, 0, 25)
+    valueText.Position = UDim2.new(1, -110, 0, 0)
+    valueText.BackgroundTransparency = 1
+    valueText.Font = Enum.Font.GothamBold
+    valueText.Text = tostring(default)
+    valueText.TextColor3 = self.Colors.Text
+    valueText.TextSize = 14
+    valueText.TextXAlignment = Enum.TextXAlignment.Right
+    valueText.Parent = sliderContainer
+    
+    -- Текущее значение
+    local value = default
+    
+    -- Функция для обновления визуального состояния
+    local function updateVisual()
+        -- Вычисляем процент
+        local percent = (value - min) / (max - min)
+        
+        -- Обновляем заполнение
+        CreateTween(sliderFill, {Size = UDim2.new(percent, 0, 1, 0)}):Play()
+        
+        -- Обновляем текст значения
+        valueText.Text = tostring(math.floor(value * 100) / 100)
+    end
+    
+    -- Начальное обновление
+    updateVisual()
+    
+    -- Область нажатия
+    local sliderButton = Instance.new("TextButton")
+    sliderButton.Name = "SliderButton"
+    sliderButton.Size = UDim2.new(1, 0, 1, 0)
+    sliderButton.BackgroundTransparency = 1
+    sliderButton.Text = ""
+    sliderButton.Parent = sliderContainer
+    
+    -- Обработка перетаскивания
+    local isDragging = false
+    
+    sliderButton.MouseButton1Down:Connect(function()
+        isDragging = true
+    end)
+    
+    game:GetService("UserInputService").InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            isDragging = false
+        end
+    end)
+    
+    sliderButton.MouseMoved:Connect(function(mouseX)
+        if isDragging then
+            -- Вычисляем новое значение на основе позиции мыши
+            local sliderPos = sliderFrame.AbsolutePosition.X
+            local sliderWidth = sliderFrame.AbsoluteSize.X
+            local percent = math.clamp((mouseX - sliderPos) / sliderWidth, 0, 1)
+            
+            -- Обновляем значение
+            value = min + percent * (max - min)
+            updateVisual()
+            
+            -- Вызываем колбэк
+            if callback then
+                pcall(callback, value)
+            end
+        end
+    end)
+    
+    -- Возвращаем функции для управления слайдером
+    return {
+        Set = function(newValue)
+            value = math.clamp(newValue, min, max)
+            updateVisual()
+            
+            if callback then
+                pcall(callback, value)
+            end
+        end,
+        Get = function()
+            return value
+        end
+    }
+end
+
+-- Добавление текстового поля
+function AriseUI:AddTextbox(parent, text, placeholder, callback)
+    -- Контейнер для текстбокса
+    local textboxContainer = Instance.new("Frame")
+    textboxContainer.Name = text .. "TextboxContainer"
+    textboxContainer.Size = UDim2.new(1, 0, 0, 60)
+    textboxContainer.BackgroundTransparency = 1
+    textboxContainer.LayoutOrder = #parent:GetChildren()
+    textboxContainer.Parent = parent
+    
+    -- Текст над полем
+    local textboxText = Instance.new("TextLabel")
+    textboxText.Name = "Text"
+    textboxText.Size = UDim2.new(1, 0, 0, 25)
+    textboxText.BackgroundTransparency = 1
+    textboxText.Font = Enum.Font.Gotham
+    textboxText.Text = text
+    textboxText.TextColor3 = self.Colors.Text
+    textboxText.TextSize = 14
+    textboxText.TextXAlignment = Enum.TextXAlignment.Left
+    textboxText.Parent = textboxContainer
+    
+    -- Фон поля ввода
+    local textboxFrame = Instance.new("Frame")
+    textboxFrame.Name = "Frame"
+    textboxFrame.Size = UDim2.new(1, 0, 0, 30)
+    textboxFrame.Position = UDim2.new(0, 0, 0.5, 0)
+    textboxFrame.BackgroundColor3 = self.Colors.Primary
+    textboxFrame.BorderSizePixel = 0
+    textboxFrame.Parent = textboxContainer
+    
+    -- Скругление фона
+    local frameCorner = Instance.new("UICorner")
+    frameCorner.CornerRadius = self.Config.ButtonRadius
+    frameCorner.Parent = textboxFrame
+    
+    -- Поле ввода
+    local textbox = Instance.new("TextBox")
+    textbox.Name = "Textbox"
+    textbox.Size = UDim2.new(1, -20, 1, 0)
+    textbox.Position = UDim2.new(0, 10, 0, 0)
+    textbox.BackgroundTransparency = 1
+    textbox.Font = Enum.Font.Gotham
+    textbox.PlaceholderText = placeholder or "Введите текст..."
+    textbox.PlaceholderColor3 = self.Colors.TextDark
+    textbox.Text = ""
+    textbox.TextColor3 = self.Colors.Text
+    textbox.TextSize = 14
+    textbox.TextXAlignment = Enum.TextXAlignment.Left
+    textbox.ClearTextOnFocus = false
+    textbox.Parent = textboxFrame
+    
+    -- Эффекты фокуса
+    textbox.Focused:Connect(function()
+        CreateTween(textboxFrame, {BackgroundColor3 = self.Colors.Accent}):Play()
+    end)
+    
+    textbox.FocusLost:Connect(function(enterPressed)
+        CreateTween(textboxFrame, {BackgroundColor3 = self.Colors.Primary}):Play()
+        
+        if enterPressed and callback then
+            pcall(callback, textbox.Text)
+        end
+    end)
+    
+    -- Возвращаем функции для управления полем ввода
+    return {
+        Set = function(text)
+            textbox.Text = text
+        end,
+        Get = function()
+            return textbox.Text
+        end
+    }
+end
+
+-- Добавление окна авторизации
+function AriseUI:ShowKeySystem(title, callback)
+    local mainUI = self:Create(title or "ARISE KEY SYSTEM")
+    local content = mainUI.ContentContainer
+    
+    -- Заголовок
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Name = "Title"
+    titleLabel.Size = UDim2.new(1, -40, 0, 40)
+    titleLabel.Position = UDim2.new(0, 20, 0, 20)
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.Font = Enum.Font.GothamBold
+    titleLabel.Text = "Авторизация"
+    titleLabel.TextColor3 = self.Colors.Text
+    titleLabel.TextSize = 20
+    titleLabel.TextXAlignment = Enum.TextXAlignment.Center
+    titleLabel.Parent = content
+    
+    -- Описание
+    local descriptionLabel = Instance.new("TextLabel")
+    descriptionLabel.Name = "Description"
+    descriptionLabel.Size = UDim2.new(1, -60, 0, 40)
+    descriptionLabel.Position = UDim2.new(0, 30, 0, 60)
+    descriptionLabel.BackgroundTransparency = 1
+    descriptionLabel.Font = Enum.Font.Gotham
+    descriptionLabel.Text = "Пожалуйста, введите ключ доступа для использования скрипта."
+    descriptionLabel.TextColor3 = self.Colors.TextDark
+    descriptionLabel.TextSize = 14
+    descriptionLabel.TextXAlignment = Enum.TextXAlignment.Center
+    descriptionLabel.TextWrapped = true
+    descriptionLabel.Parent = content
+    
+    -- Фон поля ввода
+    local keyFrame = Instance.new("Frame")
+    keyFrame.Name = "KeyFrame"
+    keyFrame.Size = UDim2.new(1, -80, 0, 40)
+    keyFrame.Position = UDim2.new(0, 40, 0, 120)
+    keyFrame.BackgroundColor3 = self.Colors.Primary
+    keyFrame.BorderSizePixel = 0
+    keyFrame.Parent = content
+    
+    -- Скругление фона
+    local frameCorner = Instance.new("UICorner")
+    frameCorner.CornerRadius = self.Config.ButtonRadius
+    frameCorner.Parent = keyFrame
+    
+    -- Поле ввода ключа
+    local keyTextbox = Instance.new("TextBox")
+    keyTextbox.Name = "KeyTextbox"
+    keyTextbox.Size = UDim2.new(1, -20, 1, 0)
+    keyTextbox.Position = UDim2.new(0, 10, 0, 0)
+    keyTextbox.BackgroundTransparency = 1
+    keyTextbox.Font = Enum.Font.Gotham
+    keyTextbox.PlaceholderText = "Введите ключ..."
+    keyTextbox.PlaceholderColor3 = self.Colors.TextDark
+    keyTextbox.Text = ""
+    keyTextbox.TextColor3 = self.Colors.Text
+    keyTextbox.TextSize = 14
+    keyTextbox.TextXAlignment = Enum.TextXAlignment.Center
+    keyTextbox.ClearTextOnFocus = false
+    keyTextbox.Parent = keyFrame
+    
+    -- Эффекты фокуса
+    keyTextbox.Focused:Connect(function()
+        CreateTween(keyFrame, {BackgroundColor3 = self.Colors.Accent}):Play()
+    end)
+    
+    keyTextbox.FocusLost:Connect(function()
+        CreateTween(keyFrame, {BackgroundColor3 = self.Colors.Primary}):Play()
+    end)
+    
+    -- Кнопка проверки
+    local submitButton = Instance.new("TextButton")
+    submitButton.Name = "SubmitButton"
+    submitButton.Size = UDim2.new(0, 200, 0, 40)
+    submitButton.Position = UDim2.new(0.5, -100, 0, 180)
+    submitButton.BackgroundColor3 = self.Colors.Primary
+    submitButton.Font = Enum.Font.GothamBold
+    submitButton.Text = "ПРОВЕРИТЬ"
+    submitButton.TextColor3 = self.Colors.Text
+    submitButton.TextSize = 14
+    submitButton.AutoButtonColor = false
+    submitButton.Parent = content
+    
+    -- Скругление кнопки
+    local buttonCorner = Instance.new("UICorner")
+    buttonCorner.CornerRadius = self.Config.ButtonRadius
+    buttonCorner.Parent = submitButton
+    
+    -- Эффекты наведения и клика
+    submitButton.MouseEnter:Connect(function()
+        CreateTween(submitButton, {BackgroundColor3 = self.Colors.Accent}):Play()
+    end)
+    
+    submitButton.MouseLeave:Connect(function()
+        CreateTween(submitButton, {BackgroundColor3 = self.Colors.Primary}):Play()
+    end)
+    
+    submitButton.MouseButton1Down:Connect(function()
+        CreateTween(submitButton, {BackgroundColor3 = self.Colors.AccentHover}, 0.1):Play()
+    end)
+    
+    submitButton.MouseButton1Up:Connect(function()
+        CreateTween(submitButton, {BackgroundColor3 = self.Colors.Accent}, 0.1):Play()
+    end)
+    
+    -- Статус ошибки
+    local errorLabel = Instance.new("TextLabel")
+    errorLabel.Name = "ErrorLabel"
+    errorLabel.Size = UDim2.new(1, -40, 0, 30)
+    errorLabel.Position = UDim2.new(0, 20, 0, 230)
+    errorLabel.BackgroundTransparency = 1
+    errorLabel.Font = Enum.Font.Gotham
+    errorLabel.Text = ""
+    errorLabel.TextColor3 = self.Colors.Error
+    errorLabel.TextSize = 14
+    errorLabel.TextXAlignment = Enum.TextXAlignment.Center
+    errorLabel.Parent = content
+    
+    -- Функция проверки ключа
+    local function checkKey()
+        local userKey = keyTextbox.Text
+        
+        -- Проверяем ключ
+        if userKey == self.Config.LicenseKey then
+            -- Успешная авторизация
+            CreateTween(keyFrame, {BackgroundColor3 = self.Colors.Success}):Play()
+            CreateTween(submitButton, {BackgroundColor3 = self.Colors.Success}):Play()
+            errorLabel.Text = "Ключ верный! Загрузка..."
+            errorLabel.TextColor3 = self.Colors.Success
+            
+            -- Анимация успешной авторизации
+            wait(1)
+            
+            -- Закрываем окно авторизации
+            local fadeTween = CreateTween(mainUI.MainFrame, {BackgroundTransparency = 1})
+            fadeTween:Play()
+            fadeTween.Completed:Connect(function()
+                GUI:Destroy()
+                Licensed = true
+                
+                -- Вызываем колбэк
+                if callback then
+                    pcall(callback, true)
+                end
+            end)
+        else
+            -- Неверный ключ
+            CreateTween(keyFrame, {BackgroundColor3 = self.Colors.Error}):Play()
+            errorLabel.Text = "Неверный ключ! Попробуйте еще раз."
+            errorLabel.TextColor3 = self.Colors.Error
+            
+            -- Анимация встряски
+            local shake = function()
+                local orig = keyFrame.Position
+                
+                CreateTween(keyFrame, {Position = orig + UDim2.new(0, -5, 0, 0)}, 0.05):Play()
+                wait(0.05)
+                CreateTween(keyFrame, {Position = orig + UDim2.new(0, 5, 0, 0)}, 0.05):Play()
+                wait(0.05)
+                CreateTween(keyFrame, {Position = orig + UDim2.new(0, -5, 0, 0)}, 0.05):Play()
+                wait(0.05)
+                CreateTween(keyFrame, {Position = orig}, 0.05):Play()
+            end
+            
+            spawn(shake)
+            
+            -- Сбрасываем цвет через некоторое время
+            wait(1)
+            CreateTween(keyFrame, {BackgroundColor3 = self.Colors.Primary}):Play()
+        end
+    end
+    
+    -- Обработка нажатия кнопки
+    submitButton.MouseButton1Click:Connect(checkKey)
+    
+    -- Обработка Enter в поле ввода
+    keyTextbox.FocusLost:Connect(function(enterPressed)
+        if enterPressed then
+            checkKey()
+        end
+    end)
+end
+
+-- Функция для проверки ключа и отображения полного интерфейса
+function AriseUI:Initialize(title, mainCallback)
+    self:ShowKeySystem(title, function(success)
+        if success then
+            wait(0.5) -- Небольшая задержка для плавности
+            
+            -- Создаем основной интерфейс и передаем его в колбэк
+            local ui = self:Create(title)
+            
+            if mainCallback then
+                mainCallback(ui)
+            end
+        end
+    end)
+end
+
+-- Загрузка UI через внешний URL
+function AriseUI:LoadFromURL(url, callback)
+    local success, result = pcall(function()
+        return game:HttpGet(url)
+    end)
+    
+    if success then
+        local loadSuccess, loadedUI = pcall(function()
+            return loadstring(result)()
+        end)
+        
+        if loadSuccess and callback then
+            callback(loadedUI)
+            return loadedUI
+        else
+            warn("Не удалось загрузить UI из URL: " .. tostring(loadedUI))
+            return nil
+        end
+    else
+        warn("Не удалось получить содержимое URL: " .. tostring(result))
+        return nil
+    end
+end
+
+-- Создаем и возвращаем объект для тестирования
+return AriseUI
