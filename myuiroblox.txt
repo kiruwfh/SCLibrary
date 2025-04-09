@@ -1076,7 +1076,7 @@ function AriseUI:LoadFromURL(url, callback)
             warn("Не удалось загрузить UI из URL: " .. tostring(loadedUI))
             return nil
         end
-    else
+    else    
         warn("Не удалось получить содержимое URL: " .. tostring(result))
         return nil
     end
