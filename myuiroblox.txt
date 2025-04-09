@@ -1,5 +1,5 @@
 -- SC UI Library Enhanced with Flight Mode
--- Fixed version 2023
+-- Fixed version 2023 - Optimized and Improved
 
 -- // Locals & Services
 local Workspace = game:GetService("Workspace")
@@ -49,23 +49,26 @@ local SC = {
     notificationContainer = nil
 }
 
--- themes
+-- Enhanced themes with improved visual design
 local objects = {}
 local themes = {
-    Background = Color3.fromRGB(24, 24, 24), 
-    Glow = Color3.fromRGB(0, 0, 0), 
-    Accent = Color3.fromRGB(10, 10, 10), 
-    LightContrast = Color3.fromRGB(20, 20, 20), 
-    DarkContrast = Color3.fromRGB(14, 14, 14),  
-    TextColor = Color3.fromRGB(255, 255, 255),
-    -- Notification Colors
-    NotifInfo = Color3.fromRGB(100, 150, 255),
-    NotifSuccess = Color3.fromRGB(100, 255, 150),
-    NotifWarning = Color3.fromRGB(255, 255, 100),
-    NotifError = Color3.fromRGB(255, 100, 100),
-    -- Flight Mode Colors
-    FlightModeAccent = Color3.fromRGB(0, 200, 255),
-    FlightModeIndicator = Color3.fromRGB(0, 120, 255)
+    -- Main UI Colors (Darker and more modern)
+    Background = Color3.fromRGB(20, 20, 30),   -- Slightly blue-tinted dark background
+    Glow = Color3.fromRGB(10, 10, 25),         -- Subtle glow color
+    Accent = Color3.fromRGB(50, 100, 200),     -- Vibrant blue accent
+    LightContrast = Color3.fromRGB(30, 30, 45), -- Lighter contrast element
+    DarkContrast = Color3.fromRGB(15, 15, 25),  -- Darker contrast element 
+    TextColor = Color3.fromRGB(240, 240, 245),  -- Slightly off-white for text
+    
+    -- Notification Colors (More saturated and professional)
+    NotifInfo = Color3.fromRGB(64, 150, 255),   -- Info blue
+    NotifSuccess = Color3.fromRGB(70, 230, 130), -- Success green
+    NotifWarning = Color3.fromRGB(255, 215, 60),  -- Warning yellow
+    NotifError = Color3.fromRGB(250, 80, 80),     -- Error red
+    
+    -- Flight Mode Colors (More vibrant)
+    FlightModeAccent = Color3.fromRGB(0, 220, 255),     -- Cyan/bright blue
+    FlightModeIndicator = Color3.fromRGB(40, 120, 255)  -- Deep blue
 }
 
 -- // Utility Functions
@@ -130,23 +133,47 @@ function utility:Sort(pattern, values)
     return new
 end
 
+-- Improved pop animation effect with smoother tweens and visual feedback
 function utility:Pop(object, shrink)
-    local clone = object:Clone()
+    -- Save original properties
+    local originalTransparency = object.ImageTransparency
+    local originalSize = object.Size
     
+    -- Create clone for animation
+    local clone = object:Clone()
+    clone.Name = "PopEffect"
+    
+    -- Position settings for centered animation
     clone.AnchorPoint = Vector2.new(0.5, 0.5)
-    clone.Size = clone.Size - UDim2.new(0, shrink, 0, shrink)
+    clone.Size = originalSize - UDim2.new(0, shrink, 0, shrink)
     clone.Position = UDim2.new(0.5, 0, 0.5, 0)
     
+    -- Prepare the clone
     clone.Parent = object
     clone:ClearAllChildren()
+    clone.ZIndex = object.ZIndex + 1
     
+    -- Temporarily hide original
     object.ImageTransparency = 1
-    utility:Tween(clone, {Size = object.Size}, 0.2)
     
+    -- Smooth size tween with subtle bounce effect
+    utility:Tween(clone, {
+        Size = originalSize + UDim2.new(0, 1, 0, 1) -- Slightly overshoot
+    }, 0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+    
+    -- Sequence of animations
     spawn(function()
-        wait(0.2)
-    
-        object.ImageTransparency = 0
+        wait(0.15) -- Wait for first tween
+        
+        -- Subtle settle animation
+        utility:Tween(clone, {
+            Size = originalSize
+        }, 0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        
+        wait(0.1) -- Wait for second tween
+        
+        -- Restore original and clean up
+        object.ImageTransparency = originalTransparency
         clone:Destroy()
     end)
     
@@ -262,47 +289,137 @@ function utility:GetLocalCharacter()
     return char, humanoid, rootPart
 end
 
--- Flight indicator UI
+-- Enhanced flight indicator UI with fancy animations
 function utility:CreateFlightIndicator()
     if FlightMode.Indicator then return FlightMode.Indicator end
     
-    -- Create GUI for indicator
+    -- Create GUI for indicator with protected parent
     local screenGui = self:Create("ScreenGui", {
         Name = "FlightModeIndicator",
         ResetOnSpawn = false,
-        ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+        DisplayOrder = 1002 -- Above watermark
+    })
+    
+    -- Container for indicator elements
+    local container = self:Create("Frame", {
+        Parent = screenGui,
+        Size = UDim2.new(0, 280, 0, 70),
+        Position = UDim2.new(0.5, -140, 0.85, -40),
+        BackgroundTransparency = 1,
+        Visible = false,
+        AnchorPoint = Vector2.new(0.5, 0.5)
+    })
+    
+    -- Background panel with blur effect
+    local background = self:Create("ImageLabel", {
+        Parent = container,
+        Size = UDim2.new(1, 0, 1, 0),
+        Position = UDim2.new(0, 0, 0, 0),
+        BackgroundTransparency = 1,
+        Image = "rbxassetid://5028857472",
+        ImageColor3 = themes.FlightModeIndicator,
+        ImageTransparency = 0.3,
+        ScaleType = Enum.ScaleType.Slice,
+        SliceCenter = Rect.new(4, 4, 296, 296)
+    })
+    
+    -- Glow effect behind indicator
+    local glow = self:Create("ImageLabel", {
+        Parent = container,
+        Size = UDim2.new(1, 30, 1, 30),
+        Position = UDim2.new(0.5, 0, 0.5, 0),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        BackgroundTransparency = 1,
+        Image = "rbxassetid://5028857084",
+        ImageColor3 = Color3.fromRGB(0, 200, 255),
+        ImageTransparency = 0.7,
+        ScaleType = Enum.ScaleType.Slice,
+        SliceCenter = Rect.new(24, 24, 276, 276),
+        ZIndex = 0
+    })
+    
+    -- Rounded corners for background
+    local uiCorner = self:Create("UICorner", {
+        Parent = background,
+        CornerRadius = UDim.new(0, 10)
     })
     
     -- Main text indicator
     local textLabel = self:Create("TextLabel", {
-        Parent = screenGui,
-        Size = UDim2.new(0, 200, 0, 50),
-        Position = UDim2.new(0.5, -100, 0.9, -50),
-        BackgroundTransparency = 0.3,
-        BackgroundColor3 = themes.FlightModeIndicator,
+        Parent = container,
+        Size = UDim2.new(1, -20, 0, 30),
+        Position = UDim2.new(0, 10, 0, 8),
+        BackgroundTransparency = 1,
         TextColor3 = themes.TextColor,
-        TextStrokeTransparency = 0,
-        TextStrokeColor3 = Color3.fromRGB(0, 0, 0),
         Font = Enum.Font.GothamBold,
-        TextSize = 18,
+        TextSize = 20,
         Text = "РЕЖИМ ПОЛЕТА АКТИВЕН",
-        Visible = false
+        TextStrokeTransparency = 0.7,
+        TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
     })
     
-    -- Rounded corners
-    local uiCorner = self:Create("UICorner", {
-        Parent = textLabel,
-        CornerRadius = UDim.new(0, 8)
+    -- Speed indicator
+    local speedLabel = self:Create("TextLabel", {
+        Parent = container,
+        Size = UDim2.new(0.5, -15, 0, 20),
+        Position = UDim2.new(0, 10, 0, 40),
+        BackgroundTransparency = 1,
+        TextColor3 = Color3.fromRGB(220, 220, 220),
+        Font = Enum.Font.Gotham,
+        TextSize = 14,
+        Text = "Скорость: 2.0",
+        TextXAlignment = Enum.TextXAlignment.Left
     })
     
-    -- Animate indicator
+    -- Key indicator
+    local keyLabel = self:Create("TextLabel", {
+        Parent = container,
+        Size = UDim2.new(0.5, -15, 0, 20),
+        Position = UDim2.new(0.5, 5, 0, 40),
+        BackgroundTransparency = 1,
+        TextColor3 = Color3.fromRGB(220, 220, 220),
+        Font = Enum.Font.Gotham,
+        TextSize = 14,
+        Text = "Клавиша: F",
+        TextXAlignment = Enum.TextXAlignment.Left
+    })
+    
+    -- Edge accent (animated line)
+    local edge = self:Create("Frame", {
+        Name = "EdgeAccent",
+        Parent = container,
+        BackgroundColor3 = themes.FlightModeAccent,
+        BorderSizePixel = 0,
+        Position = UDim2.new(0, 0, 0, 0),
+        Size = UDim2.new(0, 0, 0, 2),
+        ZIndex = 2
+    })
+    
+    -- Enhanced animation system with multiple effects
     local function animateIndicator()
-        self:Tween(textLabel, {BackgroundColor3 = themes.FlightModeAccent}, 1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+        -- Edge line animation
         spawn(function()
-            wait(1)
+            self:Tween(edge, {Size = UDim2.new(1, 0, 0, 2)}, 0.7, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+            wait(0.7)
             if FlightMode.Enabled then
-                self:Tween(textLabel, {BackgroundColor3 = themes.FlightModeIndicator}, 1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
-                wait(1)
+                self:Tween(edge, {BackgroundColor3 = themes.FlightModeAccent:Lerp(Color3.fromRGB(255,255,255), 0.5)}, 0.3)
+                wait(0.3)
+                self:Tween(edge, {BackgroundColor3 = themes.FlightModeAccent}, 0.3)
+            end
+        end)
+        
+        -- Background pulse animation
+        self:Tween(background, {ImageColor3 = themes.FlightModeAccent}, 1.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+        self:Tween(glow, {ImageTransparency = 0.5}, 1.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+        
+        spawn(function()
+            wait(1.2)
+            if FlightMode.Enabled then
+                self:Tween(background, {ImageColor3 = themes.FlightModeIndicator}, 1.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+                self:Tween(glow, {ImageTransparency = 0.7}, 1.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+                wait(1.2)
+                
                 if FlightMode.Enabled then
                     animateIndicator()
                 end
@@ -476,11 +593,47 @@ function utility:ToggleFlightMode()
     -- Setup flight mechanics
     self:SetupFlightMechanics(FlightMode.Enabled)
     
-    -- Show/hide indicator
+    -- Show/hide indicator with animation
     if FlightMode.Indicator then
-        FlightMode.Indicator.label.Visible = FlightMode.Enabled
         if FlightMode.Enabled then
+            -- Get container
+            local container = FlightMode.Indicator.label.Parent
+            container.Visible = true
+            
+            -- Initial animation (slide in from top)
+            container.Position = UDim2.new(0.5, -140, 0.7, -40)
+            container.BackgroundTransparency = 1
+            
+            -- Speed label update
+            local speedLabel = container:FindFirstChild("TextLabel", true)
+            if speedLabel and speedLabel.Name ~= "FlightModeIndicator" then
+                speedLabel.Text = "Скорость: " .. FlightMode.Speed
+            end
+            
+            -- Key label update
+            local keyLabel = container:FindFirstChild("TextLabel", true)
+            if keyLabel and keyLabel.Text:find("Клавиша") then
+                local keyName = FlightMode.ToggleKey.Name or "F"
+                keyLabel.Text = "Клавиша: " .. keyName
+            end
+            
+            -- Animate in
+            self:Tween(container, {Position = UDim2.new(0.5, -140, 0.85, -40)}, 0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+            
+            -- Start pulse animation
             FlightMode.Indicator.animate()
+        else
+            -- Get container
+            local container = FlightMode.Indicator.label.Parent
+            if container then
+                -- Animate out
+                self:Tween(container, {Position = UDim2.new(0.5, -140, 1.1, -40)}, 0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+                
+                -- Hide after animation
+                delay(0.4, function()
+                    container.Visible = false
+                end)
+            end
         end
     end
     
@@ -916,11 +1069,11 @@ function SC:New(title)
     return self
 end
 
--- Add a watermark (brand text at corner of screen)
+-- Add a watermark (brand text at corner of screen with improved visual design)
 function SC:SetWatermark(options)
     options = options or {}
-    local title = options.title or "SC UI Fixed"
-    local subtitle = options.subtitle or "v1.0"
+    local title = options.title or "SC UI Enhanced"
+    local subtitle = options.subtitle or "v2.0"
     local showFPS = options.showFPS ~= false -- Default to true
     
     -- Remove existing watermark if present
@@ -930,14 +1083,29 @@ function SC:SetWatermark(options)
         self.watermarkElements = {}
     end
     
-    -- Create watermark container
+    -- Create watermark container with protected GUI
     local watermarkScreenGui = utility:Create("ScreenGui", {
         Name = "SCUIWatermark",
-        Parent = CoreGuiService,
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
         DisplayOrder = 1000, -- Above main UI
         ResetOnSpawn = false, -- Persist across respawns
     })
+    
+    -- Protect GUI if possible
+    pcall(function()
+        if syn and syn.protect_gui then
+            syn.protect_gui(watermarkScreenGui)
+            watermarkScreenGui.Parent = CoreGuiService
+        elseif gethui then
+            watermarkScreenGui.Parent = gethui()
+        else
+            watermarkScreenGui.Parent = CoreGuiService
+        end
+    end)
+    
+    if not watermarkScreenGui.Parent then
+        watermarkScreenGui.Parent = CoreGuiService
+    end
     
     self.watermarkScreenGui = watermarkScreenGui
     self.watermarkElements = {}
@@ -948,13 +1116,14 @@ function SC:SetWatermark(options)
     }
     WatermarkFunctions.__index = WatermarkFunctions
     
-    -- Main watermark container
+    -- Main watermark container with improved positioning (bottom left corner)
     local watermarkContainer = utility:Create("Frame", {
         Name = "WatermarkContainer",
         Parent = watermarkScreenGui,
         BackgroundTransparency = 1,
-        Position = UDim2.new(0, 10, 1, -50), -- Bottom left with padding
-        Size = UDim2.new(0, 200, 0, 40), -- Will auto-size based on content
+        Position = UDim2.new(0, 10, 1, -60), -- Positioned at bottom left
+        AnchorPoint = Vector2.new(0, 1), -- Anchored to bottom left
+        Size = UDim2.new(0, 230, 0, 50), -- Slightly larger for better visibility
         AnchorPoint = Vector2.new(0, 1) -- Anchor to bottom left
     })
     
@@ -1897,7 +2066,11 @@ function SC:AddPage(title, icon)
         end
         
         -- Add section to page
-        table.insert(self.page.sections, section)
+        if self.page and self.page.sections then
+            table.insert(self.page.sections, section)
+        else
+            warn("Error in AddSection: page or page.sections is nil. Section was not added to sections array.")
+        end
         
         return section
     end
