@@ -1012,22 +1012,22 @@ function SC:New(title)
         })
     })
     
-    -- Initialize notification container
+    -- Initialize notification container (компактный, внизу слева)
     local notificationContainer = utility:Create("Frame", {
         Name = "NotificationContainer",
         Parent = container,
         BackgroundTransparency = 1,
-        Position = UDim2.new(1, -20, 0, 20), -- Right side of screen
-        Size = UDim2.new(0, 260, 1, -40), -- Full height with padding
-        AnchorPoint = Vector2.new(1, 0), -- Anchor to right side
+        Position = UDim2.new(0, 20, 1, -20), -- Левый нижний угол экрана
+        Size = UDim2.new(0, 200, 0, 300), -- Компактный размер для уведомлений
+        AnchorPoint = Vector2.new(0, 1), -- Привязка к нижнему левому углу
         ClipsDescendants = false -- Allow overflow for slide-in animations
     }, {
         -- Layout for stacking notifications
         utility:Create("UIListLayout", {
-            Padding = UDim.new(0, 10),
+            Padding = UDim.new(0, 6),
             SortOrder = Enum.SortOrder.LayoutOrder,
-            VerticalAlignment = Enum.VerticalAlignment.Top,
-            HorizontalAlignment = Enum.HorizontalAlignment.Center
+            VerticalAlignment = Enum.VerticalAlignment.Bottom, -- Уведомления идут снизу вверх
+            HorizontalAlignment = Enum.HorizontalAlignment.Left -- Выравнивание влево
         })
     })
     
@@ -1116,15 +1116,15 @@ function SC:SetWatermark(options)
     }
     WatermarkFunctions.__index = WatermarkFunctions
     
-    -- Main watermark container with improved positioning (bottom left corner)
+    -- Main watermark container with enhanced positioning (bottom left corner)
     local watermarkContainer = utility:Create("Frame", {
         Name = "WatermarkContainer",
         Parent = watermarkScreenGui,
         BackgroundTransparency = 1,
-        Position = UDim2.new(0, 10, 1, -60), -- Positioned at bottom left
+        Position = UDim2.new(0, 10, 1, -40), -- Positioned at bottom left
         AnchorPoint = Vector2.new(0, 1), -- Anchored to bottom left
-        Size = UDim2.new(0, 230, 0, 50), -- Slightly larger for better visibility
-        AnchorPoint = Vector2.new(0, 1) -- Anchor to bottom left
+        Size = UDim2.new(0, 180, 0, 35), -- Более компактный размер
+        ZIndex = 9999 -- Поверх других элементов
     })
     
     local bgContainer = utility:Create("Frame", {
@@ -1318,12 +1318,12 @@ function SC:Notify(title, text, options)
     local BAR_WIDTH = 4
     local MIN_HEIGHT = 40
     
-    -- Create notification frame (с ограниченным размером)
+    -- Create notification frame (с гораздо меньшим размером)
     local notification = utility:Create("Frame", {
         Name = "Notification",
         Parent = self.notificationContainer,
         BackgroundTransparency = 1,
-        Size = UDim2.new(0.35, 0, 0, MIN_HEIGHT), -- Уменьшен размер до 35% ширины экрана
+        Size = UDim2.new(0.25, 0, 0, MIN_HEIGHT), -- Уменьшен размер до 25% ширины экрана
         AutomaticSize = Enum.AutomaticSize.Y,
         ClipsDescendants = true,
         LayoutOrder = tick()
@@ -1423,8 +1423,8 @@ function SC:Notify(title, text, options)
         Size = UDim2.new(0.5, 0, 1, 0)
     })
     
-    -- Animation: slide in from right
-    notification.Position = UDim2.new(1, 0, 0, 0)
+    -- Animation: slide in from bottom
+    notification.Position = UDim2.new(0, 0, 1, 0)
     utility:Tween(notification, {Position = UDim2.new(0, 0, 0, 0)}, 0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
     
     -- Make notification clickable and highlight on hover
@@ -1468,8 +1468,8 @@ function SC:Notify(title, text, options)
         if isClosing then return end
         isClosing = true
         
-        -- Tween out to the right
-        utility:Tween(notification, {Position = UDim2.new(1, 0, 0, 0)}, 0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        -- Tween out to the bottom
+        utility:Tween(notification, {Position = UDim2.new(0, 0, 1, 0)}, 0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
         
         -- Remove after animation
         delay(0.3, function()
