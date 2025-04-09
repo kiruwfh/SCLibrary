@@ -779,7 +779,7 @@ do
                     TextSize = 14,
                     TextXAlignment = Enum.TextXAlignment.Left,
                     TextYAlignment = Enum.TextXAlignment.Center,
-                    TextElipsisSize = 0.1, -- Properly truncate long titles
+                    TextTruncate = Enum.TextTruncate.AtEnd, -- Properly truncate long titles
                     Position = UDim2.new(0, 10, 0, 0), -- Left padding for text
                 }),
                 
