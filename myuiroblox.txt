@@ -36,7 +36,7 @@ local EditOpened = false
 local ColorElements = {}
 
 -- Тема UI по умолчанию
-local UITheme = {
+local UITheme = getgenv().SCuiTheme or {
     Background = Color3.fromRGB(27, 27, 27),
     Accent = Color3.fromRGB(45, 45, 45),
     LightContrast = Color3.fromRGB(35, 35, 35),
@@ -1742,6 +1742,8 @@ Closed:GetPropertyChangedSignal("Value"):Connect(function()
 end)
 
 dropdownButton.MouseButton1Click:Connect(function()
+    if not debounceWait() then return end
+    
     DropdownOpened = not DropdownOpened
 
     TweenService:Create(dropdownIcon, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Rotation = DropdownOpened and -180 or -90}):Play()
@@ -1975,6 +1977,8 @@ end)
 end
 
 radioButtonTextButton.MouseButton1Click:Connect(function()
+    if not debounceWait() then return end
+    
     RadioOpened = not RadioOpened
 
     TweenService:Create(radioButtonIcon, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {ImageColor3 = RadioOpened and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(191, 191, 191)}):Play()
@@ -1983,8 +1987,13 @@ radioButtonTextButton.MouseButton1Click:Connect(function()
     TweenService:Create(radioButton, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = RadioOpened and UDim2.new(0, 162, 0, RadioYSize) or UDim2.new(0, 162, 0, 27)}):Play()
     TweenService:Create(radioContainer, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = RadioOpened and UDim2.new(0, 162, 0, RadioYSize) or UDim2.new(0, 162, 0, 27)}):Play()
     TweenService:Create(radioContainer, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {BackgroundTransparency = RadioOpened and .96 or 1}):Play()
-    TweenService:Create(sectionFrame, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = RadioOpened and UDim2.new(0, 162, 0, sectionFrame.Size.Y.Offset + RadioYSize - 27) or UDim2.new(0, 162, 0, sectionFrame.Size.Y.Offset - RadioYSize + 27)}):Play()
-    TweenService:Create(section, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = RadioOpened and UDim2.new(0, 162, 0, sectionFrame.Size.Y.Offset + RadioYSize - 27 + 4) or UDim2.new(0, 162, 0, sectionFrame.Size.Y.Offset - RadioYSize + 31)}):Play()
+    
+    -- Исправленное вычисление размера для раскрывающихся элементов
+    local newSectionFrameSize = UDim2.new(0, 162, 0, sectionFrame.Size.Y.Offset + (RadioOpened and (RadioYSize - 27) or -(RadioYSize - 27)))
+    local newSectionSize = UDim2.new(0, 162, 0, newSectionFrameSize.Y.Offset + 4)
+    
+    TweenService:Create(sectionFrame, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = newSectionFrameSize}):Play()
+    TweenService:Create(section, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = newSectionSize}):Play()
 end)
 
 for _,v in pairs(Info.Options) do
@@ -2001,8 +2010,13 @@ Closed:GetPropertyChangedSignal("Value"):Connect(function()
     TweenService:Create(radioButton, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = RadioOpened and UDim2.new(0, 162, 0, RadioYSize) or UDim2.new(0, 162, 0, 27)}):Play()
     TweenService:Create(radioContainer, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = RadioOpened and UDim2.new(0, 162, 0, RadioYSize) or UDim2.new(0, 162, 0, 27)}):Play()
     TweenService:Create(radioContainer, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {BackgroundTransparency = RadioOpened and .96 or 1}):Play()
-    TweenService:Create(sectionFrame, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = RadioOpened and UDim2.new(0, 162, 0, sectionFrame.Size.Y.Offset + RadioYSize - 27) or UDim2.new(0, 162, 0, sectionFrame.Size.Y.Offset - RadioYSize + 27)}):Play()
-    TweenService:Create(section, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = RadioOpened and UDim2.new(0, 162, 0, sectionFrame.Size.Y.Offset + RadioYSize - 27 + 4) or UDim2.new(0, 162, 0, sectionFrame.Size.Y.Offset - RadioYSize + 31)}):Play()
+    
+    -- Исправленное вычисление размера при закрытии секции
+    local newSectionFrameSize = UDim2.new(0, 162, 0, sectionFrame.Size.Y.Offset - (RadioYSize - 27))
+    local newSectionSize = UDim2.new(0, 162, 0, newSectionFrameSize.Y.Offset + 4)
+    
+    TweenService:Create(sectionFrame, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = newSectionFrameSize}):Play()
+    TweenService:Create(section, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = newSectionSize}):Play()
     end
 end)
 
@@ -2013,6 +2027,8 @@ return sectiontable
 end
 
 tabTextButton.MouseButton1Click:Connect(function()
+    if not debounceWait() then return end
+    
     TabSelected = tabFrame
     task.spawn(function()
     for _,v in pairs(main:GetChildren()) do
@@ -2027,8 +2043,12 @@ tabTextButton.MouseButton1Click:Connect(function()
         end
     end
     TweenService:Create(tabFrame, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {BackgroundTransparency = .85}):Play()
-    leftContainer.Visible = true
-    rightContainer.Visible = true
+    
+    -- Делаем небольшую задержку перед показом контейнеров
+    task.delay(0.05, function()
+        leftContainer.Visible = true
+        rightContainer.Visible = true 
+    end)
 end)
 
 function tab:Select()
@@ -2046,8 +2066,12 @@ function tab:Select()
         end
     end
     TweenService:Create(tabFrame, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {BackgroundTransparency = .85}):Play()
-    leftContainer.Visible = true
-    rightContainer.Visible = true
+    
+    -- Добавляем такую же задержку как в клике
+    task.delay(0.05, function()
+        leftContainer.Visible = true
+        rightContainer.Visible = true
+    end)
 end
 
 return tab
