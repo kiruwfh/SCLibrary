@@ -500,12 +500,13 @@ end)
 local function createThemeEditor()
     local themeEditor = Instance.new("Frame")
     themeEditor.Name = "ThemeEditor"
-    themeEditor.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    themeEditor.BackgroundColor3 = UITheme.LightContrast
     themeEditor.BorderSizePixel = 0
-    themeEditor.Position = UDim2.new(0.75, 0, 0.1, 0)
+    themeEditor.Position = UDim2.new(0.5, -100, 0.5, -125) -- Центрируем редактор тем
     themeEditor.Size = UDim2.new(0, 200, 0, 250)
     themeEditor.Visible = false
     themeEditor.ZIndex = 20
+    themeEditor.ClipsDescendants = true -- Предотвращаем выход за границы
     themeEditor.Parent = main
     
     local themeCorner = Instance.new("UICorner")
@@ -692,9 +693,27 @@ local function applyTheme()
     -- Контейнеры вкладок
     tabContainer.BackgroundColor3 = UITheme.LightContrast
     leftContainer.BackgroundColor3 = UITheme.Background
+    rightContainer.BackgroundColor3 = UITheme.Background
+
+    -- Применяем тему к editButton
+    if EditOpened then
+        uiGradient.Enabled = true
+    else
+        editButton.ImageColor3 = UITheme.TextColor
+    end
     
-    -- Применяем к другим элементам по необходимости
-    -- ...
+    -- Применяем к настройкам тем
+    themeEditor.BackgroundColor3 = UITheme.LightContrast
+    themeEditor.ThemeTitle.BackgroundColor3 = UITheme.DarkContrast
+    themeEditor.ThemeTitle.ThemeFix.BackgroundColor3 = UITheme.DarkContrast
+    themeEditor.ThemeTitle.TextColor3 = UITheme.TextColor
+    
+    -- Применяем к другим контейнерам
+    fix.BackgroundColor3 = UITheme.LightContrast
+    fix1.BackgroundColor3 = UITheme.LightContrast
+    
+    -- Сохраняем настройки темы для будущих использований
+    getgenv().SCuiTheme = UITheme
 end
 
 -- Создаем редактор темы
@@ -1019,14 +1038,22 @@ sectionIcon.ZIndex = 1
 sectionIcon.Parent = section
 
 sectionButton.MouseButton1Click:Connect(function()
+    if not debounceWait() then return end
+    
     Closed.Value = not Closed.Value
-    --#d96163
-
-
+    
+    -- Анимации раскрытия/сворачивания секции
     TweenService:Create(section, TweenInfo.new(.1, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = Closed.Value and UDim2.new(0, 162, 0, SizeY + 4) or UDim2.new(0, 162, 0, 27)}):Play()
     TweenService:Create(sectionFrame, TweenInfo.new(.1, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = Closed.Value and UDim2.new(0, 162, 0, SizeY) or UDim2.new(0, 162, 0, 23)}):Play()
     TweenService:Create(sectionIcon, TweenInfo.new(.1, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {ImageColor3 = Closed.Value and Color3.fromRGB(217, 97, 99) or Color3.fromRGB(217, 217, 217)}):Play()
     TweenService:Create(sectionIcon, TweenInfo.new(.1, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Rotation = Closed.Value and 45 or 0}):Play()
+    
+    -- Делаем все элементы в секции видимыми
+    for _, child in pairs(sectionFrame:GetChildren()) do
+        if child:IsA("Frame") then
+            child.Visible = true
+        end
+    end
 end)
 
 function sectiontable:Label(Info)
@@ -2030,13 +2057,17 @@ tabTextButton.MouseButton1Click:Connect(function()
     if not debounceWait() then return end
     
     TabSelected = tabFrame
+    
+    -- Сначала скрываем контейнеры
     task.spawn(function()
-    for _,v in pairs(main:GetChildren()) do
-        if v.Name == "LeftContainer" or v.Name == "RightContainer" then
-            v.Visible = false
+        for _,v in pairs(main:GetChildren()) do
+            if v.Name == "LeftContainer" or v.Name == "RightContainer" then
+                v.Visible = false
+            end
         end
-    end
     end)
+    
+    -- Обрабатываем стили вкладок
     for _,v in pairs(scrollingContainer:GetChildren()) do
         if v ~= tabButton and v.Name == "TabButton" then
             TweenService:Create(v.TabFrame, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {BackgroundTransparency = .96}):Play()
@@ -2044,22 +2075,47 @@ tabTextButton.MouseButton1Click:Connect(function()
     end
     TweenService:Create(tabFrame, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {BackgroundTransparency = .85}):Play()
     
-    -- Делаем небольшую задержку перед показом контейнеров
+    -- Обеспечиваем, что все дочерние элементы в секциях видимы
     task.delay(0.05, function()
         leftContainer.Visible = true
-        rightContainer.Visible = true 
+        
+        -- Делаем все элементы в секциях видимыми
+        for _, section in pairs(leftContainer:GetChildren()) do
+            if section:IsA("Frame") and section.Name == "Section" then
+                for _, child in pairs(section.SectionFrame:GetChildren()) do
+                    if child:IsA("Frame") then
+                        child.Visible = true
+                        
+                        -- Специальная обработка для категории "Игрок" - проверяем вложенные элементы
+                        if section:FindFirstChild("SectionName") and section.SectionName.Text == "Игрок" then
+                            -- Убеждаемся, что все дочерние элементы этой секции также видимы
+                            for _, subchild in pairs(child:GetChildren()) do
+                                if subchild:IsA("Frame") or subchild:IsA("TextButton") then
+                                    subchild.Visible = true
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        rightContainer.Visible = true
     end)
 end)
 
 function tab:Select()
     TabSelected = tabFrame
+    
+    -- Сначала скрываем контейнеры
     task.spawn(function()
-    for _,v in pairs(main:GetChildren()) do
-        if v.Name == "LeftContainer" or v.Name == "RightContainer" then
-            v.Visible = false
+        for _,v in pairs(main:GetChildren()) do
+            if v.Name == "LeftContainer" or v.Name == "RightContainer" then
+                v.Visible = false
+            end
         end
-    end
     end)
+    
+    -- Обрабатываем стили вкладок
     for _,v in pairs(scrollingContainer:GetChildren()) do
         if v ~= tabButton and v.Name == "TabButton" then
             TweenService:Create(v.TabFrame, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {BackgroundTransparency = .96}):Play()
@@ -2067,10 +2123,52 @@ function tab:Select()
     end
     TweenService:Create(tabFrame, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {BackgroundTransparency = .85}):Play()
     
-    -- Добавляем такую же задержку как в клике
+    -- Обеспечиваем, что все дочерние элементы в секциях видимы
     task.delay(0.05, function()
         leftContainer.Visible = true
+        
+        -- Делаем все элементы в секциях видимыми
+        for _, section in pairs(leftContainer:GetChildren()) do
+            if section:IsA("Frame") and section.Name == "Section" then
+                for _, child in pairs(section.SectionFrame:GetChildren()) do
+                    if child:IsA("Frame") then
+                        child.Visible = true
+                        
+                        -- Специальная обработка для категории "Игрок" - проверяем вложенные элементы
+                        if section:FindFirstChild("SectionName") and section.SectionName.Text == "Игрок" then
+                            -- Убеждаемся, что все дочерние элементы этой секции также видимы
+                            for _, subchild in pairs(child:GetChildren()) do
+                                if subchild:IsA("Frame") or subchild:IsA("TextButton") then
+                                    subchild.Visible = true
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
         rightContainer.Visible = true
+        
+        -- Также обрабатываем правую панель
+        for _, section in pairs(rightContainer:GetChildren()) do
+            if section:IsA("Frame") and section.Name == "Section" then
+                for _, child in pairs(section.SectionFrame:GetChildren()) do
+                    if child:IsA("Frame") then
+                        child.Visible = true
+                        
+                        -- Такая же специальная обработка для правой панели
+                        if section:FindFirstChild("SectionName") and section.SectionName.Text == "Игрок" then
+                            -- Убеждаемся, что все дочерние элементы этой секции также видимы
+                            for _, subchild in pairs(child:GetChildren()) do
+                                if subchild:IsA("Frame") or subchild:IsA("TextButton") then
+                                    subchild.Visible = true
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
     end)
 end
 
