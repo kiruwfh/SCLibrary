@@ -6,165 +6,6 @@ local Mouse = game.Players.LocalPlayer:GetMouse()
 
 local Blacklist = {Enum.KeyCode.Unknown, Enum.KeyCode.CapsLock, Enum.KeyCode.Escape, Enum.KeyCode.Tab, Enum.KeyCode.Return, Enum.KeyCode.Backspace, Enum.KeyCode.Space, Enum.KeyCode.W, Enum.KeyCode.A, Enum.KeyCode.S, Enum.KeyCode.D}
 
--- Система аутентификации SCui
-local function showAuthScreen()
-    -- Создаем интерфейс аутентификации
-    local authGui = Instance.new("ScreenGui")
-    authGui.Name = "SCuiAuth"
-    authGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    authGui.Parent = CoreGui
-    
-    local mainFrame = Instance.new("Frame")
-    mainFrame.Name = "MainFrame"
-    mainFrame.Size = UDim2.new(0, 300, 0, 150)
-    mainFrame.Position = UDim2.new(0.5, -150, 0.5, -75)
-    mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    mainFrame.BorderSizePixel = 0
-    mainFrame.Parent = authGui
-    
-    local cornerRadius = Instance.new("UICorner")
-    cornerRadius.CornerRadius = UDim.new(0, 5)
-    cornerRadius.Parent = mainFrame
-    
-    local titleLabel = Instance.new("TextLabel")
-    titleLabel.Name = "TitleLabel"
-    titleLabel.Size = UDim2.new(1, 0, 0, 40)
-    titleLabel.Position = UDim2.new(0, 0, 0, 0)
-    titleLabel.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-    titleLabel.BorderSizePixel = 0
-    titleLabel.Text = "SCui Аутентификация"
-    titleLabel.Font = Enum.Font.GothamBold
-    titleLabel.TextSize = 16
-    titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    titleLabel.Parent = mainFrame
-    
-    local cornerRadius2 = Instance.new("UICorner")
-    cornerRadius2.CornerRadius = UDim.new(0, 5)
-    cornerRadius2.Parent = titleLabel
-    
-    local keyLabel = Instance.new("TextLabel")
-    keyLabel.Name = "KeyLabel"
-    keyLabel.Size = UDim2.new(1, 0, 0, 20)
-    keyLabel.Position = UDim2.new(0, 0, 0.35, -10)
-    keyLabel.BackgroundTransparency = 1
-    keyLabel.Text = "Пожалуйста, введите ключ доступа:"
-    keyLabel.Font = Enum.Font.Gotham
-    keyLabel.TextSize = 14
-    keyLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    keyLabel.Parent = mainFrame
-    
-    local keyInputFrame = Instance.new("Frame")
-    keyInputFrame.Name = "KeyInputFrame"
-    keyInputFrame.Size = UDim2.new(0.8, 0, 0, 30)
-    keyInputFrame.Position = UDim2.new(0.1, 0, 0.5, -5)
-    keyInputFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-    keyInputFrame.BorderSizePixel = 0
-    keyInputFrame.Parent = mainFrame
-    
-    local cornerRadius3 = Instance.new("UICorner")
-    cornerRadius3.CornerRadius = UDim.new(0, 4)
-    cornerRadius3.Parent = keyInputFrame
-    
-    local keyInput = Instance.new("TextBox")
-    keyInput.Name = "KeyInput"
-    keyInput.Size = UDim2.new(0.9, 0, 1, 0)
-    keyInput.Position = UDim2.new(0.05, 0, 0, 0)
-    keyInput.BackgroundTransparency = 1
-    keyInput.Text = ""
-    keyInput.PlaceholderText = "Введите ключ SCui..."
-    keyInput.Font = Enum.Font.Gotham
-    keyInput.TextSize = 14
-    keyInput.TextColor3 = Color3.fromRGB(255, 255, 255)
-    keyInput.Parent = keyInputFrame
-    
-    local submitButton = Instance.new("TextButton")
-    submitButton.Name = "SubmitButton"
-    submitButton.Size = UDim2.new(0.5, 0, 0, 30)
-    submitButton.Position = UDim2.new(0.25, 0, 0.75, 0)
-    submitButton.BackgroundColor3 = Color3.fromRGB(48, 207, 106)
-    submitButton.BorderSizePixel = 0
-    submitButton.Text = "ПОДТВЕРДИТЬ"
-    submitButton.Font = Enum.Font.GothamBold
-    submitButton.TextSize = 14
-    submitButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    submitButton.Parent = mainFrame
-    
-    local cornerRadius4 = Instance.new("UICorner")
-    cornerRadius4.CornerRadius = UDim.new(0, 4)
-    cornerRadius4.Parent = submitButton
-    
-    local statusLabel = Instance.new("TextLabel")
-    statusLabel.Name = "StatusLabel"
-    statusLabel.Size = UDim2.new(1, 0, 0, 20)
-    statusLabel.Position = UDim2.new(0, 0, 0.9, 0)
-    statusLabel.BackgroundTransparency = 1
-    statusLabel.Text = ""
-    statusLabel.Font = Enum.Font.Gotham
-    statusLabel.TextSize = 12
-    statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
-    statusLabel.Parent = mainFrame
-    
-    -- Проверка ключа
-    local correctKey = "hh.hg**@@" -- Ваш защищенный ключ
-    
-    local function checkKey()
-        if keyInput.Text == correctKey then
-            statusLabel.Text = "Успешная авторизация!"
-            statusLabel.TextColor3 = Color3.fromRGB(48, 207, 106)
-            submitButton.BackgroundColor3 = Color3.fromRGB(48, 207, 106)
-            
-            wait(0.5)
-            authGui:Destroy()
-            
-            -- Здесь инициализируем основной интерфейс SCui
-            return true
-        else
-            statusLabel.Text = "Неверный ключ! Попробуйте снова."
-            statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
-            
-            TweenService:Create(submitButton, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-                BackgroundColor3 = Color3.fromRGB(225, 69, 69)
-            }):Play()
-            
-            wait(0.4)
-            
-            TweenService:Create(submitButton, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-                BackgroundColor3 = Color3.fromRGB(48, 207, 106)
-            }):Play()
-            
-            return false
-        end
-    end
-    
-    submitButton.MouseButton1Click:Connect(function()
-        checkKey()
-    end)
-    
-    keyInput.FocusLost:Connect(function(enterPressed)
-        if enterPressed then
-            checkKey()
-        end
-    end)
-    
-    -- Ожидаем пока пользователь введет ключ
-    repeat
-        wait(0.1)
-    until not authGui:IsDescendantOf(game) or checkKey()
-    
-    -- Если GUI был удален без правильного ключа, отменяем загрузку
-    if not authGui:IsDescendantOf(game) and not checkKey() then
-        error("SCui: Аутентификация отменена пользователем")
-        return false
-    end
-    
-    return true
-end
-
--- Запускаем аутентификацию и проверяем результат
-if not showAuthScreen() then
-    return -- Завершаем скрипт, если аутентификация не пройдена
-end
-
 -- Clean up previous instances if they exist
 if CoreGui:FindFirstChild("SCui") then
     CoreGui.SCui:Destroy()
@@ -181,32 +22,9 @@ local function CheckTable(table)
     return i
 end
 
--- Предотвращение двойных кликов с настраиваемой задержкой
-local debounce = false
-local function debounceWait(customDelay)
-    if debounce then return false end
-    debounce = true
-    
-    -- Используем очень короткую задержку для элементов интерфейса настроек темы,
-    -- и более длинную для остальных элементов
-    local delay = customDelay or 0.15
-    task.delay(delay, function() debounce = false end)
-    return true
-end
-
 local TabSelected = nil
 local EditOpened = false
 local ColorElements = {}
-
--- Тема UI по умолчанию
-local UITheme = getgenv().SCuiTheme or {
-    Background = Color3.fromRGB(27, 27, 27),
-    Accent = Color3.fromRGB(45, 45, 45),
-    LightContrast = Color3.fromRGB(35, 35, 35),
-    DarkContrast = Color3.fromRGB(25, 25, 25),    
-    TextColor = Color3.fromRGB(255, 255, 255),
-    HighlightColor = Color3.fromRGB(0, 113, 225)
-}
 
 task.spawn(function()
 while true do
@@ -360,9 +178,6 @@ scuiScreenGui.Parent = CoreGui
 local tooltipScreenGui = Instance.new("ScreenGui")
 tooltipScreenGui.Name = "Tooltips"
 tooltipScreenGui.Parent = CoreGui
-
--- Используем тему для интерфейса
-local currentTheme = UITheme
 
 local function Tooltip(text)
 local tooltip = Instance.new("Frame")
@@ -605,48 +420,83 @@ minimizeButton.MouseButton1Click:Connect(function()
     TweenService:Create(main, TweenInfo.new(.2, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = Opened and UDim2.new(0, 450,0, 321) or UDim2.new(0, 450,0, 30)}):Play()
 end)
 
--- Убрана пипетка для редактирования тем по запросу пользователя
+local editButton = Instance.new("ImageButton")
+editButton.Name = "EditButton"
+editButton.Image = getcustomasset("SCui/ColorDropper.png")
+editButton.ImageColor3 = Color3.fromRGB(237, 237, 237)
+editButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+editButton.BackgroundTransparency = 1
+editButton.Position = UDim2.new(0.841, 0, 0.226, 0)
+editButton.Size = UDim2.new(0, 15, 0, 15)
+editButton.ZIndex = 2
+editButton.Parent = topbar
 
--- Убрана функция редактирования тем по запросу пользователя
+local uiGradient = Instance.new("UIGradient")
+uiGradient.Name = "UIGradient"
+uiGradient.Enabled = false
+uiGradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0,Color3.fromRGB(255,0,0)),
+    ColorSequenceKeypoint.new(0.2,Color3.fromRGB(255,255,0)),
+    ColorSequenceKeypoint.new(0.4,Color3.fromRGB(0,255,0)),
+    ColorSequenceKeypoint.new(0.6,Color3.fromRGB(0,255,255)),
+    ColorSequenceKeypoint.new(0.8,Color3.fromRGB(0,0,255)),
+    ColorSequenceKeypoint.new(1,Color3.fromRGB(255,0,255)),
+}
+uiGradient.Parent = editButton
 
--- Базовая функция для применения темы к интерфейсу (упрощенная)
-local function applyTheme()
-    -- Основной фон
-    main.BackgroundColor3 = UITheme.Background
-    
-    -- Верхняя панель
-    topbar.BackgroundColor3 = UITheme.DarkContrast
-    frame.BackgroundColor3 = UITheme.DarkContrast
-    
-    -- Контейнеры вкладок
-    tabContainer.BackgroundColor3 = UITheme.LightContrast
-    leftContainer.BackgroundColor3 = UITheme.Background
-    rightContainer.BackgroundColor3 = UITheme.Background
-    
-    -- Применяем к другим контейнерам
-    fix.BackgroundColor3 = UITheme.LightContrast
-    fix1.BackgroundColor3 = UITheme.LightContrast
-    
-    -- Проходимся по всем элементам, имеющим ColorElements
-    for frame, info in pairs(ColorElements) do
-        if info.Type == "Toggle" and info.Enabled then
-            -- Для тоггла применяем HighlightColor
-            if frame.ClassName == "Frame" then
-                frame.BackgroundColor3 = Color3.fromRGB(48, 207, 106)
-            else
-                frame.ImageColor3 = Color3.fromRGB(48, 207, 106)
+task.spawn(function()
+    while wait() do -- skidded from devforum
+    if uiGradient.Enabled then
+    local loop = tick() % 2 / 2
+    colors = {}
+    for i = 1, 7 + 1, 1 do
+        z = Color3.fromHSV(loop - ((i - 1)/7), 1, 1)
+        if loop - ((i - 1) / 7) < 0 then
+            z = Color3.fromHSV((loop - ((i - 1) / 7)) + 1, 1, 1)
+        end
+        local d = ColorSequenceKeypoint.new((i - 1) / 7, z)
+        table.insert(colors, #colors + 1, d)
+    end
+    uiGradient.Color = ColorSequence.new(colors)
+end
+end
+end)
+
+editButton.MouseEnter:Connect(function()
+    if not EditOpened then
+        uiGradient.Enabled = true
+    end
+end)
+
+editButton.MouseLeave:Connect(function()
+    if not EditOpened then
+        uiGradient.Enabled = false
+    end
+end)
+
+editButton.MouseButton1Click:Connect(function()
+    EditOpened = not EditOpened
+
+    uiGradient.Enabled = EditOpened and true or false
+
+    if not EditOpened then
+        for frame, v in pairs(ColorElements) do
+            if v.Enabled then
+                if frame.ClassName == "Frame" then
+                TweenService:Create(frame, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {BackgroundColor3 = Color3.fromRGB(48, 207, 106)}):Play()
+                else
+                TweenService:Create(frame, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {ImageColor3 = Color3.fromRGB(48, 207, 106)}):Play()
+                end
             end
-        elseif info.Type == "Slider" then
-            -- Для слайдера применяем HighlightColor
-            if frame.ClassName == "Frame" then
-                frame.BackgroundColor3 = Color3.fromRGB(48, 207, 106)
+        end
+    else
+        for _,v in pairs(ColorElements) do
+            if v.Type ~= "Toggle" then
+                v.Enabled = true
             end
         end
     end
-    
-    -- Сохраняем настройки темы для будущих использований
-    getgenv().SCuiTheme = UITheme
-end
+end)
 
 local tabContainer = Instance.new("Frame")
 tabContainer.Name = "TabContainer"
@@ -940,22 +790,14 @@ sectionIcon.ZIndex = 1
 sectionIcon.Parent = section
 
 sectionButton.MouseButton1Click:Connect(function()
-    if not debounceWait(0.05) then return end  -- Очень короткая задержка для быстрого взаимодействия
-    
     Closed.Value = not Closed.Value
-    
-    -- Более быстрые анимации раскрытия/сворачивания секции
-    TweenService:Create(section, TweenInfo.new(.08, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = Closed.Value and UDim2.new(0, 162, 0, SizeY + 4) or UDim2.new(0, 162, 0, 27)}):Play()
-    TweenService:Create(sectionFrame, TweenInfo.new(.08, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = Closed.Value and UDim2.new(0, 162, 0, SizeY) or UDim2.new(0, 162, 0, 23)}):Play()
-    TweenService:Create(sectionIcon, TweenInfo.new(.08, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {ImageColor3 = Closed.Value and Color3.fromRGB(217, 97, 99) or Color3.fromRGB(217, 217, 217)}):Play()
-    TweenService:Create(sectionIcon, TweenInfo.new(.08, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Rotation = Closed.Value and 45 or 0}):Play()
-    
-    -- Делаем все элементы в секции видимыми
-    for _, child in pairs(sectionFrame:GetChildren()) do
-        if child:IsA("Frame") then
-            child.Visible = true
-        end
-    end
+    --#d96163
+
+
+    TweenService:Create(section, TweenInfo.new(.1, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = Closed.Value and UDim2.new(0, 162, 0, SizeY + 4) or UDim2.new(0, 162, 0, 27)}):Play()
+    TweenService:Create(sectionFrame, TweenInfo.new(.1, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = Closed.Value and UDim2.new(0, 162, 0, SizeY) or UDim2.new(0, 162, 0, 23)}):Play()
+    TweenService:Create(sectionIcon, TweenInfo.new(.1, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {ImageColor3 = Closed.Value and Color3.fromRGB(217, 97, 99) or Color3.fromRGB(217, 217, 217)}):Play()
+    TweenService:Create(sectionIcon, TweenInfo.new(.1, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Rotation = Closed.Value and 45 or 0}):Play()
 end)
 
 function sectiontable:Label(Info)
@@ -1671,37 +1513,6 @@ Closed:GetPropertyChangedSignal("Value"):Connect(function()
 end)
 
 dropdownButton.MouseButton1Click:Connect(function()
-    if not debounceWait() then return end
-    
-    -- Закрываем другие открытые выпадающие списки
-    for _, otherSection in pairs(section.Parent:GetChildren()) do
-        if otherSection:IsA("Frame") and otherSection.Name == "Section" then
-            for _, child in pairs(otherSection.SectionFrame:GetChildren()) do
-                if child:IsA("Frame") and child.Name == "Dropdown" and child ~= dropdown and child:FindFirstChild("DropdownContainer") then
-                    -- Если нашли другой открытый выпадающий список, закрываем его
-                    local otherContainer = child:FindFirstChild("DropdownContainer")
-                    if otherContainer.Size.Y.Offset > 27 then
-                        -- Этот выпадающий список открыт, закрываем его
-                        local otherIcon = child:FindFirstChild("DropdownIcon")
-                        local thisSection = otherSection
-                        local thisSectionFrame = otherSection.SectionFrame
-                        local dropdownSize = otherContainer.Size.Y.Offset
-                        
-                        -- Анимируем закрытие
-                        TweenService:Create(otherIcon, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Rotation = -90}):Play()
-                        TweenService:Create(otherIcon, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {ImageColor3 = Color3.fromRGB(191, 191, 191)}):Play()
-                        TweenService:Create(child, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = UDim2.new(0, 162, 0, 27)}):Play()
-                        TweenService:Create(otherContainer, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = UDim2.new(0, 162, 0, 27)}):Play()
-                        TweenService:Create(otherContainer, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {BackgroundTransparency = 1}):Play()
-                        TweenService:Create(thisSectionFrame, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = UDim2.new(0, 162, 0, thisSectionFrame.Size.Y.Offset - dropdownSize + 27)}):Play()
-                        TweenService:Create(thisSection, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = UDim2.new(0, 162, 0, thisSectionFrame.Size.Y.Offset - dropdownSize + 31)}):Play()
-                    end
-                end
-            end
-        end
-    end
-
-    -- Теперь открываем/закрываем текущий выпадающий список
     DropdownOpened = not DropdownOpened
 
     TweenService:Create(dropdownIcon, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Rotation = DropdownOpened and -180 or -90}):Play()
@@ -1935,8 +1746,6 @@ end)
 end
 
 radioButtonTextButton.MouseButton1Click:Connect(function()
-    if not debounceWait() then return end
-    
     RadioOpened = not RadioOpened
 
     TweenService:Create(radioButtonIcon, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {ImageColor3 = RadioOpened and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(191, 191, 191)}):Play()
@@ -1945,13 +1754,8 @@ radioButtonTextButton.MouseButton1Click:Connect(function()
     TweenService:Create(radioButton, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = RadioOpened and UDim2.new(0, 162, 0, RadioYSize) or UDim2.new(0, 162, 0, 27)}):Play()
     TweenService:Create(radioContainer, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = RadioOpened and UDim2.new(0, 162, 0, RadioYSize) or UDim2.new(0, 162, 0, 27)}):Play()
     TweenService:Create(radioContainer, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {BackgroundTransparency = RadioOpened and .96 or 1}):Play()
-    
-    -- Исправленное вычисление размера для раскрывающихся элементов
-    local newSectionFrameSize = UDim2.new(0, 162, 0, sectionFrame.Size.Y.Offset + (RadioOpened and (RadioYSize - 27) or -(RadioYSize - 27)))
-    local newSectionSize = UDim2.new(0, 162, 0, newSectionFrameSize.Y.Offset + 4)
-    
-    TweenService:Create(sectionFrame, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = newSectionFrameSize}):Play()
-    TweenService:Create(section, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = newSectionSize}):Play()
+    TweenService:Create(sectionFrame, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = RadioOpened and UDim2.new(0, 162, 0, sectionFrame.Size.Y.Offset + RadioYSize - 27) or UDim2.new(0, 162, 0, sectionFrame.Size.Y.Offset - RadioYSize + 27)}):Play()
+    TweenService:Create(section, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = RadioOpened and UDim2.new(0, 162, 0, sectionFrame.Size.Y.Offset + RadioYSize - 27 + 4) or UDim2.new(0, 162, 0, sectionFrame.Size.Y.Offset - RadioYSize + 31)}):Play()
 end)
 
 for _,v in pairs(Info.Options) do
@@ -1968,13 +1772,8 @@ Closed:GetPropertyChangedSignal("Value"):Connect(function()
     TweenService:Create(radioButton, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = RadioOpened and UDim2.new(0, 162, 0, RadioYSize) or UDim2.new(0, 162, 0, 27)}):Play()
     TweenService:Create(radioContainer, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = RadioOpened and UDim2.new(0, 162, 0, RadioYSize) or UDim2.new(0, 162, 0, 27)}):Play()
     TweenService:Create(radioContainer, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {BackgroundTransparency = RadioOpened and .96 or 1}):Play()
-    
-    -- Исправленное вычисление размера при закрытии секции
-    local newSectionFrameSize = UDim2.new(0, 162, 0, sectionFrame.Size.Y.Offset - (RadioYSize - 27))
-    local newSectionSize = UDim2.new(0, 162, 0, newSectionFrameSize.Y.Offset + 4)
-    
-    TweenService:Create(sectionFrame, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = newSectionFrameSize}):Play()
-    TweenService:Create(section, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = newSectionSize}):Play()
+    TweenService:Create(sectionFrame, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = RadioOpened and UDim2.new(0, 162, 0, sectionFrame.Size.Y.Offset + RadioYSize - 27) or UDim2.new(0, 162, 0, sectionFrame.Size.Y.Offset - RadioYSize + 27)}):Play()
+    TweenService:Create(section, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = RadioOpened and UDim2.new(0, 162, 0, sectionFrame.Size.Y.Offset + RadioYSize - 27 + 4) or UDim2.new(0, 162, 0, sectionFrame.Size.Y.Offset - RadioYSize + 31)}):Play()
     end
 end)
 
@@ -1985,122 +1784,41 @@ return sectiontable
 end
 
 tabTextButton.MouseButton1Click:Connect(function()
-    if not debounceWait() then return end
-    
     TabSelected = tabFrame
-    
-    -- Сначала скрываем контейнеры
     task.spawn(function()
-        for _,v in pairs(main:GetChildren()) do
-            if v.Name == "LeftContainer" or v.Name == "RightContainer" then
-                v.Visible = false
-            end
+    for _,v in pairs(main:GetChildren()) do
+        if v.Name == "LeftContainer" or v.Name == "RightContainer" then
+            v.Visible = false
         end
+    end
     end)
-    
-    -- Обрабатываем стили вкладок
     for _,v in pairs(scrollingContainer:GetChildren()) do
         if v ~= tabButton and v.Name == "TabButton" then
             TweenService:Create(v.TabFrame, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {BackgroundTransparency = .96}):Play()
         end
     end
     TweenService:Create(tabFrame, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {BackgroundTransparency = .85}):Play()
-    
-    -- Обеспечиваем, что все дочерние элементы в секциях видимы
-    task.delay(0.05, function()
-        leftContainer.Visible = true
-        
-        -- Делаем все элементы в секциях видимыми
-        for _, section in pairs(leftContainer:GetChildren()) do
-            if section:IsA("Frame") and section.Name == "Section" then
-                for _, child in pairs(section.SectionFrame:GetChildren()) do
-                    if child:IsA("Frame") then
-                        child.Visible = true
-                        
-                        -- Специальная обработка для категории "Игрок" - проверяем вложенные элементы
-                        if section:FindFirstChild("SectionName") and section.SectionName.Text == "Игрок" then
-                            -- Убеждаемся, что все дочерние элементы этой секции также видимы
-                            for _, subchild in pairs(child:GetChildren()) do
-                                if subchild:IsA("Frame") or subchild:IsA("TextButton") then
-                                    subchild.Visible = true
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end
-        rightContainer.Visible = true
-    end)
+    leftContainer.Visible = true
+    rightContainer.Visible = true
 end)
 
 function tab:Select()
     TabSelected = tabFrame
-    
-    -- Сначала скрываем контейнеры
     task.spawn(function()
-        for _,v in pairs(main:GetChildren()) do
-            if v.Name == "LeftContainer" or v.Name == "RightContainer" then
-                v.Visible = false
-            end
+    for _,v in pairs(main:GetChildren()) do
+        if v.Name == "LeftContainer" or v.Name == "RightContainer" then
+            v.Visible = false
         end
+    end
     end)
-    
-    -- Обрабатываем стили вкладок
     for _,v in pairs(scrollingContainer:GetChildren()) do
         if v ~= tabButton and v.Name == "TabButton" then
             TweenService:Create(v.TabFrame, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {BackgroundTransparency = .96}):Play()
         end
     end
     TweenService:Create(tabFrame, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {BackgroundTransparency = .85}):Play()
-    
-    -- Обеспечиваем, что все дочерние элементы в секциях видимы
-    task.delay(0.05, function()
-        leftContainer.Visible = true
-        
-        -- Делаем все элементы в секциях видимыми
-        for _, section in pairs(leftContainer:GetChildren()) do
-            if section:IsA("Frame") and section.Name == "Section" then
-                for _, child in pairs(section.SectionFrame:GetChildren()) do
-                    if child:IsA("Frame") then
-                        child.Visible = true
-                        
-                        -- Специальная обработка для категории "Игрок" - проверяем вложенные элементы
-                        if section:FindFirstChild("SectionName") and section.SectionName.Text == "Игрок" then
-                            -- Убеждаемся, что все дочерние элементы этой секции также видимы
-                            for _, subchild in pairs(child:GetChildren()) do
-                                if subchild:IsA("Frame") or subchild:IsA("TextButton") then
-                                    subchild.Visible = true
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end
-        rightContainer.Visible = true
-        
-        -- Также обрабатываем правую панель
-        for _, section in pairs(rightContainer:GetChildren()) do
-            if section:IsA("Frame") and section.Name == "Section" then
-                for _, child in pairs(section.SectionFrame:GetChildren()) do
-                    if child:IsA("Frame") then
-                        child.Visible = true
-                        
-                        -- Такая же специальная обработка для правой панели
-                        if section:FindFirstChild("SectionName") and section.SectionName.Text == "Игрок" then
-                            -- Убеждаемся, что все дочерние элементы этой секции также видимы
-                            for _, subchild in pairs(child:GetChildren()) do
-                                if subchild:IsA("Frame") or subchild:IsA("TextButton") then
-                                    subchild.Visible = true
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end)
+    leftContainer.Visible = true
+    rightContainer.Visible = true
 end
 
 return tab
