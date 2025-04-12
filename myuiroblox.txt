@@ -22,9 +22,28 @@ local function CheckTable(table)
     return i
 end
 
+-- Предотвращение двойных кликов
+local debounce = false
+local function debounceWait()
+    if debounce then return false end
+    debounce = true
+    task.delay(0.3, function() debounce = false end)
+    return true
+end
+
 local TabSelected = nil
 local EditOpened = false
 local ColorElements = {}
+
+-- Тема UI по умолчанию
+local UITheme = {
+    Background = Color3.fromRGB(27, 27, 27),
+    Accent = Color3.fromRGB(45, 45, 45),
+    LightContrast = Color3.fromRGB(35, 35, 35),
+    DarkContrast = Color3.fromRGB(25, 25, 25),    
+    TextColor = Color3.fromRGB(255, 255, 255),
+    HighlightColor = Color3.fromRGB(0, 113, 225)
+}
 
 task.spawn(function()
 while true do
@@ -178,6 +197,9 @@ scuiScreenGui.Parent = CoreGui
 local tooltipScreenGui = Instance.new("ScreenGui")
 tooltipScreenGui.Name = "Tooltips"
 tooltipScreenGui.Parent = CoreGui
+
+-- Используем тему для интерфейса
+local currentTheme = UITheme
 
 local function Tooltip(text)
 local tooltip = Instance.new("Frame")
@@ -474,10 +496,217 @@ editButton.MouseLeave:Connect(function()
     end
 end)
 
-editButton.MouseButton1Click:Connect(function()
-    EditOpened = not EditOpened
+-- Создаем UI для настройки темы
+local function createThemeEditor()
+    local themeEditor = Instance.new("Frame")
+    themeEditor.Name = "ThemeEditor"
+    themeEditor.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    themeEditor.BorderSizePixel = 0
+    themeEditor.Position = UDim2.new(0.75, 0, 0.1, 0)
+    themeEditor.Size = UDim2.new(0, 200, 0, 250)
+    themeEditor.Visible = false
+    themeEditor.ZIndex = 20
+    themeEditor.Parent = main
+    
+    local themeCorner = Instance.new("UICorner")
+    themeCorner.CornerRadius = UDim.new(0, 5)
+    themeCorner.Parent = themeEditor
+    
+    local themeTitle = Instance.new("TextLabel")
+    themeTitle.Name = "ThemeTitle"
+    themeTitle.Font = Enum.Font.GothamBold
+    themeTitle.Text = "Настройки темы SCui"
+    themeTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+    themeTitle.TextSize = 12
+    themeTitle.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    themeTitle.Size = UDim2.new(1, 0, 0, 30)
+    themeTitle.ZIndex = 21
+    themeTitle.Parent = themeEditor
+    
+    local titleCorner = Instance.new("UICorner")
+    titleCorner.CornerRadius = UDim.new(0, 5)
+    titleCorner.Parent = themeTitle
+    
+    local themeFix = Instance.new("Frame")
+    themeFix.Name = "ThemeFix"
+    themeFix.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    themeFix.BorderSizePixel = 0
+    themeFix.Position = UDim2.new(0, 0, 1, -5)
+    themeFix.Size = UDim2.new(1, 0, 0, 5)
+    themeFix.ZIndex = 21
+    themeFix.Parent = themeTitle
+    
+    local themeContainer = Instance.new("ScrollingFrame")
+    themeContainer.Name = "ThemeContainer"
+    themeContainer.BackgroundTransparency = 1
+    themeContainer.Position = UDim2.new(0, 0, 0, 30)
+    themeContainer.Size = UDim2.new(1, 0, 1, -30)
+    themeContainer.CanvasSize = UDim2.new(0, 0, 0, 300)
+    themeContainer.ScrollBarThickness = 3
+    themeContainer.ZIndex = 21
+    themeContainer.Parent = themeEditor
+    
+    local themeList = Instance.new("UIListLayout")
+    themeList.Padding = UDim.new(0, 5)
+    themeList.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    themeList.Parent = themeContainer
+    
+    local themePadding = Instance.new("UIPadding")
+    themePadding.PaddingTop = UDim.new(0, 10)
+    themePadding.Parent = themeContainer
+    
+    -- Создаем выбор цвета для каждого элемента темы
+    local themeColors = {
+        {"Фон", "Background"},
+        {"Акцент", "Accent"},
+        {"Светлый контраст", "LightContrast"},
+        {"Темный контраст", "DarkContrast"},
+        {"Текст", "TextColor"},
+        {"Выделение", "HighlightColor"}
+    }
+    
+    for _, colorInfo in ipairs(themeColors) do
+        local colorFrame = Instance.new("Frame")
+        colorFrame.Name = colorInfo[2] .. "Frame"
+        colorFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+        colorFrame.Size = UDim2.new(0.9, 0, 0, 40)
+        colorFrame.ZIndex = 22
+        colorFrame.Parent = themeContainer
+        
+        local colorCorner = Instance.new("UICorner")
+        colorCorner.CornerRadius = UDim.new(0, 4)
+        colorCorner.Parent = colorFrame
+        
+        local colorLabel = Instance.new("TextLabel")
+        colorLabel.Name = "ColorLabel"
+        colorLabel.Font = Enum.Font.Gotham
+        colorLabel.Text = colorInfo[1]
+        colorLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        colorLabel.TextSize = 12
+        colorLabel.TextXAlignment = Enum.TextXAlignment.Left
+        colorLabel.BackgroundTransparency = 1
+        colorLabel.Position = UDim2.new(0, 10, 0, 0)
+        colorLabel.Size = UDim2.new(0.6, 0, 1, 0)
+        colorLabel.ZIndex = 23
+        colorLabel.Parent = colorFrame
+        
+        local colorPreview = Instance.new("Frame")
+        colorPreview.Name = "ColorPreview"
+        colorPreview.BackgroundColor3 = UITheme[colorInfo[2]]
+        colorPreview.Position = UDim2.new(0.75, 0, 0.5, 0)
+        colorPreview.AnchorPoint = Vector2.new(0, 0.5)
+        colorPreview.Size = UDim2.new(0, 30, 0, 30)
+        colorPreview.ZIndex = 23
+        colorPreview.Parent = colorFrame
+        
+        local previewCorner = Instance.new("UICorner")
+        previewCorner.CornerRadius = UDim.new(0, 4)
+        previewCorner.Parent = colorPreview
+        
+        -- Добавляем возможность выбора цвета при клике
+        colorPreview.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                -- Эта функция будет обрабатывать выбор цвета
+                local currentColor = UITheme[colorInfo[2]]
+                -- Здесь нужно создать цветовую палитру, но для простоты
+                -- пока просто меняем между несколькими предустановленными цветами
+                local presetColors = {
+                    Color3.fromRGB(27, 27, 27),  -- Темно-серый
+                    Color3.fromRGB(0, 113, 225), -- Синий
+                    Color3.fromRGB(48, 207, 106), -- Зеленый
+                    Color3.fromRGB(225, 69, 69),  -- Красный
+                    Color3.fromRGB(230, 189, 56), -- Желтый
+                    Color3.fromRGB(155, 89, 182)  -- Фиолетовый
+                }
+                
+                -- Находим текущий цвет в списке или выбираем следующий
+                local nextIndex = 1
+                for i, color in ipairs(presetColors) do
+                    if color == currentColor then
+                        nextIndex = (i % #presetColors) + 1
+                        break
+                    end
+                end
+                
+                -- Меняем цвет
+                UITheme[colorInfo[2]] = presetColors[nextIndex]
+                colorPreview.BackgroundColor3 = presetColors[nextIndex]
+                
+                -- Применяем новую тему к UI
+                applyTheme()
+            end
+        end)
+    end
+    
+    -- Кнопка для сброса темы
+    local resetButton = Instance.new("TextButton")
+    resetButton.Name = "ResetButton"
+    resetButton.Text = "Сбросить тему"
+    resetButton.Font = Enum.Font.GothamBold
+    resetButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    resetButton.TextSize = 12
+    resetButton.BackgroundColor3 = Color3.fromRGB(225, 69, 69)
+    resetButton.Size = UDim2.new(0.8, 0, 0, 35)
+    resetButton.ZIndex = 22
+    resetButton.Parent = themeContainer
+    
+    local resetCorner = Instance.new("UICorner")
+    resetCorner.CornerRadius = UDim.new(0, 4)
+    resetCorner.Parent = resetButton
+    
+    resetButton.MouseButton1Click:Connect(function()
+        -- Сбрасываем тему на стандартную
+        UITheme = {
+            Background = Color3.fromRGB(27, 27, 27),
+            Accent = Color3.fromRGB(45, 45, 45),
+            LightContrast = Color3.fromRGB(35, 35, 35),
+            DarkContrast = Color3.fromRGB(25, 25, 25),    
+            TextColor = Color3.fromRGB(255, 255, 255),
+            HighlightColor = Color3.fromRGB(0, 113, 225)
+        }
+        
+        -- Обновляем предпросмотры цветов
+        for _, colorInfo in ipairs(themeColors) do
+            local colorPreview = themeContainer:FindFirstChild(colorInfo[2] .. "Frame"):FindFirstChild("ColorPreview")
+            if colorPreview then
+                colorPreview.BackgroundColor3 = UITheme[colorInfo[2]]
+            end
+        end
+        
+        -- Применяем обновленную тему
+        applyTheme()
+    end)
+    
+    return themeEditor
+end
 
+-- Функция для применения темы к интерфейсу
+local function applyTheme()
+    -- Основной фон
+    main.BackgroundColor3 = UITheme.Background
+    
+    -- Верхняя панель
+    topbar.BackgroundColor3 = UITheme.DarkContrast
+    frame.BackgroundColor3 = UITheme.DarkContrast
+    
+    -- Контейнеры вкладок
+    tabContainer.BackgroundColor3 = UITheme.LightContrast
+    leftContainer.BackgroundColor3 = UITheme.Background
+    
+    -- Применяем к другим элементам по необходимости
+    -- ...
+end
+
+-- Создаем редактор темы
+local themeEditor = createThemeEditor()
+
+-- Обработка кнопки редактирования
+editButton.MouseButton1Click:Connect(function()
+    if not debounceWait() then return end
+    
+    EditOpened = not EditOpened
     uiGradient.Enabled = EditOpened and true or false
+    themeEditor.Visible = EditOpened
 
     if not EditOpened then
         for frame, v in pairs(ColorElements) do
