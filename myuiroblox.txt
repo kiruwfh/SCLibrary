@@ -1771,6 +1771,35 @@ end)
 dropdownButton.MouseButton1Click:Connect(function()
     if not debounceWait() then return end
     
+    -- Закрываем другие открытые выпадающие списки
+    for _, otherSection in pairs(section.Parent:GetChildren()) do
+        if otherSection:IsA("Frame") and otherSection.Name == "Section" then
+            for _, child in pairs(otherSection.SectionFrame:GetChildren()) do
+                if child:IsA("Frame") and child.Name == "Dropdown" and child ~= dropdown and child:FindFirstChild("DropdownContainer") then
+                    -- Если нашли другой открытый выпадающий список, закрываем его
+                    local otherContainer = child:FindFirstChild("DropdownContainer")
+                    if otherContainer.Size.Y.Offset > 27 then
+                        -- Этот выпадающий список открыт, закрываем его
+                        local otherIcon = child:FindFirstChild("DropdownIcon")
+                        local thisSection = otherSection
+                        local thisSectionFrame = otherSection.SectionFrame
+                        local dropdownSize = otherContainer.Size.Y.Offset
+                        
+                        -- Анимируем закрытие
+                        TweenService:Create(otherIcon, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Rotation = -90}):Play()
+                        TweenService:Create(otherIcon, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {ImageColor3 = Color3.fromRGB(191, 191, 191)}):Play()
+                        TweenService:Create(child, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = UDim2.new(0, 162, 0, 27)}):Play()
+                        TweenService:Create(otherContainer, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = UDim2.new(0, 162, 0, 27)}):Play()
+                        TweenService:Create(otherContainer, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {BackgroundTransparency = 1}):Play()
+                        TweenService:Create(thisSectionFrame, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = UDim2.new(0, 162, 0, thisSectionFrame.Size.Y.Offset - dropdownSize + 27)}):Play()
+                        TweenService:Create(thisSection, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = UDim2.new(0, 162, 0, thisSectionFrame.Size.Y.Offset - dropdownSize + 31)}):Play()
+                    end
+                end
+            end
+        end
+    end
+
+    -- Теперь открываем/закрываем текущий выпадающий список
     DropdownOpened = not DropdownOpened
 
     TweenService:Create(dropdownIcon, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Rotation = DropdownOpened and -180 or -90}):Play()
