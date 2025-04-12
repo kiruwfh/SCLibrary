@@ -6,6 +6,165 @@ local Mouse = game.Players.LocalPlayer:GetMouse()
 
 local Blacklist = {Enum.KeyCode.Unknown, Enum.KeyCode.CapsLock, Enum.KeyCode.Escape, Enum.KeyCode.Tab, Enum.KeyCode.Return, Enum.KeyCode.Backspace, Enum.KeyCode.Space, Enum.KeyCode.W, Enum.KeyCode.A, Enum.KeyCode.S, Enum.KeyCode.D}
 
+-- Система аутентификации SCui
+local function showAuthScreen()
+    -- Создаем интерфейс аутентификации
+    local authGui = Instance.new("ScreenGui")
+    authGui.Name = "SCuiAuth"
+    authGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    authGui.Parent = CoreGui
+    
+    local mainFrame = Instance.new("Frame")
+    mainFrame.Name = "MainFrame"
+    mainFrame.Size = UDim2.new(0, 300, 0, 150)
+    mainFrame.Position = UDim2.new(0.5, -150, 0.5, -75)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    mainFrame.BorderSizePixel = 0
+    mainFrame.Parent = authGui
+    
+    local cornerRadius = Instance.new("UICorner")
+    cornerRadius.CornerRadius = UDim.new(0, 5)
+    cornerRadius.Parent = mainFrame
+    
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Name = "TitleLabel"
+    titleLabel.Size = UDim2.new(1, 0, 0, 40)
+    titleLabel.Position = UDim2.new(0, 0, 0, 0)
+    titleLabel.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    titleLabel.BorderSizePixel = 0
+    titleLabel.Text = "SCui Аутентификация"
+    titleLabel.Font = Enum.Font.GothamBold
+    titleLabel.TextSize = 16
+    titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    titleLabel.Parent = mainFrame
+    
+    local cornerRadius2 = Instance.new("UICorner")
+    cornerRadius2.CornerRadius = UDim.new(0, 5)
+    cornerRadius2.Parent = titleLabel
+    
+    local keyLabel = Instance.new("TextLabel")
+    keyLabel.Name = "KeyLabel"
+    keyLabel.Size = UDim2.new(1, 0, 0, 20)
+    keyLabel.Position = UDim2.new(0, 0, 0.35, -10)
+    keyLabel.BackgroundTransparency = 1
+    keyLabel.Text = "Пожалуйста, введите ключ доступа:"
+    keyLabel.Font = Enum.Font.Gotham
+    keyLabel.TextSize = 14
+    keyLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    keyLabel.Parent = mainFrame
+    
+    local keyInputFrame = Instance.new("Frame")
+    keyInputFrame.Name = "KeyInputFrame"
+    keyInputFrame.Size = UDim2.new(0.8, 0, 0, 30)
+    keyInputFrame.Position = UDim2.new(0.1, 0, 0.5, -5)
+    keyInputFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+    keyInputFrame.BorderSizePixel = 0
+    keyInputFrame.Parent = mainFrame
+    
+    local cornerRadius3 = Instance.new("UICorner")
+    cornerRadius3.CornerRadius = UDim.new(0, 4)
+    cornerRadius3.Parent = keyInputFrame
+    
+    local keyInput = Instance.new("TextBox")
+    keyInput.Name = "KeyInput"
+    keyInput.Size = UDim2.new(0.9, 0, 1, 0)
+    keyInput.Position = UDim2.new(0.05, 0, 0, 0)
+    keyInput.BackgroundTransparency = 1
+    keyInput.Text = ""
+    keyInput.PlaceholderText = "Введите ключ SCui..."
+    keyInput.Font = Enum.Font.Gotham
+    keyInput.TextSize = 14
+    keyInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+    keyInput.Parent = keyInputFrame
+    
+    local submitButton = Instance.new("TextButton")
+    submitButton.Name = "SubmitButton"
+    submitButton.Size = UDim2.new(0.5, 0, 0, 30)
+    submitButton.Position = UDim2.new(0.25, 0, 0.75, 0)
+    submitButton.BackgroundColor3 = Color3.fromRGB(48, 207, 106)
+    submitButton.BorderSizePixel = 0
+    submitButton.Text = "ПОДТВЕРДИТЬ"
+    submitButton.Font = Enum.Font.GothamBold
+    submitButton.TextSize = 14
+    submitButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    submitButton.Parent = mainFrame
+    
+    local cornerRadius4 = Instance.new("UICorner")
+    cornerRadius4.CornerRadius = UDim.new(0, 4)
+    cornerRadius4.Parent = submitButton
+    
+    local statusLabel = Instance.new("TextLabel")
+    statusLabel.Name = "StatusLabel"
+    statusLabel.Size = UDim2.new(1, 0, 0, 20)
+    statusLabel.Position = UDim2.new(0, 0, 0.9, 0)
+    statusLabel.BackgroundTransparency = 1
+    statusLabel.Text = ""
+    statusLabel.Font = Enum.Font.Gotham
+    statusLabel.TextSize = 12
+    statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+    statusLabel.Parent = mainFrame
+    
+    -- Проверка ключа
+    local correctKey = "hh.hg**@@" -- Ваш защищенный ключ
+    
+    local function checkKey()
+        if keyInput.Text == correctKey then
+            statusLabel.Text = "Успешная авторизация!"
+            statusLabel.TextColor3 = Color3.fromRGB(48, 207, 106)
+            submitButton.BackgroundColor3 = Color3.fromRGB(48, 207, 106)
+            
+            wait(0.5)
+            authGui:Destroy()
+            
+            -- Здесь инициализируем основной интерфейс SCui
+            return true
+        else
+            statusLabel.Text = "Неверный ключ! Попробуйте снова."
+            statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+            
+            TweenService:Create(submitButton, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                BackgroundColor3 = Color3.fromRGB(225, 69, 69)
+            }):Play()
+            
+            wait(0.4)
+            
+            TweenService:Create(submitButton, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                BackgroundColor3 = Color3.fromRGB(48, 207, 106)
+            }):Play()
+            
+            return false
+        end
+    end
+    
+    submitButton.MouseButton1Click:Connect(function()
+        checkKey()
+    end)
+    
+    keyInput.FocusLost:Connect(function(enterPressed)
+        if enterPressed then
+            checkKey()
+        end
+    end)
+    
+    -- Ожидаем пока пользователь введет ключ
+    repeat
+        wait(0.1)
+    until not authGui:IsDescendantOf(game) or checkKey()
+    
+    -- Если GUI был удален без правильного ключа, отменяем загрузку
+    if not authGui:IsDescendantOf(game) and not checkKey() then
+        error("SCui: Аутентификация отменена пользователем")
+        return false
+    end
+    
+    return true
+end
+
+-- Запускаем аутентификацию и проверяем результат
+if not showAuthScreen() then
+    return -- Завершаем скрипт, если аутентификация не пройдена
+end
+
 -- Clean up previous instances if they exist
 if CoreGui:FindFirstChild("SCui") then
     CoreGui.SCui:Destroy()
