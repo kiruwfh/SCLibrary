@@ -22,12 +22,16 @@ local function CheckTable(table)
     return i
 end
 
--- Предотвращение двойных кликов
+-- Предотвращение двойных кликов с настраиваемой задержкой
 local debounce = false
-local function debounceWait()
+local function debounceWait(customDelay)
     if debounce then return false end
     debounce = true
-    task.delay(0.3, function() debounce = false end)
+    
+    -- Используем очень короткую задержку для элементов интерфейса настроек темы,
+    -- и более длинную для остальных элементов
+    local delay = customDelay or 0.15
+    task.delay(delay, function() debounce = false end)
     return true
 end
 
@@ -611,13 +615,29 @@ local function createThemeEditor()
                 local currentColor = UITheme[colorInfo[2]]
                 -- Здесь нужно создать цветовую палитру, но для простоты
                 -- пока просто меняем между несколькими предустановленными цветами
+                -- Обновленные и улучшенные цветовые схемы для тем
                 local presetColors = {
-                    Color3.fromRGB(27, 27, 27),  -- Темно-серый
-                    Color3.fromRGB(0, 113, 225), -- Синий
-                    Color3.fromRGB(48, 207, 106), -- Зеленый
-                    Color3.fromRGB(225, 69, 69),  -- Красный
-                    Color3.fromRGB(230, 189, 56), -- Желтый
-                    Color3.fromRGB(155, 89, 182)  -- Фиолетовый
+                    -- Темные темы
+                    Color3.fromRGB(27, 27, 27),    -- Классическая темная
+                    Color3.fromRGB(44, 62, 80),    -- Полуночный синий
+                    Color3.fromRGB(33, 33, 33),    -- Темный графит
+                    Color3.fromRGB(24, 24, 36),    -- Темно-индиго
+                    
+                    -- Яркие темы
+                    Color3.fromRGB(0, 113, 225),   -- Классический синий
+                    Color3.fromRGB(0, 151, 230),   -- Лазурный
+                    Color3.fromRGB(0, 184, 148),   -- Изумрудный
+                    Color3.fromRGB(48, 207, 106),  -- Светло-зеленый
+                    Color3.fromRGB(9, 132, 227),   -- Электрик блю
+                    
+                    -- Контрастные темы
+                    Color3.fromRGB(225, 69, 69),   -- Красный
+                    Color3.fromRGB(214, 48, 98),   -- Малиновый
+                    Color3.fromRGB(104, 109, 224), -- Лавандовый
+                    Color3.fromRGB(108, 92, 231),  -- Фиолетовый
+                    Color3.fromRGB(155, 89, 182),  -- Светло-фиолетовый
+                    Color3.fromRGB(230, 189, 56),  -- Золотистый
+                    Color3.fromRGB(242, 153, 74)   -- Оранжевый
                 }
                 
                 -- Находим текущий цвет в списке или выбираем следующий
@@ -712,6 +732,40 @@ local function applyTheme()
     fix.BackgroundColor3 = UITheme.LightContrast
     fix1.BackgroundColor3 = UITheme.LightContrast
     
+    -- Применяем к элементам без ColorElements
+    for _, frame in pairs(main:GetDescendants()) do
+        if frame:IsA("Frame") and frame.Name == "TabFrame" then
+            -- Цвет для выбранных вкладок
+            if TabSelected == frame then
+                frame.UIStroke.Color = UITheme.HighlightColor
+            end
+        elseif frame:IsA("Frame") and frame.Name == "SectionFrame" then
+            -- Применяем цвет к рамкам секций
+            frame.UIStroke.Color = Color3.fromRGB(
+                math.min(UITheme.LightContrast.R * 255 + 20, 255),
+                math.min(UITheme.LightContrast.G * 255 + 20, 255),
+                math.min(UITheme.LightContrast.B * 255 + 20, 255)
+            )
+        end
+    end
+    
+    -- Проходимся по всем элементам, имеющим ColorElements
+    for frame, info in pairs(ColorElements) do
+        if info.Type == "Toggle" and info.Enabled and not EditOpened then
+            -- Для тоггла применяем HighlightColor
+            if frame.ClassName == "Frame" then
+                TweenService:Create(frame, TweenInfo.new(.08, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {BackgroundColor3 = UITheme.HighlightColor}):Play()
+            else
+                TweenService:Create(frame, TweenInfo.new(.08, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {ImageColor3 = UITheme.HighlightColor}):Play()
+            end
+        elseif info.Type == "Slider" then
+            -- Для слайдера применяем HighlightColor
+            if frame.ClassName == "Frame" and not EditOpened then
+                frame.BackgroundColor3 = UITheme.HighlightColor
+            end
+        end
+    end
+    
     -- Сохраняем настройки темы для будущих использований
     getgenv().SCuiTheme = UITheme
 end
@@ -721,7 +775,7 @@ local themeEditor = createThemeEditor()
 
 -- Обработка кнопки редактирования
 editButton.MouseButton1Click:Connect(function()
-    if not debounceWait() then return end
+    if not debounceWait(0.05) then return end  -- Очень короткая задержка для быстрого взаимодействия
     
     EditOpened = not EditOpened
     uiGradient.Enabled = EditOpened and true or false
@@ -731,9 +785,9 @@ editButton.MouseButton1Click:Connect(function()
         for frame, v in pairs(ColorElements) do
             if v.Enabled then
                 if frame.ClassName == "Frame" then
-                TweenService:Create(frame, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {BackgroundColor3 = Color3.fromRGB(48, 207, 106)}):Play()
+                TweenService:Create(frame, TweenInfo.new(.1, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {BackgroundColor3 = Color3.fromRGB(48, 207, 106)}):Play()
                 else
-                TweenService:Create(frame, TweenInfo.new(.15, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {ImageColor3 = Color3.fromRGB(48, 207, 106)}):Play()
+                TweenService:Create(frame, TweenInfo.new(.1, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {ImageColor3 = Color3.fromRGB(48, 207, 106)}):Play()
                 end
             end
         end
@@ -1038,15 +1092,15 @@ sectionIcon.ZIndex = 1
 sectionIcon.Parent = section
 
 sectionButton.MouseButton1Click:Connect(function()
-    if not debounceWait() then return end
+    if not debounceWait(0.05) then return end  -- Очень короткая задержка для быстрого взаимодействия
     
     Closed.Value = not Closed.Value
     
-    -- Анимации раскрытия/сворачивания секции
-    TweenService:Create(section, TweenInfo.new(.1, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = Closed.Value and UDim2.new(0, 162, 0, SizeY + 4) or UDim2.new(0, 162, 0, 27)}):Play()
-    TweenService:Create(sectionFrame, TweenInfo.new(.1, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = Closed.Value and UDim2.new(0, 162, 0, SizeY) or UDim2.new(0, 162, 0, 23)}):Play()
-    TweenService:Create(sectionIcon, TweenInfo.new(.1, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {ImageColor3 = Closed.Value and Color3.fromRGB(217, 97, 99) or Color3.fromRGB(217, 217, 217)}):Play()
-    TweenService:Create(sectionIcon, TweenInfo.new(.1, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Rotation = Closed.Value and 45 or 0}):Play()
+    -- Более быстрые анимации раскрытия/сворачивания секции
+    TweenService:Create(section, TweenInfo.new(.08, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = Closed.Value and UDim2.new(0, 162, 0, SizeY + 4) or UDim2.new(0, 162, 0, 27)}):Play()
+    TweenService:Create(sectionFrame, TweenInfo.new(.08, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Size = Closed.Value and UDim2.new(0, 162, 0, SizeY) or UDim2.new(0, 162, 0, 23)}):Play()
+    TweenService:Create(sectionIcon, TweenInfo.new(.08, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {ImageColor3 = Closed.Value and Color3.fromRGB(217, 97, 99) or Color3.fromRGB(217, 217, 217)}):Play()
+    TweenService:Create(sectionIcon, TweenInfo.new(.08, Enum.EasingStyle.Linear, Enum.EasingDirection.In), {Rotation = Closed.Value and 45 or 0}):Play()
     
     -- Делаем все элементы в секции видимыми
     for _, child in pairs(sectionFrame:GetChildren()) do
