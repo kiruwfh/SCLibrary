@@ -4,6 +4,57 @@
     Updated in 2025 for compatibility with Solara v3 executor
 ]]
 
+-- // Защита от ошибок с readonly таблицами (необходимо для Solara v3)
+
+-- Замена стандартных функций для предотвращения ошибок при попытке модифицировать readonly таблицы
+-- Используется для поддержки различных исполнителей: Synapse X, Solara v3, и других
+local oldMetamethod = getrawmetatable and getrawmetatable(game)
+if oldMetamethod then
+    local oldIndex = oldMetamethod.__index
+    local oldNewIndex = oldMetamethod.__newindex
+    local oldNamecall = oldMetamethod.__namecall
+    
+    -- Безопасная функция для разблокировки защиты метатаблицы
+    local function safeSetReadOnly(state)
+        pcall(function()
+            if make_writeable and state == false then
+                make_writeable(oldMetamethod)
+            elseif setreadonly then
+                setreadonly(oldMetamethod, state)
+            elseif set_readonly then
+                set_readonly(oldMetamethod, state)
+            end
+        end)
+    end
+    
+    -- Безопасное добавление метаметодов
+    pcall(function()
+        safeSetReadOnly(false)
+        
+        -- Защищённый индекс
+        oldMetamethod.__index = newcclosure(function(t, k)
+            return oldIndex(t, k)
+        end)
+        
+        -- Защищённый newindex
+        oldMetamethod.__newindex = newcclosure(function(t, k, v)
+            if t == _G or t == task or t == math then
+                -- Обрабатываем особые таблицы особым образом
+                rawset(t, k, v)
+                return
+            end
+            return oldNewIndex(t, k, v)
+        end)
+        
+        -- Защищённый namecall
+        oldMetamethod.__namecall = newcclosure(function(t, ...)
+            return oldNamecall(t, ...)
+        end)
+        
+        safeSetReadOnly(true)
+    end)
+end
+
 -- // Вспомогательные функции для кроссплатформенности
 -- Безопасная имплементация clamp для совместимости вне Roblox
 local function safeClamp(value, minimum, maximum)
@@ -22,9 +73,36 @@ local function safeTick()
 end
 
 -- Переопределение math.clamp, math.round и tick для обратной совместимости
-math.clamp = safeClamp
-math.round = safeRound
-tick = safeTick
+local function safeAssign(tbl, key, value)
+    -- Пытаемся безопасно разблокировать таблицу перед изменением
+    local success = pcall(function()
+        if type(setreadonly) == "function" then
+            setreadonly(tbl, false) -- Стандартный метод
+        elseif type(make_writeable) == "function" then
+            make_writeable(tbl) -- Метод Solara v3
+        end
+        tbl[key] = value
+        if type(setreadonly) == "function" then
+            setreadonly(tbl, true) -- Восстанавливаем readonly
+        elseif type(make_readonly) == "function" then
+            make_readonly(tbl) -- Метод Solara v3
+        end
+    end)
+    
+    if not success then
+        -- Обходной путь - создаем глобальные функции без изменения таблицы
+        if key == "clamp" then
+            _G.mathClamp = value
+        elseif key == "round" then
+            _G.mathRound = value
+        end
+    end
+end
+
+-- Безопасно переопределяем функции
+safeAssign(math, "clamp", safeClamp)
+safeAssign(math, "round", safeRound)
+_G.tick = safeTick
 
 -- // Защищенное получение сервисов
 local function getSafeService(serviceName)
@@ -79,6 +157,149 @@ end
 
 local success, stats = getSafeService("Stats")
 if not success then stats = {} end
+
+-- Создаем безопасную имитацию Enum, если он не существует
+if not Enum then
+    Enum = {
+        KeyCode = {
+            Z = "Z",
+            RightControl = "RightControl",
+            LeftControl = "LeftControl",
+            LeftAlt = "LeftAlt",
+            RightAlt = "RightAlt",
+            Unknown = "Unknown",
+            Home = "Home"
+        },
+        UserInputType = {
+            MouseButton1 = "MouseButton1",
+            MouseButton2 = "MouseButton2",
+            MouseMovement = "MouseMovement",
+            MouseWheel = "MouseWheel"
+        }
+    }
+end
+
+-- Создаем имитацию Vector2, если его нет
+if not Vector2 then
+    Vector2 = {}
+    Vector2.new = function(x, y)
+        return {x = x or 0, y = y or 0}
+    end
+end
+
+-- Создаем имитацию Vector3, если его нет
+if not Vector3 then
+    Vector3 = {}
+    Vector3.new = function(x, y, z)
+        return {x = x or 0, y = y or 0, z = z or 0}
+    end
+end
+
+-- Создаем имитацию Color3, если его нет
+if not Color3 then
+    Color3 = {}
+    Color3.fromRGB = function(r, g, b)
+        return {
+            R = r/255, 
+            G = g/255, 
+            B = b/255,
+            ToHSV = function() return 0, 0, 0 end
+        }
+    end
+end
+
+-- Создаем имитацию UDim2, если его нет
+if not UDim2 then
+    UDim2 = {}
+    UDim2.new = function(xScale, xOffset, yScale, yOffset)
+        return {
+            X = {Scale = xScale or 0, Offset = xOffset or 0},
+            Y = {Scale = yScale or 0, Offset = yOffset or 0}
+        }
+    end
+end
+
+-- Создаем имитацию Drawing, если его нет
+if not Drawing then
+    Drawing = {
+        Fonts = {
+            Plex = 1,
+            Monospace = 2,
+            System = 3
+        },
+        new = function(drawingType)
+            local obj = {
+                Visible = false,
+                Color = {R = 1, G = 1, B = 1},
+                Transparency = 1,
+                Size = Vector2.new(100, 100),
+                Position = Vector2.new(0, 0),
+                Thickness = 1,
+                ZIndex = 0,
+                Text = "",
+                Center = false,
+                Outline = false,
+                OutlineColor = {R = 0, G = 0, B = 0},
+                Font = 1,
+                TextBounds = Vector2.new(100, 20),
+                __OBJECT_EXISTS = true,
+                Remove = function() end
+            }
+            return obj
+        end
+    }
+end
+
+-- Создаем имитацию makefolder, isfile, readfile, writefile
+if not makefolder then
+    makefolder = function(path)
+        print("[MOCK] Creating folder: " .. path)
+    end
+end
+
+if not isfile then
+    isfile = function(path)
+        print("[MOCK] Checking if file exists: " .. path)
+        return false
+    end
+end
+
+if not readfile then
+    readfile = function(path)
+        print("[MOCK] Reading file: " .. path)
+        return ""
+    end
+end
+
+if not writefile then
+    writefile = function(path, data)
+        print("[MOCK] Writing to file: " .. path)
+        return true
+    end
+end
+
+-- Создаем имитацию http functions
+if not game then
+    game = {
+        HttpGet = function(self, url)
+            print("[MOCK] HttpGet request to: " .. url)
+            return ""
+        end,
+        GetService = function(self, service)
+            if service == "HttpService" then
+                return {
+                    JSONEncode = function(self, data)
+                        return "{}"
+                    end,
+                    JSONDecode = function(self, data)
+                        return {}
+                    end
+                }
+            end
+            return {}
+        end
+    }
+end
 -- UI Variables
 local library = {
     drawings = {},
@@ -145,6 +366,12 @@ local theme = {
 -- // Utility Functions
 do
     function utility:Size(xScale,xOffset,yScale,yOffset,instance)
+        -- Обеспечиваем безопасные значения для параметров
+        xScale = xScale or 0
+        xOffset = xOffset or 0
+        yScale = yScale or 0
+        yOffset = yOffset or 0
+        
         if instance then
             local x = xScale*instance.Size.x+xOffset
             local y = yScale*instance.Size.y+yOffset
@@ -161,18 +388,46 @@ do
     end
     --
     function utility:Position(xScale,xOffset,yScale,yOffset,instance)
+        -- Обеспечиваем безопасные значения для параметров
+        xScale = xScale or 0
+        xOffset = xOffset or 0
+        yScale = yScale or 0
+        yOffset = yOffset or 0
+        
         if instance then
-            local x = instance.Position.x+xScale*instance.Size.x+xOffset
-            local y = instance.Position.y+yScale*instance.Size.y+yOffset
-            --
-            return Vector2.new(x,y)
+            -- Безопасно получаем значения Position и Size, обрабатывая разные форматы
+            local posX, posY, sizeX, sizeY = 0, 0, 0, 0
+            
+            -- Получаем положение объекта
+            if instance.Position then
+                posX = instance.Position.x or instance.Position.X or 0
+                posY = instance.Position.y or instance.Position.Y or 0
+            end
+            
+            -- Получаем размер объекта
+            if instance.Size then
+                sizeX = instance.Size.x or instance.Size.X or 0
+                sizeY = instance.Size.y or instance.Size.Y or 0
+            end
+            
+            -- Вычисляем координаты
+            local x = posX + (xScale * sizeX) + xOffset
+            local y = posY + (yScale * sizeY) + yOffset
+            
+            return Vector2.new(x, y)
         else
-            local vx,vy = ws.CurrentCamera.ViewportSize.x,ws.CurrentCamera.ViewportSize.y
-            --
-            local x = xScale*vx+xOffset
-            local y = yScale*vy+yOffset
-            --
-            return Vector2.new(x,y)
+            -- Безопасное получение размера экрана
+            local vx, vy = 800, 600 -- Значения по умолчанию, если не удается получить размер экрана
+            
+            if ws and ws.CurrentCamera and ws.CurrentCamera.ViewportSize then
+                vx = ws.CurrentCamera.ViewportSize.x or ws.CurrentCamera.ViewportSize.X or 800
+                vy = ws.CurrentCamera.ViewportSize.y or ws.CurrentCamera.ViewportSize.Y or 600
+            end
+            
+            local x = (xScale * vx) + xOffset
+            local y = (yScale * vy) + yOffset
+            
+            return Vector2.new(x, y)
         end
     end
     --
@@ -390,28 +645,46 @@ do
     end
     --
     function utility:GetTextBounds(text, textSize, font)
-        local textbounds = Vector2.new(0, 0)
-        --
-        local textlabel = utility:Create("TextLabel", {Vector2.new(0, 0)}, {
-            Text = text,
-            Size = textSize,
-            Font = font,
-            Hidden = true
-        })
+        -- Проверяем входные параметры
+        text = text or ""
+        textSize = textSize or 13
+        font = font or 1
         
-        -- Безопасная проверка наличия TextBounds
-        if textlabel and textlabel.TextBounds then
-            textbounds = textlabel.TextBounds
-        else
-            -- Расчет размера текста на основе длины строки, если TextBounds недоступно
+        local textbounds
+        
+        -- Попытка создать и получить размеры текста
+        local success, err = pcall(function()
+            local textlabel = utility:Create("TextLabel", {Vector2.new(0, 0)}, {
+                Text = text,
+                Size = textSize,
+                Font = font,
+                Hidden = true
+            })
+            
+            if textlabel and textlabel.TextBounds then
+                textbounds = textlabel.TextBounds
+            end
+            
+            utility:Remove(textlabel, true)
+        end)
+        
+        -- Если не удалось получить TextBounds, делаем оценку
+        if not success or not textbounds then
+            -- Расчет размера текста на основе длины строки
             local textLength = text and string.len(text) or 0
-            local estimatedWidth = textLength * (textSize or 13) * 0.5
+            local estimatedWidth = textLength * (textSize or 13) * 0.55
             textbounds = Vector2.new(estimatedWidth, (textSize or 13) * 1.5)
         end
         
-        utility:Remove(textlabel, true)
-        --
-        return textbounds
+        -- Обеспечиваем совместимость с обоими форматами представления векторов
+        local result = {
+            X = textbounds.X or textbounds.x or 0,
+            Y = textbounds.Y or textbounds.y or 0,
+            x = textbounds.X or textbounds.x or 0,
+            y = textbounds.Y or textbounds.y or 0
+        }
+        
+        return result
     end
     --
     function utility:GetScreenSize()
@@ -520,16 +793,45 @@ do
     function library:New(info)
         local info = info or {}
         local name = info.name or info.Name or info.title or info.Title or "UI Title"
-        local size = info.size or info.Size or Vector2.new(504,604)
+        
+        -- Безопасная проверка size - если это уже Vector2, используем его, иначе создаем новый
+        local size
+        if info.size and type(info.size) == "table" and info.size.x and info.size.y then
+            size = info.size
+        elseif info.Size and type(info.Size) == "table" and info.Size.x and info.Size.y then
+            size = info.Size
+        else
+            size = Vector2.new(504, 604)
+        end
+        
         local accent = info.accent or info.Accent or info.color or info.Color or theme.accent
         --
         theme.accent = accent
         --
-        local window = {pages = {}, isVisible = false, uibind = Enum.KeyCode.Z, currentPage = nil, fading = false, dragging = false, drag = Vector2.new(0,0), currentContent = {frame = nil, dropdown = nil, multibox = nil, colorpicker = nil, keybind = nil}}
-        --
+        local window = {
+            pages = {}, 
+            isVisible = false, 
+            uibind = Enum.KeyCode.Z, 
+            currentPage = nil, 
+            fading = false, 
+            dragging = false, 
+            drag = Vector2.new(0,0), 
+            currentContent = {
+                frame = nil, 
+                dropdown = nil, 
+                multibox = nil, 
+                colorpicker = nil, 
+                keybind = nil
+            }
+        }
+        
+        -- Получаем x и y из size безопасно, обрабатывая разные форматы вектора
+        local sizeX = size.x or size.X or 504
+        local sizeY = size.y or size.Y or 604
+        
         local main_frame = utility:Create("Frame", {Vector2.new(0,0)}, {
-            Size = utility:Size(0, size.X, 0, size.Y),
-            Position = utility:Position(0.5, -(size.X/2) ,0.5, -(size.Y/2)),
+            Size = utility:Size(0, sizeX, 0, sizeY),
+            Position = utility:Position(0.5, -(sizeX/2), 0.5, -(sizeY/2)),
             Color = theme.outline
         });window["main_frame"] = main_frame
         --
@@ -1803,9 +2105,17 @@ do
         end
         --
         local textbounds = utility:GetTextBounds(name, theme.textsize, theme.font)
-        --
+        -- Получение безопасного размера текста
+        local textWidth = 0
+        if textbounds and (textbounds.X or textbounds.x) then
+            textWidth = textbounds.X or textbounds.x
+        else
+            -- Оценка размера текста на основе длины строки
+            textWidth = #name * 7
+        end
+        
         local page_button = utility:Create("Frame", {Vector2.new(position,4), window.back_frame}, {
-            Size = utility:Size(0, info.size or textbounds.X+41.6, 0, 21),
+            Size = utility:Size(0, info.size or textWidth+41.6, 0, 21),
             Position = utility:Position(0, position, 0, 4, window.back_frame),
             Color = theme.outline
         });page["page_button"] = page_button
@@ -1834,14 +2144,31 @@ do
             Color = "darkcontrast"
         }
         --
-        local page_button_title = utility:Create("TextLabel", {Vector2.new(utility:Position(0.5, 0, 0, 2, page_button_color).X - page_button_color.Position.X,2), page_button_color}, {
+        -- Безопасное получение позиции для заголовка
+        local titlePos
+        local safePos = utility:Position(0.5, 0, 0, 2, page_button_color)
+        
+        -- Безопасная обработка X и Y
+        local posX = 0
+        if safePos and (safePos.X or safePos.x) then
+            posX = (safePos.X or safePos.x)
+        end
+        
+        local buttonPosX = 0
+        if page_button_color and page_button_color.Position then
+            if page_button_color.Position.X or page_button_color.Position.x then
+                buttonPosX = (page_button_color.Position.X or page_button_color.Position.x)
+            end
+        end
+        
+        local page_button_title = utility:Create("TextLabel", {Vector2.new(posX - buttonPosX, 2), page_button_color}, {
             Text = name,
             Size = theme.textsize,
             Font = theme.font,
             Color = theme.textcolor,
             Center = true,
             OutlineColor = theme.textborder,
-            Position = utility:Position(0.5, 0, 0, 2, page_button_color)
+            Position = safePos
         })
         --
         library.colors[page_button_title] = {
@@ -1856,8 +2183,29 @@ do
             page.sectionOffset["right"] = 0
             --
             for i,v in pairs(page.sections) do
-                utility:UpdateOffset(v.section_inline, {Vector2.new(v.side == "right" and (window.tab_frame.Size.X/2)+2 or 5,5 + page["sectionOffset"][v.side]), window.tab_frame})
-                page.sectionOffset[v.side] = page.sectionOffset[v.side] + v.section_inline.Size.Y + 5
+                -- Безопасное получение размера окна
+                local tabFrameSizeX = 0
+                if window.tab_frame and window.tab_frame.Size then
+                    if window.tab_frame.Size.X or window.tab_frame.Size.x then
+                        tabFrameSizeX = window.tab_frame.Size.X or window.tab_frame.Size.x
+                    end
+                end
+                
+                -- Безопасный расчет позиции
+                local xPos = (v.side == "right" and (tabFrameSizeX/2)+2 or 5)
+                local yPos = 5 + page["sectionOffset"][v.side]
+                
+                utility:UpdateOffset(v.section_inline, {Vector2.new(xPos, yPos), window.tab_frame})
+                
+                -- Безопасное получение размера секции
+                local sectionSizeY = 0
+                if v.section_inline and v.section_inline.Size then
+                    if v.section_inline.Size.Y or v.section_inline.Size.y then
+                        sectionSizeY = v.section_inline.Size.Y or v.section_inline.Size.y
+                    end
+                end
+                
+                page.sectionOffset[v.side] = page.sectionOffset[v.side] + sectionSizeY + 5
             end
             --
             window:Move(window.main_frame.Position)
