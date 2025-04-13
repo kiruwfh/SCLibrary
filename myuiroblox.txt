@@ -4,6 +4,61 @@
     Updated in 2025 for compatibility with Solara v3 executor
 ]]
 
+-- // Глобальные безопасные функции для Vector2 и Color3
+local function safeVector2(x, y)
+    if type(Vector2) == "table" and type(Vector2.new) == "function" then
+        return Vector2.new(x or 0, y or 0)
+    else
+        return {x = x or 0, y = y or 0}
+    end
+end
+
+local function safeColor3(r, g, b)
+    if type(Color3) == "table" and type(Color3.fromRGB) == "function" then
+        return Color3.fromRGB(r or 0, g or 0, b or 0)
+    else
+        return {R = (r or 0)/255, G = (g or 0)/255, B = (b or 0)/255}
+    end
+end
+
+-- Безопасные геттеры для X и Y координат
+local function getSafeX(obj)
+    if not obj then return 0 end
+    
+    if type(obj) == "table" then
+        if obj.X ~= nil then 
+            return obj.X 
+        elseif obj.x ~= nil then 
+            return obj.x 
+        end
+    end
+    
+    return 0
+end
+
+local function getSafeY(obj)
+    if not obj then return 0 end
+    
+    if type(obj) == "table" then
+        if obj.Y ~= nil then 
+            return obj.Y 
+        elseif obj.y ~= nil then 
+            return obj.y 
+        end
+    end
+    
+    return 0
+end
+
+-- Безопасные арифметические операции с защитой от nil
+local function safeAdd(a, b) return (a or 0) + (b or 0) end
+local function safeSub(a, b) return (a or 0) - (b or 0) end
+local function safeMul(a, b) return (a or 0) * (b or 0) end
+local function safeDiv(a, b)
+    if not b or b == 0 then return 0 end
+    return (a or 0) / b
+end
+
 -- // Защита от ошибок с readonly таблицами (необходимо для Solara v3)
 
 -- Замена стандартных функций для предотвращения ошибок при попытке модифицировать readonly таблицы
@@ -836,7 +891,19 @@ do
         }
         --
         local mouseLocation = utility:MouseLocation()
-        return (mouseLocation.x >= values[1] and mouseLocation.x <= (values[1] + (values[3] - values[1]))) and (mouseLocation.y >= values[2] and mouseLocation.y <= (values[2] + (values[4] - values[2])))
+        
+        -- Безопасно получаем координаты мыши
+        local mouseX = getSafeX(mouseLocation)
+        local mouseY = getSafeY(mouseLocation)
+        
+        -- Безопасные вычисления с защитой от nil значений
+        local minX = values[1] or 0
+        local minY = values[2] or 0 
+        local maxX = values[3] or 0
+        local maxY = values[4] or 0
+        
+        -- Проверяем, находится ли курсор в заданных границах
+        return (mouseX >= minX and mouseX <= maxX) and (mouseY >= minY and mouseY <= maxY)
     end
     --
     -- Кэш для хранения вычисленных размеров текста
@@ -883,12 +950,21 @@ do
         textBoundsCache[cacheKey] = textbounds
         recursionProtection:exit("GetTextBounds")
         
-        -- Обеспечиваем совместимость с обоими форматами представления векторов
+        -- Обеспечиваем совместимость с обоими форматами представления векторов и защиту от NaN значений
+        local x = textbounds.X or textbounds.x or 0
+        local y = textbounds.Y or textbounds.y or 0
+        
+        -- Защита от NaN
+        if x ~= x or y ~= y then -- проверка NaN (NaN не равен самому себе)
+            x = x ~= x and 0 or x
+            y = y ~= y and 0 or y
+        end
+        
         local result = {
-            X = textbounds.X or textbounds.x or 0,
-            Y = textbounds.Y or textbounds.y or 0,
-            x = textbounds.X or textbounds.x or 0,
-            y = textbounds.Y or textbounds.y or 0
+            X = x,
+            Y = y,
+            x = x,
+            y = y
         }
         
         return result
@@ -2287,24 +2363,62 @@ do
         end
         --
         function window:Initialize()
-            window.pages[1]:Show()
-            --
-            for i,v in pairs(window.pages) do
-                v:Update()
+            -- Безопасная инициализация с защитой от ошибок
+            local success, err = pcall(function()
+                -- Показываем первую страницу, если она есть
+                if window.pages and window.pages[1] then
+                    window.pages[1]:Show()
+                end
+                
+                -- Обновляем все страницы
+                if window.pages then
+                    for i,v in pairs(window.pages) do
+                        if type(v.Update) == "function" then
+                            v:Update()
+                        end
+                    end
+                end
+                
+                -- Устанавливаем флаг инициализации
+                library.shared.initialized = true
+                
+                -- Инициализируем дополнительные элементы интерфейса
+                -- Оборачиваем каждый в pcall для предотвращения крашей
+                pcall(function() window:Watermark() end)
+                pcall(function() window:KeybindsList() end)
+                pcall(function() window:StatusList() end)
+                pcall(function() window:Cursor() end)
+                
+                -- Показываем/скрываем окно
+                pcall(function() window:Fade() end)
+            end)
+            
+            if not success then
+                print("Предупреждение: Ошибка при инициализации окна: " .. tostring(err))
             end
-            --
-            library.shared.initialized = true
-            --
-            window:Watermark()
-            window:KeybindsList()
-            window:StatusList()
-            window:Cursor()
-            --
-            window:Fade()
         end
         --
         library.began[#library.began + 1] = function(Input)
-            if Input.UserInputType == Enum.UserInputType.MouseButton1 and window.isVisible and window.isVisible and utility:MouseOverDrawing({main_frame.Position.X,main_frame.Position.Y,main_frame.Position.X + main_frame.Size.X,main_frame.Position.Y + 20}) then
+            -- Безопасная обработка X и Y координат
+            local function getSafe(obj, field, subfield)
+                if not obj or not obj[field] then return 0 end
+                
+                -- Vector2 в Roblox имеет заглавные X, Y
+                if obj[field][subfield] ~= nil then
+                    return obj[field][subfield]
+                -- Наша заглушка safeVector2 использует строчные x, y
+                elseif obj[field][string.lower(subfield)] ~= nil then
+                    return obj[field][string.lower(subfield)]
+                else
+                    return 0
+                end
+            end
+            
+            local mainPosX = getSafe(main_frame, "Position", "X")
+            local mainPosY = getSafe(main_frame, "Position", "Y")
+            local mainSizeX = getSafe(main_frame, "Size", "X")
+            
+            if Input.UserInputType == Enum.UserInputType.MouseButton1 and window.isVisible and window.isVisible and utility:MouseOverDrawing({mainPosX, mainPosY, mainPosX + mainSizeX, mainPosY + 20}) then
                 local mouseLocation = utility:MouseLocation()
                 --
                 window.dragging = true
@@ -2350,12 +2464,46 @@ do
             end]]
         end
         --
-        utility:Connection(uis.InputBegan,function(Input)
+        -- Безопасное подключение функций обработки ввода с защитой от ошибок
+        local function safeConnect(signal, handler)
+            -- Проверяем, что сигнал существует
+            if not signal then
+                print("Предупреждение: Невозможно подключиться, возвращаем заглушку")
+                -- Возвращаем фиктивное подключение, которое ничего не делает
+                return {
+                    Disconnect = function() end
+                }
+            end
+            
+            -- Пытаемся подключиться с pcall
+            local success, connection = pcall(function()
+                return signal:Connect(handler)
+            end)
+            
+            if success then
+                return connection
+            else
+                print("Предупреждение: Ошибка при подключении: " .. tostring(connection))
+                -- Возвращаем фиктивное подключение
+                return {
+                    Disconnect = function() end
+                }
+            end
+        end
+        
+        safeConnect(uis.InputBegan, function(Input)
+            if not Input then return end -- Защита от nil Input
+            
             for _, func in pairs(library.began) do
                 if not window.dragging then
                     local e,s = pcall(function()
                         func(Input)
                     end)
+                    
+                    if not e then
+                        -- Логируем ошибку, но продолжаем выполнение
+                        print("Ошибка в обработчике InputBegan: " .. tostring(s))
+                    end
                 else
                     break
                 end
@@ -2409,8 +2557,26 @@ do
         --
         local position = 4
         --
+        -- Безопасная функция для получения размера X
+        local function getSafeX(obj)
+            if not obj then return 0 end
+            if not obj.Size then return 0 end
+            
+            -- Vector2 в Roblox имеет заглавные X, Y
+            if obj.Size.X ~= nil then
+                return obj.Size.X
+            -- Наша заглушка safeVector2 использует строчные x, y
+            elseif obj.Size.x ~= nil then
+                return obj.Size.x
+            else
+                return 0
+            end
+        end
+        
         for i,v in pairs(window.pages) do
-            position = position + (v.page_button.Size.X+2)
+            if v and v.page_button then
+                position = position + (getSafeX(v.page_button) + 2)
+            end
         end
         --
         local textbounds = utility:GetTextBounds(name, theme.textsize, theme.font)
@@ -2556,7 +2722,41 @@ do
         end
         --
         library.began[#library.began + 1] = function(Input)
-            if Input.UserInputType == Enum.UserInputType.MouseButton1 and window.isVisible and utility:MouseOverDrawing({page_button.Position.X,page_button.Position.Y,page_button.Position.X + page_button.Size.X,page_button.Position.Y + page_button.Size.Y}) and window.currentPage ~= page then
+            -- Создаем безопасные функции для получения Position и Size
+            local function getSafePos(obj, field)
+                if not obj or not obj.Position then return 0 end
+                
+                -- Vector2 в Roblox имеет заглавные X, Y
+                if obj.Position[field] ~= nil then
+                    return obj.Position[field]
+                -- Наша заглушка safeVector2 использует строчные x, y
+                elseif obj.Position[string.lower(field)] ~= nil then
+                    return obj.Position[string.lower(field)]
+                else
+                    return 0
+                end
+            end
+            
+            local function getSafeSize(obj, field)
+                if not obj or not obj.Size then return 0 end
+                
+                -- Vector2 в Roblox имеет заглавные X, Y
+                if obj.Size[field] ~= nil then
+                    return obj.Size[field]
+                -- Наша заглушка safeVector2 использует строчные x, y
+                elseif obj.Size[string.lower(field)] ~= nil then
+                    return obj.Size[string.lower(field)]
+                else
+                    return 0
+                end
+            end
+            
+            local posX = getSafePos(page_button, "X")
+            local posY = getSafePos(page_button, "Y") 
+            local sizeX = getSafeSize(page_button, "X")
+            local sizeY = getSafeSize(page_button, "Y")
+            
+            if Input.UserInputType == Enum.UserInputType.MouseButton1 and window.isVisible and utility:MouseOverDrawing({posX, posY, posX + sizeX, posY + sizeY}) and window.currentPage ~= page then
                 page:Show()
             end
         end
@@ -2876,7 +3076,13 @@ do
         --
         local label = {axis = section.currentAxis}
         --
-        local label_title = utility:Create("TextLabel", {Vector2.new(middle and (section.section_frame.Size.X/2) or 4,label.axis), section.section_frame}, {
+        -- Безопасное получение размера X для section.section_frame
+        local sectionFrameSizeX = 0
+        if section.section_frame and section.section_frame.Size then
+            sectionFrameSizeX = getSafeX(section.section_frame.Size)
+        end
+        
+        local label_title = utility:Create("TextLabel", {Vector2.new(middle and (sectionFrameSizeX/2) or 4, label.axis), section.section_frame}, {
             Text = name,
             Size = theme.textsize,
             Font = theme.font,
@@ -2919,8 +3125,14 @@ do
         --
         local textbox = {axis = section.currentAxis, current = text}
         --
+        -- Безопасное получение размера X для section.section_frame
+        local sectionFrameSizeX = 0
+        if section.section_frame and section.section_frame.Size then
+            sectionFrameSizeX = getSafeX(section.section_frame.Size)
+        end
+        
         local textbox_outline = utility:Create("Frame", {Vector2.new(4, textbox.axis), section.section_frame}, {
-            Size = utility:Size(0, section.section_frame.Size.X - 8, 0, 20),
+            Size = utility:Size(0, sectionFrameSizeX - 8, 0, 20),
             Position = utility:Position(0.5, 0, 0, textbox.axis, section.section_frame),
             Color = theme.outline,
             Visible = page.open
@@ -2952,7 +3164,13 @@ do
             Color = "darkconstrast"
         }
         --
-        local placeholder_text = utility:Create("TextLabel", {Vector2.new(middle and textbox_frame.Size.X / 2 or 4, 0), textbox_frame}, {
+        -- Безопасное получение размера X для textbox_frame
+        local textboxFrameSizeX = 0
+        if textbox_frame and textbox_frame.Size then
+            textboxFrameSizeX = getSafeX(textbox_frame.Size)
+        end
+        
+        local placeholder_text = utility:Create("TextLabel", {Vector2.new(middle and textboxFrameSizeX / 2 or 4, 0), textbox_frame}, {
             Text = placeholder,
             Size = theme.textsize,
             Font = theme.font,
@@ -2964,7 +3182,7 @@ do
             Visible = page.open
         }, section.visibleContent)
         --
-        local text = utility:Create("TextLabel", {Vector2.new(middle and textbox_frame.Size.X / 2 or 4, 0), textbox_frame}, {
+        local text = utility:Create("TextLabel", {Vector2.new(middle and textboxFrameSizeX / 2 or 4, 0), textbox_frame}, {
             Text = text,
             Size = theme.textsize,
             Font = theme.font,
@@ -3045,7 +3263,12 @@ do
             library.pointers[tostring(pointer)] = textbox
         end
         --
-        section.currentAxis = section.currentAxis + textbox_outline.Size.Y + 4
+        -- Безопасное получение Y-размера и обновление оси
+        local sizeY = 0
+        if textbox_outline and textbox_outline.Size then
+            sizeY = getSafeY(textbox_outline.Size)
+        end
+        section.currentAxis = section.currentAxis + sizeY + 4
         section:Update()
         --
         return textbox
@@ -3104,13 +3327,17 @@ do
             Visible = page.open
         }, section.visibleContent)
         --
-        local toggle_title = utility:Create("TextLabel", {Vector2.new(23,toggle.axis + (15/2) - (utility:GetTextBounds(name, theme.textsize, theme.font).Y/2)), section.section_frame}, {
+        -- Безопасное получение размеров текста
+        local textBounds = utility:GetTextBounds(name, theme.textsize, theme.font)
+        local textHeight = getSafeY(textBounds) or 15
+        
+        local toggle_title = utility:Create("TextLabel", {Vector2.new(23,toggle.axis + (15/2) - (textHeight/2)), section.section_frame}, {
             Text = name,
             Size = theme.textsize,
             Font = theme.font,
             Color = theme.textcolor,
             OutlineColor = theme.textborder,
-            Position = utility:Position(0, 23, 0, toggle.axis + (15/2) - ((utility:GetTextBounds(name, theme.textsize, theme.font).Y or 15)/2), section.section_frame),
+            Position = utility:Position(0, 23, 0, toggle.axis + (15/2) - (textHeight/2), section.section_frame),
             Visible = page.open
         }, section.visibleContent)
         --
@@ -3609,7 +3836,13 @@ do
                 Visible = page.open
             }, section.visibleContent)
             --
-            local keybind_value = utility:Create("TextLabel", {Vector2.new(keybind_outline.Size.X/2,1), keybind_outline}, {
+            -- Безопасное получение размера X для keybind_outline
+            local keybindOutlineSizeX = 0
+            if keybind_outline and keybind_outline.Size then
+                keybindOutlineSizeX = getSafeX(keybind_outline.Size)
+            end
+            
+            local keybind_value = utility:Create("TextLabel", {Vector2.new(keybindOutlineSizeX/2, 1), keybind_outline}, {
                 Text = "...",
                 Size = theme.textsize,
                 Font = theme.font,
@@ -4907,7 +5140,13 @@ do
         local allowedInputTypes = {"MouseButton1","MouseButton2","MouseButton3"}
         local shortenedInputs = {["MouseButton1"] = "MB1", ["MouseButton2"] = "MB2", ["MouseButton3"] = "MB3", ["Insert"] = "Ins", ["LeftAlt"] = "LAlt", ["LeftControl"] = "LC", ["LeftShift"] = "LS", ["RightAlt"] = "RAlt", ["RightControl"] = "RC", ["RightShift"] = "RS", ["CapsLock"] = "Caps"}
         --
-        local keybind_outline = utility:Create("Frame", {Vector2.new(section.section_frame.Size.X-(40+4),keybind.axis), section.section_frame}, {
+        -- Безопасное получение размера X
+        local sectionSizeX = 0
+        if section.section_frame and section.section_frame.Size then
+            sectionSizeX = getSafeX(section.section_frame.Size)
+        end
+        
+        local keybind_outline = utility:Create("Frame", {Vector2.new(sectionSizeX-(40+4), keybind.axis), section.section_frame}, {
             Size = utility:Size(0, 40, 0, 17),
             Position = utility:Position(1, -(40+4), 0, keybind.axis, section.section_frame),
             Color = theme.outline,
@@ -4940,13 +5179,17 @@ do
             Color = "lightcontrast"
         }
         --
-        local keybind_title = utility:Create("TextLabel", {Vector2.new(4,keybind.axis + (17/2) - ((utility:GetTextBounds(name, theme.textsize, theme.font).Y or 15)/2)), section.section_frame}, {
+        -- Безопасное получение размера текста
+        local textBounds = utility:GetTextBounds(name, theme.textsize, theme.font)
+        local textHeight = getSafeY(textBounds) or 15
+        
+        local keybind_title = utility:Create("TextLabel", {Vector2.new(4,keybind.axis + (17/2) - (textHeight/2)), section.section_frame}, {
             Text = name,
             Size = theme.textsize,
             Font = theme.font,
             Color = theme.textcolor,
             OutlineColor = theme.textborder,
-            Position = utility:Position(0, 4, 0, keybind.axis + (17/2) - ((utility:GetTextBounds(name, theme.textsize, theme.font).Y or 15)/2), section.section_frame),
+            Position = utility:Position(0, 4, 0, keybind.axis + (17/2) - (textHeight/2), section.section_frame),
             Visible = page.open
         }, section.visibleContent)
         --
@@ -4962,7 +5205,13 @@ do
             Visible = page.open
         }, section.visibleContent)
         --
-        local keybind_value = utility:Create("TextLabel", {Vector2.new(keybind_outline.Size.X/2,1), keybind_outline}, {
+        -- Безопасное получение размера X для keybind_outline
+        local keybindOutlineSizeX = 0
+        if keybind_outline and keybind_outline.Size then
+            keybindOutlineSizeX = getSafeX(keybind_outline.Size)
+        end
+        
+        local keybind_value = utility:Create("TextLabel", {Vector2.new(keybindOutlineSizeX/2, 1), keybind_outline}, {
             Text = "[None]",
             Size = theme.textsize,
             Font = theme.font,
@@ -5179,7 +5428,13 @@ do
                     utility:LoadImage(keybind__gradient, "gradient", "https://i.imgur.com/5hmlrjX.png")
                     --
                     for i,v in pairs({"Always", "Toggle", "Hold"}) do
-                        local button_title = utility:Create("TextLabel", {Vector2.new(modemenu_frame.Size.X/2,15 * (i-1)), modemenu_frame}, {
+                        -- Безопасное получение размера X
+                        local frameSizeX = 0
+                        if modemenu_frame and modemenu_frame.Size then
+                            frameSizeX = getSafeX(modemenu_frame.Size)
+                        end
+                        
+                        local button_title = utility:Create("TextLabel", {Vector2.new(frameSizeX/2, 15 * (i-1)), modemenu_frame}, {
                             Text = v,
                             Size = theme.textsize,
                             Font = theme.font,
@@ -5240,7 +5495,13 @@ do
         local hh, ss, vv = def:ToHSV()
         local colorpicker = {axis = section.currentAxis, secondColorpicker = false, current = {hh, ss, vv , (transp or 0)}, holding = {picker = false, huepicker = false, transparency = false}, holder = {inline = nil, picker = nil, picker_cursor = nil, huepicker = nil, huepicker_cursor = {}, transparency = nil, transparencybg = nil, transparency_cursor = {}, drawings = {}}}
         --
-        local colorpicker_outline = utility:Create("Frame", {Vector2.new(section.section_frame.Size.X-(30+4),colorpicker.axis), section.section_frame}, {
+        -- Безопасное получение размера X
+        local sectionSizeX = 0
+        if section.section_frame and section.section_frame.Size then
+            sectionSizeX = getSafeX(section.section_frame.Size)
+        end
+        
+        local colorpicker_outline = utility:Create("Frame", {Vector2.new(sectionSizeX-(30+4), colorpicker.axis), section.section_frame}, {
             Size = utility:Size(0, 30, 0, 15),
             Position = utility:Position(1, -(30+4), 0, colorpicker.axis, section.section_frame),
             Color = theme.outline,
@@ -5278,13 +5539,17 @@ do
             Visible = page.open
         }, section.visibleContent)
         --
-        local colorpicker_title = utility:Create("TextLabel", {Vector2.new(4,colorpicker.axis + (15/2) - (utility:GetTextBounds(name, theme.textsize, theme.font).Y/2)), section.section_frame}, {
+        -- Безопасное получение размера текста
+        local textBounds = utility:GetTextBounds(name, theme.textsize, theme.font)
+        local textHeight = getSafeY(textBounds) or 15
+        
+        local colorpicker_title = utility:Create("TextLabel", {Vector2.new(4,colorpicker.axis + (15/2) - (textHeight/2)), section.section_frame}, {
             Text = name,
             Size = theme.textsize,
             Font = theme.font,
             Color = theme.textcolor,
             OutlineColor = theme.textborder,
-            Position = utility:Position(0, 4, 0, colorpicker.axis + (15/2) - (utility:GetTextBounds(name, theme.textsize, theme.font).Y/2), section.section_frame),
+            Position = utility:Position(0, 4, 0, colorpicker.axis + (15/2) - (textHeight/2), section.section_frame),
             Visible = page.open
         }, section.visibleContent)
         --
@@ -5625,9 +5890,15 @@ do
             local colorpicker = {axis = colorpicker.axis, current = {hh, ss, vv , (transp or 0)}, holding = {picker = false, huepicker = false, transparency = false}, holder = {inline = nil, picker = nil, picker_cursor = nil, huepicker = nil, huepicker_cursor = {}, transparency = nil, transparencybg = nil, transparency_cursor = {}, drawings = {}}}
             --
             colorpicker_outline.Position = utility:Position(1, -(60+8), 0, colorpicker.axis, section.section_frame)
-            utility:UpdateOffset(colorpicker_outline, {Vector2.new(section.section_frame.Size.X-(60+8),colorpicker.axis), section.section_frame})
+            -- Безопасное получение размера X
+            local sectionSizeX = 0
+            if section.section_frame and section.section_frame.Size then
+                sectionSizeX = getSafeX(section.section_frame.Size)
+            end
+            
+            utility:UpdateOffset(colorpicker_outline, {Vector2.new(sectionSizeX-(60+8), colorpicker.axis), section.section_frame})
             --
-            local colorpicker_outline = utility:Create("Frame", {Vector2.new(section.section_frame.Size.X-(30+4),colorpicker.axis), section.section_frame}, {
+            local colorpicker_outline = utility:Create("Frame", {Vector2.new(sectionSizeX-(30+4), colorpicker.axis), section.section_frame}, {
                 Size = utility:Size(0, 30, 0, 15),
                 Position = utility:Position(1, -(30+4), 0, colorpicker.axis, section.section_frame),
                 Color = theme.outline,
@@ -6578,8 +6849,8 @@ local m_thread = {} do
     end
 end
 
--- Автоматически запускаем демонстрационный UI, если не находимся внутри Roblox
-if not (game and game.Loaded) then
+-- Функция создания и инициализации демонстрационного UI с защитой от ошибок
+local function createSafeDemoUI()
     -- Функция для создания Vector2, если он не доступен глобально
     local function safeVector2(x, y)
         if type(Vector2) == "table" and type(Vector2.new) == "function" then
@@ -6589,46 +6860,89 @@ if not (game and game.Loaded) then
         end
     end
     
-    -- Запускаем демонстрационное окно в тестовом режиме
-    local auto_window = library:New({
-        name = "Octernal UI Library v2.0",
-        size = safeVector2(580, 400),
-        accent = safeColor3FromRGB(55, 175, 225)
-    })
+    -- Оборачиваем всё в pcall для защиты от ошибок
+    local success, err = pcall(function()
+        -- Запускаем демонстрационное окно в тестовом режиме
+        local auto_window = library:New({
+            name = "Octernal UI Library v2.0",
+            size = safeVector2(580, 400),
+            accent = safeColor3FromRGB(55, 175, 225)
+        })
 
-    -- Создаем основную страницу
-    local autoPage = auto_window:Page({name = "Demonstration"})
+        -- Создаем основную страницу
+        local autoPage = auto_window:Page({name = "Demonstration"})
+        
+        -- Секция информации
+        local infoSection = autoPage:Section({name = "Information", side = "left"})
+        infoSection:Label({text = "Octernal UI Library - Auto Demo"})
+        infoSection:Label({text = "Status: " .. (game and game.Loaded and "Injected" or "Тестовый режим")})
+        infoSection:Label({text = "Compatible with Solara v3"})
+        
+        -- Секция с примерами элементов
+        local elementsSection = autoPage:Section({name = "UI Elements", side = "right"})
+        
+        elementsSection:Button({
+            name = "Example Button",
+            callback = function() end
+        })
+        
+        elementsSection:Toggle({
+            name = "Example Toggle",
+            default = true,
+            callback = function() end
+        })
+        
+        elementsSection:Slider({
+            name = "Example Slider",
+            min = 0,
+            max = 100,
+            default = 50,
+            callback = function() end
+        })
+        
+        -- Безопасно инициализируем окно с отложенным запуском
+        safeTask.spawn(function()
+            -- Небольшая задержка для стабильности
+            safeTask.wait(0.2)
+            
+            local init_success, init_err = pcall(function()
+                auto_window:Initialize()
+            end)
+            
+            if not init_success then
+                print("Предупреждение: Не удалось инициализировать демо-окно: " .. tostring(init_err))
+            end
+        end)
+    end)
     
-    -- Секция информации
-    local infoSection = autoPage:Section({name = "Information", side = "left"})
-    infoSection:Label({text = "Octernal UI Library - Auto Demo"})
-    infoSection:Label({text = "Status: Тестовый режим"})
-    infoSection:Label({text = "Compatible with Solara v3"})
-    
-    -- Секция с примерами элементов
-    local elementsSection = autoPage:Section({name = "UI Elements", side = "right"})
-    
-    elementsSection:Button({
-        name = "Example Button",
-        callback = function() end
-    })
-    
-    elementsSection:Toggle({
-        name = "Example Toggle",
-        default = true,
-        callback = function() end
-    })
-    
-    elementsSection:Slider({
-        name = "Example Slider",
-        min = 0,
-        max = 100,
-        default = 50,
-        callback = function() end
-    })
-    
-    -- Инициализация автоматического окна
-    auto_window:Initialize()
+    if not success then
+        print("Предупреждение: Не удалось создать демо-окно: " .. tostring(err))
+    end
+end
+
+-- Автоматически запускаем демонстрационный UI с защитой
+if not (game and game.Loaded) then
+    -- Запускаем создание демо в отдельной задаче с задержкой
+    safeTask.spawn(function()
+        safeTask.wait(0.5) -- Задержка для стабильности
+        createSafeDemoUI()
+    end)
+else
+    -- Для Roblox и Solara v3 создаем демо с дополнительными проверками
+    safeTask.spawn(function()
+        safeTask.wait(1.0) -- Больше задержка для инъекции
+        
+        -- Дополнительная проверка перед созданием UI
+        local check_success, result = pcall(function()
+            return (game and game.Loaded)
+        end)
+        
+        if check_success and result then
+            createSafeDemoUI()
+        else
+            print("Пропускаем создание демо-окна в нестабильной среде")
+        end
+    end)
 end
 
 return library, library.pointers, theme -- utility
