@@ -72,6 +72,54 @@ local function safeTick()
     return os.time() - _startTime + os.clock() % 1
 end
 
+-- Безопасная имплементация task (для совместимости вне Roblox)
+local safeTask = {}
+function safeTask.spawn(func, ...)
+    if type(func) ~= "function" then return end
+    
+    local args = {...}
+    local success, result = pcall(function()
+        if type(task) == "table" and type(task.spawn) == "function" then
+            -- Используем настоящий task.spawn если он доступен
+            return task.spawn(func, unpack(args))
+        else
+            -- Имитируем task.spawn через coroutine
+            local co = coroutine.create(func)
+            return coroutine.resume(co, unpack(args))
+        end
+    end)
+    
+    if not success then
+        print("Ошибка при запуске задачи: " .. tostring(result))
+    end
+    
+    return result
+end
+
+function safeTask.wait(seconds)
+    if type(task) == "table" and type(task.wait) == "function" then
+        -- Используем настоящий task.wait если он доступен
+        return task.wait(seconds)
+    else
+        -- Имитируем task.wait
+        local start = os.clock()
+        seconds = seconds or 0
+        
+        -- Простая задержка для Lua
+        if seconds > 0 then
+            local time = os.clock()
+            while os.clock() - time < seconds do end
+        end
+        
+        return os.clock() - start
+    end
+end
+
+-- Создаем глобальную переменную task, если она не существует
+if not task then
+    task = safeTask
+end
+
 -- Переопределение math.clamp, math.round и tick для обратной совместимости
 local function safeAssign(tbl, key, value)
     -- Пытаемся безопасно разблокировать таблицу перед изменением
@@ -688,7 +736,38 @@ do
     end
     --
     function utility:GetScreenSize()
-        return ws.CurrentCamera.ViewportSize
+        -- Безопасное получение размера экрана
+        local defaultSize = Vector2.new(1920, 1080) -- Стандартный размер по умолчанию
+        
+        -- Пробуем получить размер экрана из ws.CurrentCamera.ViewportSize
+        local success, result = pcall(function()
+            if ws and ws.CurrentCamera and ws.CurrentCamera.ViewportSize then
+                -- Проверяем формат ViewportSize (может быть таблицей или Vector2)
+                local viewportSize = ws.CurrentCamera.ViewportSize
+                
+                -- Если это Vector2, возвращаем как есть
+                if typeof(viewportSize) == "Vector2" then
+                    return viewportSize
+                end
+                
+                -- Если это таблица с числовыми свойствами x/y или X/Y
+                if type(viewportSize) == "table" then
+                    local x = viewportSize.x or viewportSize.X or defaultSize.x
+                    local y = viewportSize.y or viewportSize.Y or defaultSize.y
+                    return Vector2.new(x, y)
+                end
+            end
+            
+            -- Возвращаем значение по умолчанию, если не удалось получить корректный размер
+            return defaultSize
+        end)
+        
+        -- Возвращаем результат или значение по умолчанию в случае ошибки
+        if success then
+            return result
+        else
+            return defaultSize
+        end
     end
     --
     function utility:LoadImage(instance, imageName, imageLink)
@@ -1183,14 +1262,26 @@ do
             --
             function window.watermark:UpdateSize()
                 -- Безопасное получение размера текста
-                local textWidth = 0
-                if watermark_title and watermark_title.TextBounds then
-                    textWidth = watermark_title.TextBounds.X
-                else
-                    -- Примерно оцениваем ширину текста на основе длины строки
-                    local textLength = watermark_title and watermark_title.Text and string.len(watermark_title.Text) or 0
-                    textWidth = textLength * (theme.textsize or 13) * 0.5
+                local textWidth = 100 -- Минимальная ширина по умолчанию
+                
+                -- Сначала проверяем наличие watermark_title
+                if watermark_title then
+                    -- Пытаемся получить текст
+                    local titleText = watermark_title.Text or ""
+                    
+                    -- Пытаемся получить прямые границы текста
+                    if watermark_title.TextBounds and watermark_title.TextBounds.X and watermark_title.TextBounds.X > 0 then
+                        textWidth = watermark_title.TextBounds.X
+                    else
+                        -- Если нет TextBounds, вычисляем приблизительно
+                        local textLength = string.len(titleText)
+                        local fontSize = (theme and theme.textsize) or 13
+                        textWidth = textLength * fontSize * 0.6 -- Увеличиваем коэффициент для более точной оценки
+                    end
                 end
+                
+                -- Гарантируем минимальную ширину
+                textWidth = math.max(textWidth, 100)
                 
                 watermark_outline.Size = utility:Size(0, textWidth + 4 + (6*2), 0, 21)
                 watermark_inline.Size = utility:Size(1, -2, 1, -2, watermark_outline)
@@ -1432,7 +1523,15 @@ do
             --
             local info = info or {}
             --
-            local keybindslist_outline = utility:Create("Frame", {Vector2.new(10,(utility:GetScreenSize().Y/2)-200)}, {
+            -- Безопасное получение положения для списка
+            local screenSize = utility:GetScreenSize()
+            local yPosition = 200
+            
+            if screenSize and screenSize.Y then
+                yPosition = (screenSize.Y / 2) - 200
+            end
+            
+            local keybindslist_outline = utility:Create("Frame", {Vector2.new(10, yPosition)}, {
                 Size = utility:Size(0, 180, 0, 22),
                 Position = utility:Position(0, 10, 0.4, 0),
                 Hidden = true,
@@ -1664,7 +1763,15 @@ do
             --
             local info = info or {}
             --
-            local statuslist_outline = utility:Create("Frame", {Vector2.new(10,(utility:GetScreenSize().Y/2)-200)}, {
+            -- Безопасное получение положения для списка статусов
+            local screenSize = utility:GetScreenSize()
+            local yPosition = 200
+            
+            if screenSize and screenSize.Y then
+                yPosition = (screenSize.Y / 2) - 200
+            end
+            
+            local statuslist_outline = utility:Create("Frame", {Vector2.new(10, yPosition)}, {
                 Size = utility:Size(0, 150, 0, 22),
                 Position = utility:Position(1, -160, 0.4, 0),
                 Hidden = true,
@@ -2264,9 +2371,21 @@ do
         local page = self
         local section = {window = window, page = page, visibleContent = {}, currentAxis = 20, side = side}
         --
-        local section_inline = utility:Create("Frame", {Vector2.new(side == "right" and (window.tab_frame.Size.X/2)+2 or 5,5 + page["sectionOffset"][side]), window.tab_frame}, {
+        -- Безопасное получение размера окна
+        local tabFrameSizeX = 0
+        if window.tab_frame and window.tab_frame.Size then
+            if window.tab_frame.Size.X or window.tab_frame.Size.x then
+                tabFrameSizeX = window.tab_frame.Size.X or window.tab_frame.Size.x
+            end
+        end
+        
+        -- Безопасное вычисление позиции
+        local xPosition = side == "right" and (tabFrameSizeX/2)+2 or 5
+        local yPosition = 5 + (page["sectionOffset"][side] or 0)
+        
+        local section_inline = utility:Create("Frame", {Vector2.new(xPosition, yPosition), window.tab_frame}, {
             Size = utility:Size(0.5, -7, 0, 22, window.tab_frame),
-            Position = utility:Position(side == "right" and 0.5 or 0, side == "right" and 2 or 5, 0, 5 + page.sectionOffset[side], window.tab_frame),
+            Position = utility:Position(side == "right" and 0.5 or 0, side == "right" and 2 or 5, 0, 5 + (page.sectionOffset[side] or 0), window.tab_frame),
             Color = theme.inline,
             Visible = page.open
         }, section.visibleContent);section["section_inline"] = section_inline
@@ -2345,9 +2464,21 @@ do
         local page = self
         local multiSection = {window = window, page = page, sections = {}, backup = {}, visibleContent = {}, currentSection = nil, xAxis = 0, side = side}
         --
-        local multiSection_inline = utility:Create("Frame", {Vector2.new(side == "right" and (window.tab_frame.Size.X/2)+2 or 5,5 + page["sectionOffset"][side]), window.tab_frame}, {
+        -- Безопасное получение размера окна
+        local tabFrameSizeX = 0
+        if window.tab_frame and window.tab_frame.Size then
+            if window.tab_frame.Size.X or window.tab_frame.Size.x then
+                tabFrameSizeX = window.tab_frame.Size.X or window.tab_frame.Size.x
+            end
+        end
+        
+        -- Безопасное вычисление позиции
+        local xPosition = side == "right" and (tabFrameSizeX/2)+2 or 5
+        local yPosition = 5 + (page["sectionOffset"][side] or 0)
+        
+        local multiSection_inline = utility:Create("Frame", {Vector2.new(xPosition, yPosition), window.tab_frame}, {
             Size = utility:Size(0.5, -7, 0, size, window.tab_frame),
-            Position = utility:Position(side == "right" and 0.5 or 0, side == "right" and 2 or 5, 0, 5 + page.sectionOffset[side], window.tab_frame),
+            Position = utility:Position(side == "right" and 0.5 or 0, side == "right" and 2 or 5, 0, 5 + (page.sectionOffset[side] or 0), window.tab_frame),
             Color = theme.inline,
             Visible = page.open
         }, multiSection.visibleContent);multiSection["section_inline"] = multiSection_inline
@@ -3605,8 +3736,23 @@ do
             Color = "lightcontrast"
         }
         --
+        -- Безопасное получение размера фрейма
+        local sliderFrameSizeX = 0
+        if slider_frame and slider_frame.Size then
+            sliderFrameSizeX = slider_frame.Size.X or slider_frame.Size.x or 0
+        end
+        
+        -- Безопасное вычисление размера слайдера
+        local slideWidth = 0
+        if slider.max and slider.min and slider.current then
+            local range = slider.max - slider.min
+            if range ~= 0 then
+                slideWidth = (sliderFrameSizeX / range * (slider.current - slider.min))
+            end
+        end
+        
         local slider_slide = utility:Create("Frame", {Vector2.new(1,1), slider_inline}, {
-            Size = utility:Size(0, (slider_frame.Size.X / (slider.max - slider.min) * (slider.current - slider.min)), 1, -2, slider_inline),
+            Size = utility:Size(0, slideWidth, 1, -2, slider_inline),
             Position = utility:Position(0, 1, 0, 1, slider_inline),
             Color = theme.accent,
             Visible = page.open
@@ -3624,14 +3770,29 @@ do
         }, section.visibleContent)
         --
         local textBounds = utility:GetTextBounds(name, theme.textsize, theme.font)
-        local slider_value = utility:Create("TextLabel", {Vector2.new(slider_outline.Size.X/2,(slider_outline.Size.Y/2) - (textBounds.Y/2)), slider_outline}, {
-            Text = slider.current..slider.sub.."/"..slider.max..slider.sub,
+        
+        -- Безопасное получение размеров и вычисление позиции для текста слайдера
+        local outlineSizeX, outlineSizeY = 0, 0
+        if slider_outline and slider_outline.Size then
+            outlineSizeX = slider_outline.Size.X or slider_outline.Size.x or 0
+            outlineSizeY = slider_outline.Size.Y or slider_outline.Size.y or 0
+        end
+        
+        local textHeightOffset = 0
+        if textBounds and textBounds.Y then
+            textHeightOffset = textBounds.Y / 2
+        end
+        
+        local yPos = (outlineSizeY / 2) - textHeightOffset
+        
+        local slider_value = utility:Create("TextLabel", {Vector2.new(outlineSizeX/2, yPos), slider_outline}, {
+            Text = slider.current..(slider.sub or "").."/"..(slider.max or 0)..(slider.sub or ""),
             Size = theme.textsize,
             Font = theme.font,
             Color = theme.textcolor,
             Center = true,
             OutlineColor = theme.textborder,
-            Position = utility:Position(0.5, 0, 0, (slider_outline.Size.Y/2) - (textBounds.Y/2), slider_outline),
+            Position = utility:Position(0.5, 0, 0, yPos, slider_outline),
             Visible = page.open
         }, section.visibleContent)
         --
@@ -3643,10 +3804,30 @@ do
         utility:LoadImage(slider__gradient, "gradient", "https://i.imgur.com/5hmlrjX.png")
         --
         function slider:set(value)
-            slider.current = math.clamp(math.round(value * slider.decimals) / slider.decimals, slider.min, slider.max)
-            local percent = 1 - ((slider.max - slider.current) / (slider.max - slider.min))
-            slider_value.Text = slider.current..slider.sub.."/"..slider.max..slider.sub
-            slider_slide.Size = utility:Size(0, percent * slider_frame.Size.X, 1, -2, slider_inline)
+            -- Безопасное округление и ограничение значения
+            local clampedValue = safeClamp(value, slider.min, slider.max)
+            if slider.decimals then
+                slider.current = safeRound(clampedValue * slider.decimals) / slider.decimals
+            else
+                slider.current = clampedValue
+            end
+            
+            -- Безопасное вычисление процентного соотношения
+            local percent = 0
+            if slider.max ~= slider.min then
+                percent = 1 - ((slider.max - slider.current) / (slider.max - slider.min))
+            end
+            
+            -- Обновление текста и размера ползунка
+            slider_value.Text = slider.current..(slider.sub or "").."/"..slider.max..(slider.sub or "")
+            
+            -- Безопасное получение размера фрейма
+            local frameWidth = 0
+            if slider_frame and slider_frame.Size then
+                frameWidth = slider_frame.Size.X or slider_frame.Size.x or 0
+            end
+            
+            slider_slide.Size = utility:Size(0, percent * frameWidth, 1, -2, slider_inline)
             callback(slider.current)
         end
         --
@@ -3657,9 +3838,33 @@ do
         --
         function slider:Refresh()
             local mouseLocation = utility:MouseLocation()
-            local percent = math.clamp(mouseLocation.X - slider_slide.Position.X, 0, slider_frame.Size.X) / slider_frame.Size.X
-            local value = math.floor((slider.min + (slider.max - slider.min) * percent) * slider.decimals) / slider.decimals
-            value = math.clamp(value, slider.min, slider.max)
+            
+            -- Безопасное получение позиции слайдера
+            local slidePositionX = 0
+            if slider_slide and slider_slide.Position then
+                slidePositionX = slider_slide.Position.X or slider_slide.Position.x or 0
+            end
+            
+            -- Безопасное получение размера фрейма
+            local frameWidth = 0
+            if slider_frame and slider_frame.Size then
+                frameWidth = slider_frame.Size.X or slider_frame.Size.x or 0
+            end
+            
+            -- Предотвращение деления на ноль
+            if frameWidth == 0 then
+                return
+            end
+            
+            local percent = safeClamp(mouseLocation.X - slidePositionX, 0, frameWidth) / frameWidth
+            
+            -- Безопасное вычисление значения
+            local value = slider.min + (slider.max - slider.min) * percent
+            if slider.decimals then
+                value = math.floor(value * slider.decimals) / slider.decimals
+            end
+            
+            value = safeClamp(value, slider.min, slider.max)
             slider:set(value)
         end
         --
@@ -3751,7 +3956,13 @@ do
             Visible = page.open
         }, section.visibleContent)
         --
-        local button_title = utility:Create("TextLabel", {Vector2.new(button_frame.Size.X/2,1), button_frame}, {
+        -- Безопасное получение размера кнопки
+        local buttonSizeX = 0
+        if button_frame and button_frame.Size then
+            buttonSizeX = button_frame.Size.X or button_frame.Size.x or 0
+        end
+        
+        local button_title = utility:Create("TextLabel", {Vector2.new(buttonSizeX/2, 1), button_frame}, {
             Text = name,
             Size = theme.textsize,
             Font = theme.font,
@@ -3879,7 +4090,13 @@ do
                 Visible = page.open
             }, section.visibleContent)
             --
-            local button_title = utility:Create("TextLabel", {Vector2.new(button_frame.Size.X/2,1), button_frame}, {
+            -- Безопасное получение размера кнопки
+            local buttonSizeX = 0
+            if button_frame and button_frame.Size then
+                buttonSizeX = button_frame.Size.X or button_frame.Size.x or 0
+            end
+            
+            local button_title = utility:Create("TextLabel", {Vector2.new(buttonSizeX/2, 1), button_frame}, {
                 Text = buttons[i][1],
                 Size = theme.textsize,
                 Font = theme.font,
@@ -3977,13 +4194,19 @@ do
             Visible = page.open
         }, section.visibleContent)
         --
-        local dropdown_value = utility:Create("TextLabel", {Vector2.new(3,dropdown_frame.Size.Y/2 - 7), dropdown_frame}, {
+        -- Безопасное получение размера фрейма
+        local frameSizeY = 0
+        if dropdown_frame and dropdown_frame.Size then
+            frameSizeY = dropdown_frame.Size.Y or dropdown_frame.Size.y or 0
+        end
+        
+        local dropdown_value = utility:Create("TextLabel", {Vector2.new(3, frameSizeY/2 - 7), dropdown_frame}, {
             Text = dropdown.current,
             Size = theme.textsize,
             Font = theme.font,
             Color = theme.textcolor,
             OutlineColor = theme.textborder,
-            Position = utility:Position(0, 3, 0, (dropdown_frame.Size.Y/2) - 7, dropdown_frame),
+            Position = utility:Position(0, 3, 0, (frameSizeY/2) - 7, dropdown_frame),
             Visible = page.open
         }, section.visibleContent)
         --
@@ -3992,7 +4215,13 @@ do
             Color = "textcolor"
         }
         --
-        local dropdown_image = utility:Create("Image", {Vector2.new(dropdown_frame.Size.X - 15,dropdown_frame.Size.Y/2 - 3), dropdown_frame}, {
+        -- Безопасное получение размера фрейма для позиционирования изображения
+        local frameSizeX = 0
+        if dropdown_frame and dropdown_frame.Size then
+            frameSizeX = dropdown_frame.Size.X or dropdown_frame.Size.x or 0
+        end
+        
+        local dropdown_image = utility:Create("Image", {Vector2.new(frameSizeX - 15, frameSizeY/2 - 3), dropdown_frame}, {
             Size = utility:Size(0, 9, 0, 6, dropdown_frame),
             Position = utility:Position(1, -15, 0.5, -3, dropdown_frame),
             Visible = page.open
