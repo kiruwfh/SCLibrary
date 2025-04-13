@@ -73,21 +73,33 @@ local function safeTick()
 end
 
 -- Безопасная имплементация task (для совместимости вне Roblox)
+-- Флаг, который предотвращает рекурсию в safeTask.spawn
+local isSafeTaskSpawning = false
+
 local safeTask = {}
 function safeTask.spawn(func, ...)
     if type(func) ~= "function" then return end
     
+    -- Защита от рекурсии без использования recursionProtection (который может еще не быть определен)
+    if isSafeTaskSpawning then
+        print("Предотвращена рекурсия в safeTask.spawn")
+        return nil
+    end
+    
+    isSafeTaskSpawning = true
     local args = {...}
     local success, result = pcall(function()
-        if type(task) == "table" and type(task.spawn) == "function" then
-            -- Используем настоящий task.spawn если он доступен
-            return task.spawn(func, unpack(args))
+        -- Используем оригинальный task, если он доступен и это не safeTask
+        if type(_G.task) == "table" and type(_G.task.spawn) == "function" and _G.task ~= safeTask then
+            return _G.task.spawn(func, unpack(args))
         else
             -- Имитируем task.spawn через coroutine
             local co = coroutine.create(func)
             return coroutine.resume(co, unpack(args))
         end
     end)
+    
+    isSafeTaskSpawning = false
     
     if not success then
         print("Ошибка при запуске задачи: " .. tostring(result))
@@ -96,27 +108,51 @@ function safeTask.spawn(func, ...)
     return result
 end
 
+-- Флаг, который предотвращает рекурсию в safeTask.wait
+local isSafeTaskWaiting = false
+
 function safeTask.wait(seconds)
-    if type(task) == "table" and type(task.wait) == "function" then
-        -- Используем настоящий task.wait если он доступен
-        return task.wait(seconds)
+    -- Защита от рекурсии
+    if isSafeTaskWaiting then
+        print("Предотвращена рекурсия в safeTask.wait")
+        seconds = seconds or 0
+        return seconds
+    end
+    
+    isSafeTaskWaiting = true
+    
+    local result
+    -- Используем оригинальный task.wait, если он доступен и это не safeTask
+    if type(_G.task) == "table" and type(_G.task.wait) == "function" and _G.task ~= safeTask then
+        result = _G.task.wait(seconds)
     else
         -- Имитируем task.wait
         local start = os.clock()
         seconds = seconds or 0
         
-        -- Простая задержка для Lua
+        -- Простая задержка для Lua (не блокируем)
         if seconds > 0 then
+            -- Ждём максимум 0.1 секунды, чтобы не блокировать выполнение слишком долго
+            local waitTime = math.min(seconds, 0.1)
             local time = os.clock()
-            while os.clock() - time < seconds do end
+            while os.clock() - time < waitTime do end
         end
         
-        return os.clock() - start
+        result = os.clock() - start
     end
+    
+    isSafeTaskWaiting = false
+    return result
 end
 
 -- Создаем глобальную переменную task, если она не существует
-if not task then
+if not _G.task then
+    _G.task = safeTask
+end
+
+-- Создаем локальную переменную task для использования в этом файле
+-- Но проверяем, не будет ли это создавать циклическую ссылку
+if task ~= safeTask then
     task = safeTask
 end
 
@@ -226,6 +262,33 @@ if not Enum then
         }
     }
 end
+
+-- Механизм защиты от рекурсивных вызовов
+local recursionProtection = {
+    active = {},  -- активные рекурсивные вызовы
+    counts = {},  -- счетчики для каждой функции
+    maxCounts = {}, -- максимальная глубина рекурсии для каждой функции
+    
+    -- Функция для отслеживания входа в рекурсивный вызов
+    enter = function(self, funcName, maxDepth)
+        self.counts[funcName] = (self.counts[funcName] or 0) + 1
+        self.maxCounts[funcName] = maxDepth or 5
+        
+        if self.active[funcName] or self.counts[funcName] > self.maxCounts[funcName] then
+            self.counts[funcName] = self.counts[funcName] - 1
+            return false -- рекурсия обнаружена или слишком глубока
+        end
+        
+        self.active[funcName] = true
+        return true -- можно продолжить выполнение
+    end,
+    
+    -- Функция для отслеживания выхода из рекурсивного вызова
+    exit = function(self, funcName)
+        self.active[funcName] = false
+        self.counts[funcName] = (self.counts[funcName] or 1) - 1
+    end
+}
 
 -- Создаем имитацию Vector2, если его нет
 if not Vector2 then
@@ -414,55 +477,107 @@ local theme = {
 -- // Utility Functions
 do
     function utility:Size(xScale,xOffset,yScale,yOffset,instance)
+        -- Защита от рекурсивных вызовов
+        if not recursionProtection:enter("Size", 5) then
+            print("Предотвращена рекурсия в utility:Size")
+            return Vector2.new(xOffset or 0, yOffset or 0)
+        end
+        
         -- Обеспечиваем безопасные значения для параметров
         xScale = xScale or 0
         xOffset = xOffset or 0
         yScale = yScale or 0
         yOffset = yOffset or 0
         
-        if instance then
-            local x = xScale*instance.Size.x+xOffset
-            local y = yScale*instance.Size.y+yOffset
-            --
-            return Vector2.new(x,y)
-        else
-            local vx,vy = ws.CurrentCamera.ViewportSize.x,ws.CurrentCamera.ViewportSize.y
-            --
-            local x = xScale*vx+xOffset
-            local y = yScale*vy+yOffset
-            --
-            return Vector2.new(x,y)
+        local x, y
+        
+        local success, err = pcall(function()
+            if instance then
+                -- Безопасно получаем размер объекта
+                local sizeX, sizeY = 0, 0
+                
+                if instance.Size then
+                    sizeX = instance.Size.x or instance.Size.X or 0
+                    sizeY = instance.Size.y or instance.Size.Y or 0
+                end
+                
+                -- Вычисляем новый размер
+                x = xScale * sizeX + xOffset
+                y = yScale * sizeY + yOffset
+            else
+                -- Безопасное получение размера экрана
+                local vx, vy = 800, 600 -- Значения по умолчанию если не удается получить размер экрана
+                
+                if ws and ws.CurrentCamera and ws.CurrentCamera.ViewportSize then
+                    vx = ws.CurrentCamera.ViewportSize.x or ws.CurrentCamera.ViewportSize.X or 800
+                    vy = ws.CurrentCamera.ViewportSize.y or ws.CurrentCamera.ViewportSize.Y or 600
+                end
+                
+                -- Вычисляем новый размер
+                x = xScale * vx + xOffset
+                y = yScale * vy + yOffset
+            end
+        end)
+        
+        -- Сбрасываем флаг рекурсии
+        recursionProtection:exit("Size")
+        
+        if not success then
+            print("Ошибка в utility:Size:", err)
+            return Vector2.new(xOffset, yOffset)
         end
+        
+        return Vector2.new(x, y)
     end
     --
     function utility:Position(xScale,xOffset,yScale,yOffset,instance)
+        -- Защита от рекурсивных вызовов с использованием общего механизма
+        if not recursionProtection:enter("Position", 5) then
+            print("Предотвращена рекурсия в utility:Position")
+            return Vector2.new(xOffset or 0, yOffset or 0) -- Возвращаем простое смещение при слишком глубокой рекурсии
+        end
+        
         -- Обеспечиваем безопасные значения для параметров
         xScale = xScale or 0
         xOffset = xOffset or 0
         yScale = yScale or 0
         yOffset = yOffset or 0
         
+        -- Результирующие координаты
+        local x, y
+        
         if instance then
-            -- Безопасно получаем значения Position и Size, обрабатывая разные форматы
-            local posX, posY, sizeX, sizeY = 0, 0, 0, 0
+            local success, err = pcall(function()
+                -- Безопасно получаем значения Position и Size, обрабатывая разные форматы
+                local posX, posY, sizeX, sizeY = 0, 0, 0, 0
+                
+                -- Получаем положение объекта
+                if instance.Position then
+                    posX = instance.Position.x or instance.Position.X or 0
+                    posY = instance.Position.y or instance.Position.Y or 0
+                end
+                
+                -- Получаем размер объекта
+                if instance.Size then
+                    sizeX = instance.Size.x or instance.Size.X or 0
+                    sizeY = instance.Size.y or instance.Size.Y or 0
+                end
+                
+                -- Вычисляем координаты
+                x = posX + (xScale * sizeX) + xOffset
+                y = posY + (yScale * sizeY) + yOffset
+            end)
             
-            -- Получаем положение объекта
-            if instance.Position then
-                posX = instance.Position.x or instance.Position.X or 0
-                posY = instance.Position.y or instance.Position.Y or 0
+            if not success then
+                -- В случае ошибки, возвращаем простые значения
+                x = xOffset
+                y = yOffset
             end
             
-            -- Получаем размер объекта
-            if instance.Size then
-                sizeX = instance.Size.x or instance.Size.X or 0
-                sizeY = instance.Size.y or instance.Size.Y or 0
-            end
+            -- Сбрасываем счетчик рекурсии
+            recursionProtection:exit("Position")
             
-            -- Вычисляем координаты
-            local x = posX + (xScale * sizeX) + xOffset
-            local y = posY + (yScale * sizeY) + yOffset
-            
-            return Vector2.new(x, y)
+            return Vector2.new(x or xOffset, y or yOffset)
         else
             -- Безопасное получение размера экрана
             local vx, vy = 800, 600 -- Значения по умолчанию, если не удается получить размер экрана
@@ -474,6 +589,9 @@ do
             
             local x = (xScale * vx) + xOffset
             local y = (yScale * vy) + yOffset
+            
+            -- Сбрасываем счетчик рекурсии
+            recursionProtection:exit("Position")
             
             return Vector2.new(x, y)
         end
@@ -490,6 +608,28 @@ do
     end
     --
     function utility:Create(instanceType, instanceOffset, instanceProperties, instanceParent)
+        -- Защита от рекурсивных вызовов с использованием общего механизма
+        if not recursionProtection:enter("Create", 5) then
+            print("Предотвращена рекурсия в utility:Create - " .. tostring(instanceType))
+            
+            -- Возвращаем простую заглушку вместо настоящего объекта
+            local dummyInstance = {
+                Position = Vector2.new(0, 0),
+                Size = Vector2.new(100, 100),
+                Color = safeColor3FromRGB(255, 255, 255),
+                Visible = true,
+                ZIndex = 1000,
+                Transparency = 1,
+                TextBounds = Vector2.new(100, 20),
+                Text = (instanceProperties and instanceProperties.Text) or "",
+                Font = (instanceProperties and instanceProperties.Font) or 3,
+                __OBJECT_EXISTS = true,
+                Remove = function() end
+            }
+            return dummyInstance
+        end
+        
+        -- Основной код функции
         local instanceType = instanceType or "Frame"
         local instanceOffset = instanceOffset or {Vector2.new(0,0)}
         local instanceProperties = instanceProperties or {}
@@ -598,9 +738,16 @@ do
             if instanceParent then
                 instanceParent[#instanceParent + 1] = instance
             end
-            --
+            
+            -- Сбрасываем счетчик рекурсии
+            recursionProtection:exit("Create")
+            
             return instance
         end
+        
+        -- Сбрасываем переменные рекурсии в случае неудачи создания instance
+        recursionProtection:exit("Create")
+        return nil
     end
     --
     function utility:UpdateOffset(instance, instanceOffset)
@@ -692,37 +839,49 @@ do
         return (mouseLocation.x >= values[1] and mouseLocation.x <= (values[1] + (values[3] - values[1]))) and (mouseLocation.y >= values[2] and mouseLocation.y <= (values[2] + (values[4] - values[2])))
     end
     --
+    -- Кэш для хранения вычисленных размеров текста
+    local textBoundsCache = {}
+    
     function utility:GetTextBounds(text, textSize, font)
         -- Проверяем входные параметры
         text = text or ""
         textSize = textSize or 13
         font = font or 1
         
-        local textbounds
+        -- Создаем уникальный ключ для кэша
+        local cacheKey = tostring(text) .. "_" .. tostring(textSize) .. "_" .. tostring(font)
         
-        -- Попытка создать и получить размеры текста
-        local success, err = pcall(function()
-            local textlabel = utility:Create("TextLabel", {Vector2.new(0, 0)}, {
-                Text = text,
-                Size = textSize,
-                Font = font,
-                Hidden = true
-            })
-            
-            if textlabel and textlabel.TextBounds then
-                textbounds = textlabel.TextBounds
-            end
-            
-            utility:Remove(textlabel, true)
-        end)
+        -- Проверяем кэш чтобы избежать повторных вычислений
+        if textBoundsCache[cacheKey] then
+            return textBoundsCache[cacheKey]
+        end
         
-        -- Если не удалось получить TextBounds, делаем оценку
-        if not success or not textbounds then
-            -- Расчет размера текста на основе длины строки
+        -- Защита от рекурсии с использованием общего механизма
+        if not recursionProtection:enter("GetTextBounds", 5) then
+            -- Если защита сработала, возвращаем оценку
             local textLength = text and string.len(text) or 0
             local estimatedWidth = textLength * (textSize or 13) * 0.55
-            textbounds = Vector2.new(estimatedWidth, (textSize or 13) * 1.5)
+            return Vector2.new(estimatedWidth, (textSize or 13) * 1.5)
         end
+        
+        local textbounds
+        
+        -- Вместо создания нового TextLabel, сначала попробуем оценку на основе длины текста
+        local textLength = text and string.len(text) or 0
+        local estimatedWidth = textLength * (textSize or 13) * 0.55
+        local estimatedHeight = (textSize or 13) * 1.5
+        
+        -- Используем оценку как текстбаунды
+        textbounds = {
+            X = estimatedWidth,
+            Y = estimatedHeight,
+            x = estimatedWidth,
+            y = estimatedHeight
+        }
+        
+        -- Сохраняем результат в кэш и выходим из функции защиты от рекурсии
+        textBoundsCache[cacheKey] = textbounds
+        recursionProtection:exit("GetTextBounds")
         
         -- Обеспечиваем совместимость с обоими форматами представления векторов
         local result = {
@@ -1583,7 +1742,13 @@ do
                 Color = "accent"
             }
             --
-            local keybindslist_title = utility:Create("TextLabel", {Vector2.new(keybindslist_outline.Size.X/2,4), keybindslist_outline}, {
+            -- Безопасное получение размера контейнера
+            local outlineSizeX = 90 -- Значение по умолчанию в случае ошибки
+            if keybindslist_outline and keybindslist_outline.Size then
+                outlineSizeX = keybindslist_outline.Size.X or keybindslist_outline.Size.x or 90
+            end
+            
+            local keybindslist_title = utility:Create("TextLabel", {Vector2.new(outlineSizeX/2, 4), keybindslist_outline}, {
                 Text = "Keybinds",
                 Size = theme.textsize,
                 Font = theme.font,
@@ -1614,7 +1779,13 @@ do
                 if keybindname and keybindvalue and not window.keybindslist.keybinds[keybindname] then
                     local keybindTable = {}
                     --
-                    local keybind_outline = utility:Create("Frame", {Vector2.new(0,keybindslist_outline.Size.Y-1), keybindslist_outline}, {
+                    -- Безопасное получение размера Y
+                    local outlineSizeY = 22 -- Значение по умолчанию
+                    if keybindslist_outline and keybindslist_outline.Size then
+                        outlineSizeY = keybindslist_outline.Size.Y or keybindslist_outline.Size.y or 22
+                    end
+                    
+                    local keybind_outline = utility:Create("Frame", {Vector2.new(0, outlineSizeY-1), keybindslist_outline}, {
                         Size = utility:Size(1, 0, 0, 18, keybindslist_outline),
                         Position = utility:Position(0, 0, 1, -1, keybindslist_outline),
                         Hidden = true,
@@ -1671,7 +1842,20 @@ do
                         Color = "textcolor"
                     }
                     --
-                    local keybind_value = utility:Create("TextLabel", {Vector2.new(keybind_outline.Size.X - 4 - utility:GetTextBounds(keybindname, theme.textsize, theme.font).X,3), keybind_outline}, {
+                    -- Безопасное получение размера X контейнера кнопки и размера текста
+                    local outlineSizeX = 90 -- Значение по умолчанию
+                    if keybind_outline and keybind_outline.Size then
+                        outlineSizeX = keybind_outline.Size.X or keybind_outline.Size.x or 90
+                    end
+                    
+                    -- Безопасное получение размера текста
+                    local textBounds = utility:GetTextBounds(keybindname, theme.textsize, theme.font)
+                    local textSizeX = 50 -- Значение по умолчанию
+                    if textBounds and (textBounds.X or textBounds.x) then
+                        textSizeX = textBounds.X or textBounds.x
+                    end
+                    
+                    local keybind_value = utility:Create("TextLabel", {Vector2.new(outlineSizeX - 4 - textSizeX, 3), keybind_outline}, {
                         Text = "["..keybindvalue.."]",
                         Size = theme.textsize,
                         Font = theme.font,
@@ -1679,7 +1863,7 @@ do
                         OutlineColor = theme.textborder,
                         Hidden = true,
                         ZIndex = 1005,
-                        Position = utility:Position(1, -4 - utility:GetTextBounds(keybindname, theme.textsize, theme.font).X, 0, 3, keybind_outline),
+                        Position = utility:Position(1, -4 - textSizeX, 0, 3, keybind_outline),
                         Visible = window.keybindslist.visible
                     })
                     --
@@ -1693,7 +1877,12 @@ do
                         keybind_inline.Position = utility:Position(0, 1, 0, 1, keybind_outline)
                         keybind_frame.Position = utility:Position(0, 1, 0, 1, keybind_inline)
                         keybind_title.Position = utility:Position(0, 4, 0, 3, keybind_outline)
-                        keybind_value.Position = utility:Position(1, -4 - keybind_value.TextBounds.X, 0, 3, keybind_outline)
+                        -- Безопасное получение размера текста
+                        local textBoundsX = 50 -- Значение по умолчанию
+                        if keybind_value and keybind_value.TextBounds then
+                            textBoundsX = keybind_value.TextBounds.X or keybind_value.TextBounds.x or 50
+                        end
+                        keybind_value.Position = utility:Position(1, -4 - textBoundsX, 0, 3, keybind_outline)
                     end
                     --
                     function keybindTable:Remove()
@@ -1823,7 +2012,13 @@ do
                 Color = "accent"
             }
             --
-            local statuslist_title = utility:Create("TextLabel", {Vector2.new(statuslist_outline.Size.X/2,4), statuslist_outline}, {
+            -- Безопасное получение размера контейнера
+            local outlineSizeX = 75 -- Значение по умолчанию в случае ошибки
+            if statuslist_outline and statuslist_outline.Size then
+                outlineSizeX = statuslist_outline.Size.X or statuslist_outline.Size.x or 75
+            end
+            
+            local statuslist_title = utility:Create("TextLabel", {Vector2.new(outlineSizeX/2, 4), statuslist_outline}, {
                 Text = "Status",
                 Size = theme.textsize,
                 Font = theme.font,
@@ -1854,7 +2049,13 @@ do
                 if statusname and not window.statuslist.statuses[statusname] then
                     local statusTable = {}
                     --
-                    local status_outline = utility:Create("Frame", {Vector2.new(0,statuslist_outline.Size.Y-1), statuslist_outline}, {
+                    -- Безопасное получение размера Y
+                    local outlineSizeY = 22 -- Значение по умолчанию
+                    if statuslist_outline and statuslist_outline.Size then
+                        outlineSizeY = statuslist_outline.Size.Y or statuslist_outline.Size.y or 22
+                    end
+                    
+                    local status_outline = utility:Create("Frame", {Vector2.new(0, outlineSizeY-1), statuslist_outline}, {
                         Size = utility:Size(1, 0, 0, 18, statuslist_outline),
                         Position = utility:Position(0, 0, 1, -1, statuslist_outline),
                         Hidden = true,
@@ -2034,7 +2235,8 @@ do
             window.fading = true
             window.isVisible = not window.isVisible
             --
-            spawn(function()
+            -- Используем безопасную функцию safeTask.spawn вместо встроенной spawn
+            safeTask.spawn(function()
                 for i, v in pairs(library.drawings) do
                     utility:Lerp(v[1], {Transparency = window.isVisible and v[3] or 0}, 0.25)
                 end
@@ -2908,7 +3110,7 @@ do
             Font = theme.font,
             Color = theme.textcolor,
             OutlineColor = theme.textborder,
-            Position = utility:Position(0, 23, 0, toggle.axis + (15/2) - (utility:GetTextBounds(name, theme.textsize, theme.font).Y/2), section.section_frame),
+            Position = utility:Position(0, 23, 0, toggle.axis + (15/2) - ((utility:GetTextBounds(name, theme.textsize, theme.font).Y or 15)/2), section.section_frame),
             Visible = page.open
         }, section.visibleContent)
         --
@@ -4738,13 +4940,13 @@ do
             Color = "lightcontrast"
         }
         --
-        local keybind_title = utility:Create("TextLabel", {Vector2.new(4,keybind.axis + (17/2) - (utility:GetTextBounds(name, theme.textsize, theme.font).Y/2)), section.section_frame}, {
+        local keybind_title = utility:Create("TextLabel", {Vector2.new(4,keybind.axis + (17/2) - ((utility:GetTextBounds(name, theme.textsize, theme.font).Y or 15)/2)), section.section_frame}, {
             Text = name,
             Size = theme.textsize,
             Font = theme.font,
             Color = theme.textcolor,
             OutlineColor = theme.textborder,
-            Position = utility:Position(0, 4, 0, keybind.axis + (17/2) - (utility:GetTextBounds(name, theme.textsize, theme.font).Y/2), section.section_frame),
+            Position = utility:Position(0, 4, 0, keybind.axis + (17/2) - ((utility:GetTextBounds(name, theme.textsize, theme.font).Y or 15)/2), section.section_frame),
             Visible = page.open
         }, section.visibleContent)
         --
