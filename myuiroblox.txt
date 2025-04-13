@@ -3,6 +3,29 @@
     bored#9316 @wally hub user - Helped make library
     Updated in 2025 for compatibility with Solara v3 executor
 ]]
+
+-- // Вспомогательные функции для кроссплатформенности
+-- Безопасная имплементация clamp для совместимости вне Roblox
+local function safeClamp(value, minimum, maximum)
+    return math.min(math.max(value, minimum), maximum)
+end
+
+-- Безопасная имплементация round
+local function safeRound(value)
+    return math.floor(value + 0.5)
+end
+
+-- Безопасная имплементация tick (для совместимости вне Roblox)
+local _startTime = os.time() + (os.clock() % 1)
+local function safeTick()
+    return os.time() - _startTime + os.clock() % 1
+end
+
+-- Переопределение math.clamp, math.round и tick для обратной совместимости
+math.clamp = safeClamp
+math.round = safeRound
+tick = safeTick
+
 -- // Защищенное получение сервисов
 local function getSafeService(serviceName)
     if game then
@@ -857,7 +880,17 @@ do
             }
             --
             function window.watermark:UpdateSize()
-                watermark_outline.Size = utility:Size(0, watermark_title.TextBounds.X + 4 + (6*2), 0, 21)
+                -- Безопасное получение размера текста
+                local textWidth = 0
+                if watermark_title and watermark_title.TextBounds then
+                    textWidth = watermark_title.TextBounds.X
+                else
+                    -- Примерно оцениваем ширину текста на основе длины строки
+                    local textLength = watermark_title and watermark_title.Text and string.len(watermark_title.Text) or 0
+                    textWidth = textLength * (theme.textsize or 13) * 0.5
+                end
+                
+                watermark_outline.Size = utility:Size(0, textWidth + 4 + (6*2), 0, 21)
                 watermark_inline.Size = utility:Size(1, -2, 1, -2, watermark_outline)
                 watermark_frame.Size = utility:Size(1, -2, 1, -2, watermark_inline)
                 watermark_accent.Size = utility:Size(1, 0, 0, 1, watermark_frame)
@@ -896,11 +929,31 @@ do
             end)
             --
             utility:Connection(rs.RenderStepped, function(FPS)
-                library.shared.ping = stats.Network:FindFirstChild("ServerStatsItem") and tostring(math.floor(stats.Network.ServerStatsItem["Data Ping"]:GetValue())) or "Unknown"
-                --
-local GameName = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name
+                -- Безопасное получение пинга
+                local pingValue = "Unknown"
+                pcall(function()
+                    if stats.Network and stats.Network:FindFirstChild("ServerStatsItem") then
+                        pingValue = tostring(math.floor(stats.Network.ServerStatsItem["Data Ping"]:GetValue()))
+                    end
+                end)
+                library.shared.ping = pingValue
+                
+                -- Безопасное получение имени игры
+                local GameName = "Test Mode"
+                pcall(function()
+                    if game and game.GetService then
+                        local marketplaceService = game:GetService("MarketplaceService")
+                        if marketplaceService and marketplaceService.GetProductInfo and game.PlaceId then
+                            local info = marketplaceService:GetProductInfo(game.PlaceId)
+                            if info and info.Name then
+                                GameName = info.Name
+                            end
+                        end
+                    end
+                end)
+                
                 if (tick() - Tick) > 0.15 then
-                    watermark_title.Text = string.format("ZeeBot |%s,  Fps = %u,  | "..GameName, library.shared.ping, library.shared.fps)
+                    watermark_title.Text = string.format("Octernal | %s, FPS = %u | %s", library.shared.ping, library.shared.fps, GameName)
                     window.watermark:UpdateSize()
                     --
                     Tick = tick()
@@ -3147,6 +3200,7 @@ local GameName = game:GetService("MarketplaceService"):GetProductInfo(game.Place
         decimals = 1 / decimals
         local pointer = info.pointer or info.Pointer or info.flag or info.Flag or nil
         local callback = info.callback or info.callBack or info.Callback or info.CallBack or function()end
+        -- Используем глобальную функцию math.clamp, определенную в начале файла
         def = math.clamp(def, min, max)
         --
         local window = self.window
@@ -5690,33 +5744,39 @@ end
 
 
 
-local m_thread = task do
+local m_thread = {} do
     -- Проверяем, существует ли функция setreadonly
     local function safeSetReadOnly(obj, state)
         if type(setreadonly) == "function" then
             pcall(setreadonly, obj, state)
+        elseif type(make_writeable) == "function" and type(make_readonly) == "function" then
+            -- Альтернативные функции в Solara v3
+            if state then
+                pcall(make_readonly, obj)
+            else
+                pcall(make_writeable, obj)
+            end
         end
     end
+
+    -- Безопасно делаем таблицу task доступной для записи перед модификацией
+    safeSetReadOnly(task, false)
     
-    -- Инициализация m_thread только если его нет
-    if not m_thread then
-        m_thread = {}
-        
-        -- Базовые функции потоков
-        m_thread.spawn = function(f)
-            if type(f) == "function" then
-                local thread = coroutine.create(f)
-                task.spawn(function() coroutine.resume(thread) end)
-                return thread
-            end
-            return nil
+    -- Создаем или используем существующую таблицу m_thread
+    -- Базовые функции потоков
+    m_thread.spawn = function(f)
+        if type(f) == "function" then
+            local thread = coroutine.create(f)
+            task.spawn(function() coroutine.resume(thread) end)
+            return thread
         end
-        
-        m_thread.wait = function(t)
-            t = t or 0
-            task.wait(t)
-            return t
-        end
+        return nil
+    end
+    
+    m_thread.wait = function(t)
+        t = t or 0
+        task.wait(t)
+        return t
     end
     
     -- Безопасная установка read-only
@@ -5737,6 +5797,59 @@ local m_thread = task do
     if m_thread and type(safeSetReadOnly) == "function" then
         safeSetReadOnly(m_thread, true)
     end
+end
+
+-- Автоматически запускаем демонстрационный UI, если не находимся внутри Roblox
+if not (game and game.Loaded) then
+    -- Функция для создания Vector2, если он не доступен глобально
+    local function safeVector2(x, y)
+        if type(Vector2) == "table" and type(Vector2.new) == "function" then
+            return Vector2.new(x, y)
+        else
+            return {x = x, y = y}
+        end
+    end
+    
+    -- Запускаем демонстрационное окно в тестовом режиме
+    local auto_window = library:New({
+        name = "Octernal UI Library v2.0",
+        size = safeVector2(580, 400),
+        accent = safeColor3FromRGB(55, 175, 225)
+    })
+
+    -- Создаем основную страницу
+    local autoPage = auto_window:Page({name = "Demonstration"})
+    
+    -- Секция информации
+    local infoSection = autoPage:Section({name = "Information", side = "left"})
+    infoSection:Label({text = "Octernal UI Library - Auto Demo"})
+    infoSection:Label({text = "Status: Тестовый режим"})
+    infoSection:Label({text = "Compatible with Solara v3"})
+    
+    -- Секция с примерами элементов
+    local elementsSection = autoPage:Section({name = "UI Elements", side = "right"})
+    
+    elementsSection:Button({
+        name = "Example Button",
+        callback = function() end
+    })
+    
+    elementsSection:Toggle({
+        name = "Example Toggle",
+        default = true,
+        callback = function() end
+    })
+    
+    elementsSection:Slider({
+        name = "Example Slider",
+        min = 0,
+        max = 100,
+        default = 50,
+        callback = function() end
+    })
+    
+    -- Инициализация автоматического окна
+    auto_window:Initialize()
 end
 
 return library, library.pointers, theme -- utility
